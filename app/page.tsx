@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import ReactECharts from 'echarts-for-react';
+import { useState } from 'react';
 
 const webkitDep = {
   "type": "force",
@@ -14,7 +15,7 @@ const webkitDep = {
     { "name": "Other", "keyword": {} }
   ],
   "nodes": [
-    { id:1, "name": "AnalyserNode", "value": 1, "category": 4 },
+    { id: 1, "name": "AnalyserNode", "value": 1, "category": 4 },
     { "name": "AudioNode", "value": 1, "category": 4 },
     { "name": "Uint8Array", "value": 1, "category": 4 },
     { "name": "Float32Array", "value": 1, "category": 4 },
@@ -68,13 +69,41 @@ const option = {
 };
 
 export default function Home() {
+
+  // A state variable that stores the user url input
+  const [url, setURL] = useState('');
+
+  // A function that handles the change event of the url input box
+  async function handleChange(event: any) {
+
+    if (event.key === "Enter") {
+      await handleClick(event);
+    }
+
+    // Get the new value of the input box
+    const value = event.target.value;
+
+    // Update the url state
+    setURL(value);
+  }
+
+  // A function that handles the click event
+  async function handleClick(event: any) {
+    fetch('/api/repo', {
+      method: 'POST',
+      body: JSON.stringify({
+        url: url
+      })
+    })
+  }
+
   return (
     <main className="h-screen p-8">
       <div className="w-full flex flex-row h-full">
         <section className="flex flex-col w-4/6 border">
           <header className="border p-4 flex flex-row gap-2">
-            <Input placeholder="Github repo URL" className='border' />
-            <Button>Send</Button>
+            <Input placeholder="Github repo URL" className='border' type='url' onChange={handleChange} />
+            <Button onClick={handleClick}>Send</Button>
           </header>
           <main>
             <ReactECharts
