@@ -70,14 +70,14 @@ const option = {
 
 export default function Home() {
 
-  // A state variable that stores the user url input
   const [url, setURL] = useState('');
+  const [query, setQuery] = useState('');
 
   // A function that handles the change event of the url input box
-  async function handleChange(event: any) {
+  async function handleRepoInputChange(event: any) {
 
     if (event.key === "Enter") {
-      await handleClick(event);
+      await handleRepoClick(event);
     }
 
     // Get the new value of the input box
@@ -88,7 +88,7 @@ export default function Home() {
   }
 
   // A function that handles the click event
-  async function handleClick(event: any) {
+  async function handleRepoClick(event: any) {
     fetch('/api/repo', {
       method: 'POST',
       body: JSON.stringify({
@@ -97,13 +97,35 @@ export default function Home() {
     })
   }
 
+
+  // A function that handles the change event of the url input box
+  async function handleQueryInputChange(event: any) {
+
+    if (event.key === "Enter") {
+      await handleRepoClick(event);
+    }
+
+    // Get the new value of the input box
+    const value = event.target.value;
+
+    // Update the url state
+    setQuery(value);
+  }
+
+  // A function that handles the click event
+  async function handleQueryClick(event: any) {
+    fetch(`/api/repo/repo1?q=${query}&type=text`, {
+      method: 'GET'
+    })
+  }
+
   return (
     <main className="h-screen p-8">
       <div className="w-full flex flex-row h-full">
         <section className="flex flex-col w-4/6 border">
           <header className="border p-4 flex flex-row gap-2">
-            <Input placeholder="Github repo URL" className='border' type='url' onChange={handleChange} />
-            <Button onClick={handleClick}>Send</Button>
+            <Input placeholder="Github repo URL" className='border' type='url' onChange={handleRepoInputChange} />
+            <Button onClick={handleRepoClick}>Send</Button>
           </header>
           <main>
             <ReactECharts
@@ -128,8 +150,8 @@ export default function Home() {
             </div>
           </main>
           <footer className="border p-4 flex flex-row gap-2">
-            <Input className="" placeholder="Type a message..." />
-            <Button>Send</Button>
+            <Input className="" placeholder="Type a query..." onChange={handleQueryInputChange}/>
+            <Button onClick={handleQueryClick}>Send</Button>
           </footer>
         </aside>
       </div>
