@@ -93,7 +93,7 @@ export default function Home() {
               </div>
               <div className="flex items-end gap-2 justify-end">
                 <div className="rounded-lg bg-blue-500 text-white p-2">
-                  <p className="text-sm">I'm fine, thanks for asking!</p>
+                  <p className="text-sm">Im fine, thanks for asking!</p>
                 </div>
               </div>
             </div>
