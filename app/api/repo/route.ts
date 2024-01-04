@@ -64,8 +64,8 @@ export async function POST(request: NextRequest) {
 	// collect all source files in repo
 	//--------------------------------------------------------------------------
 
-	let source_files = [];
-	let walk = function(dir) {
+	let source_files: string[] = [];
+	let walk = function(dir: string) {
 		let files = fs.readdirSync(dir);
 		for (let file of files) {
 			let file_path = path.join(dir, file);
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 	for (let source_file of source_files) {
 		console.log("Processing file: " + source_file);
 		// read file
-		fs.readFile(source_file, 'utf8', function(err, source) {
+		fs.readFile(source_file, 'utf8', function(err: any, source: string) {
 			if (err) {
 				return console.log(err);
 			}
