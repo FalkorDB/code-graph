@@ -7,69 +7,69 @@ import { useState } from 'react';
 import { Chat } from './chat';
 import { Graph, SAMPLE_GRAPH } from './api/model';
 
-const option = {
-  tooltip: {
-    position: 'right',
-  },
-  legend: [
-    {
-      data: SAMPLE_GRAPH.categories.map(function (c) {
-        return c.name;
-      })
-    }
-  ],
-  toolbox: {
-    show: true,
-    feature: {
-      restore: {},
-      saveAsImage: {}
-    }
-  },
-  series: [{
-    type: 'graph',
-    layout: 'force',
-    animation: false,
-    label: {
-      normal: {
-        position: 'right',
-        formatter: '{b}'
-      }
-    },
-    draggable: true,
-    data: SAMPLE_GRAPH.nodes.map(function (node:any, idx) {
-      node.id = idx;
-      return node;
-    }),
-    categories: SAMPLE_GRAPH.categories,
-    force: {
-      // initLayout: 'circular'
-      // repulsion: 20,
-      edgeLength: 5,
-      repulsion: 20,
-      gravity: 0.2
-    },
-    edges: SAMPLE_GRAPH.edges,
-    emphasis: {
-      focus: 'adjacency',
-      label: {
-        position: 'right',
-        show: true
-      }
-    },
-    roam: true,
-    lineStyle: {
-      color: 'source',
-      width: 3.0,
-      curveness: 0.1,
-      opacity: 0.7
-    },
-  }]
-};
-
 export default function Home() {
 
   const [url, setURL] = useState('');
-  const [graph, setGraph] = useState<Graph>({} as Graph);
+  const [graph, setGraph] = useState<Graph>(SAMPLE_GRAPH);
+
+  const option = {
+    tooltip: {
+      position: 'right',
+    },
+    legend: [
+      {
+        data: graph.categories.map(function (c) {
+          return c.name;
+        })
+      }
+    ],
+    toolbox: {
+      show: true,
+      feature: {
+        restore: {},
+        saveAsImage: {}
+      }
+    },
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      animation: false,
+      label: {
+        normal: {
+          position: 'right',
+          formatter: '{b}'
+        }
+      },
+      draggable: true,
+      data: graph.nodes.map(function (node:any, idx) {
+        node.id = idx;
+        return node;
+      }),
+      categories: graph.categories,
+      force: {
+        // initLayout: 'circular'
+        // repulsion: 20,
+        edgeLength: 5,
+        repulsion: 20,
+        gravity: 0.2
+      },
+      edges: graph.edges,
+      emphasis: {
+        focus: 'adjacency',
+        label: {
+          position: 'right',
+          show: true
+        }
+      },
+      roam: true,
+      lineStyle: {
+        color: 'source',
+        width: 3.0,
+        curveness: 0.1,
+        opacity: 0.7
+      },
+    }]
+  };
 
   // A function that handles the change event of the url input box
   async function handleRepoInputChange(event: any) {
