@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falkordb';
+import Parser from 'web-tree-sitter';
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
+
 
 //const client = createClient();
 //client.connect()
@@ -7,7 +12,6 @@ import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falko
 export async function POST(request: NextRequest) {
 	// parse source files
 	// const Parser = require('tree-sitter');
-	const Parser = require('web-tree-sitter');
 	//await Parser.init();
 	await Parser.init({
 		locateFile(scriptName: string, scriptDirectory: string) {
@@ -29,9 +33,7 @@ export async function POST(request: NextRequest) {
 
 	// Download Github Repo into a temporary folder
 	// Create temporary folder
-	const os   = require('os');
-	const fs   = require('fs');
-	const path = require('path');
+
 
 	const tmp_dir = os.tmpdir();
 	console.log("Temporary directory: " + tmp_dir);
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
 	//--------------------------------------------------------------------------
 
 	const simpleGit = require('simple-git');
-	const git = simpleGit({baseDir: tmp_dir});
+	const git = simpleGit({ baseDir: tmp_dir });
 	git.clone(url);
 
 	console.log("Cloned repo");
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
 	//--------------------------------------------------------------------------
 
 	let source_files: string[] = [];
-	let walk = function(dir: string) {
+	let walk = function (dir: string) {
 		let files = fs.readdirSync(dir);
 		for (let file of files) {
 			let file_path = path.join(dir, file);
@@ -85,7 +87,7 @@ export async function POST(request: NextRequest) {
 	for (let source_file of source_files) {
 		console.log("Processing file: " + source_file);
 		// read file
-		fs.readFile(source_file, 'utf8', function(err: any, source: string) {
+		fs.readFile(source_file, 'utf8', function (err: any, source: string) {
 			if (err) {
 				return console.log(err);
 			}
@@ -94,5 +96,5 @@ export async function POST(request: NextRequest) {
 		});
 	}
 
-    return NextResponse.json({ message: "in progress..." }, { status: 201 })
+	return NextResponse.json({ message: "in progress..." }, { status: 201 })
 }
