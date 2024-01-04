@@ -13,22 +13,22 @@ import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falko
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
 
-let parser;
+let parser: Parser;
 
 // class definition tree-sitter query
 // responsible for matching class definition, in addition to extracting the class name
-let class_definition_query;
+let class_definition_query: Parser.Query;
 
 // function definition tree-sitter query
 // responsible for matching function definition, in addition to extracting the function name
-let function_definition_query;
+let function_definition_query: Parser.Query;
 
 // function call tree-sitter query
 // responsible for matching function calls, in addition to extracting the callee function name
-let function_call_query;
+let function_call_query: Parser.Query;
 
 // Process Python file (Module)
-function processPythonSource(source_file) {
+function processPythonSource(source_file: string) {
 	// read file
 	fs.readFile(source_file, 'utf8', function (err: any, source: string) {
 		if (err) {
@@ -49,7 +49,7 @@ function processPythonSource(source_file) {
 }
 
 // Process Class declaration
-function processClassDeclaration(source_file, match) {
+function processClassDeclaration(source_file: string, match: Parser.QueryMatch) {
 	let class_node = match.captures[0].node;
 	let class_name = match.captures[1].node.text;
 	console.log("Class node: " + class_node);
@@ -63,7 +63,7 @@ function processClassDeclaration(source_file, match) {
 }
 
 // Process function declaration
-function processFunctionDeclaration(source_file, match) {
+function processFunctionDeclaration(source_file: string, match: Parser.QueryMatch) {
 	let function_node = match.captures[0].node;
 	let function_name = match.captures[1].node.text;
 	//console.log("Function definition Node: " + function_node);
