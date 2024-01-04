@@ -14,7 +14,7 @@ interface Message {
     type: MessageTypes;
 }
 
-export function Chat() {
+export function Chat(props: {repo: string} ) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [query, setQuery] = useState('');
 
@@ -39,7 +39,7 @@ export function Chat() {
 
         setMessages((messages) => [...messages, { text: query, type: MessageTypes.Query }]);
 
-        fetch(`/api/repo/repo1?q=${query}&type=text`, {
+        fetch(`/api/repo/${props.repo}?q=${query}&type=text`, {
             method: 'GET'
         })
             .then(response => response.json())
@@ -51,7 +51,7 @@ export function Chat() {
                     variant: "destructive",
                     title: "Uh oh! Something went wrong.",
                     description: error.message,
-                })
+                  })
             })
     }
 

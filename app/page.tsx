@@ -149,7 +149,7 @@ export default function Home() {
           </main>
         </section>
         <aside className="flex flex-col w-2/6 border">
-          <Chat />
+          <Chat repo={graph.id}/>
         </aside>
       </div>
     </main>
