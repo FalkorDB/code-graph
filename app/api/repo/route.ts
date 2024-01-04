@@ -52,7 +52,7 @@ function processPythonSource(source_file) {
 function processClassDeclaration(source_file, match) {
 	let class_node = match.captures[0].node;
 	let class_name = match.captures[1].node.text;
-	//console.log("Class node: " + class_node);
+	console.log("Class node: " + class_node);
 	console.log("Class name: " + class_name);
 
 	// Match all function definition within the current class
@@ -95,8 +95,7 @@ export async function POST(request: NextRequest) {
 	// Tree-Sitter AST queries
 	//-------------------------------------------------------------------------
 	
-	function_call_query = Python.query(`((call function: (identifier) @function-name))`);
-	//function_call_query       = Python.query(`(call_expression function: (identifier) @function-name)`);
+	function_call_query 	  = Python.query(`((call function: (identifier) @function-name))`);
 	class_definition_query    = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
 	function_definition_query = Python.query(`(function_definition name: (identifier) @function-name) @function-definition`);
 

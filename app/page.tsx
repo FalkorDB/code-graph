@@ -58,17 +58,17 @@ export default function Home() {
         gravity: 0.2
       },
       edges: graph.edges,
-      emphasis: {
-        focus: 'adjacency',
-        label: {
-          position: 'right',
-          show: true
-        }
-      },
+      //emphasis: {
+      //  focus: 'adjacency',
+      //  label: {
+      //   position: 'right',
+      //    show: true
+      //  }
+      //},
       roam: true,
       lineStyle: {
-        color: 'source',
-        width: 3.0,
+        //color: 'source',
+        width: 1.5,
         curveness: 0.1,
         opacity: 0.7
       },
