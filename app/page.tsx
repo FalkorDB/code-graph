@@ -2,15 +2,17 @@
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import ReactECharts from 'echarts-for-react';
-import { useState } from 'react';
+import ReactECharts, { EChartsInstance } from 'echarts-for-react';
+import { useState, useRef } from 'react';
 import { Chat } from './chat';
 import { Graph, SAMPLE_GRAPH } from './api/model';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 
 export default function Home() {
 
   const [url, setURL] = useState('');
   const [graph, setGraph] = useState<Graph>(SAMPLE_GRAPH);
+  const echartRef = useRef<EChartsInstance | null>(null)
 
   const option = {
     tooltip: {
@@ -41,7 +43,7 @@ export default function Home() {
         }
       },
       draggable: true,
-      data: graph.nodes.map(function (node:any, idx) {
+      data: graph.nodes.map(function (node: any, idx) {
         node.id = idx;
         return node;
       }),
@@ -101,6 +103,20 @@ export default function Home() {
         console.error('Error:', error);
       })
   }
+  function handleZoomClick(factor: number) {
+    let chart = echartRef.current
+    if (chart) {
+      let option = chart.getOption()
+      let zoom = factor * option.series[0].zoom
+      chart.setOption({
+        series: [
+          {
+            zoom,
+          }
+        ]
+      })
+    }
+  }
 
   return (
     <main className="h-screen p-8">
@@ -111,9 +127,14 @@ export default function Home() {
             <Button onClick={handleRepoClick}>Send</Button>
           </header>
           <main className="h-full">
+            <div className="flex flex-row" >
+              <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(1.1)}><ZoomIn /></Button>
+              <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(0.9)}><ZoomOut /></Button>
+            </div>
             <ReactECharts
               option={option}
               style={{ height: '100%', width: '100%' }}
+              onChartReady={(e) => { echartRef.current = e }}
             />
           </main>
         </section>
