@@ -21,6 +21,7 @@ export interface Graph {
 }
 
 export const SAMPLE_GRAPH: Graph = {
+    "id": "sample",
     "categories": [
       { "name": "HTMLElement"},
       { "name": "WebGL"},
