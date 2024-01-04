@@ -8,8 +8,22 @@ import { Chat } from './chat';
 import { Graph, SAMPLE_GRAPH } from './api/model';
 
 const option = {
-  legend: {
-    data: ['HTMLElement', 'WebGL', 'SVG', 'CSS', 'Other']
+  tooltip: {
+    position: 'right',
+  },
+  legend: [
+    {
+      data: SAMPLE_GRAPH.categories.map(function (c) {
+        return c.name;
+      })
+    }
+  ],
+  toolbox: {
+    show: true,
+    feature: {
+      restore: {},
+      saveAsImage: {}
+    }
   },
   series: [{
     type: 'graph',
@@ -34,7 +48,21 @@ const option = {
       repulsion: 20,
       gravity: 0.2
     },
-    edges: SAMPLE_GRAPH.edges
+    edges: SAMPLE_GRAPH.edges,
+    emphasis: {
+      focus: 'adjacency',
+      label: {
+        position: 'right',
+        show: true
+      }
+    },
+    roam: true,
+    lineStyle: {
+      color: 'source',
+      width: 3.0,
+      curveness: 0.1,
+      opacity: 0.7
+    },
   }]
 };
 
@@ -82,10 +110,10 @@ export default function Home() {
             <Input placeholder="Github repo URL" className='border' type='url' onChange={handleRepoInputChange} />
             <Button onClick={handleRepoClick}>Send</Button>
           </header>
-          <main>
+          <main className="h-full">
             <ReactECharts
               option={option}
-              style={{ height: '700px', width: '100%' }}
+              style={{ height: '100%', width: '100%' }}
             />
           </main>
         </section>
