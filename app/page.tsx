@@ -77,7 +77,7 @@ export default function Home() {
   async function handleRepoInputChange(event: any) {
 
     if (event.key === "Enter") {
-      await handleRepoClick(event);
+      await handleSubmit(event);
     }
 
     // Get the new value of the input box
@@ -88,7 +88,9 @@ export default function Home() {
   }
 
   // A function that handles the click event
-  async function handleRepoClick(event: any) {
+  async function handleSubmit(event: any) {
+    event.preventDefault();
+
     fetch('/api/repo', {
       method: 'POST',
       body: JSON.stringify({
@@ -122,9 +124,11 @@ export default function Home() {
     <main className="h-screen p-8">
       <div className="w-full flex flex-row h-full">
         <section className="flex flex-col w-4/6 border">
-          <header className="border p-4 flex flex-row gap-2">
-            <Input placeholder="Github repo URL" className='border' type='url' onChange={handleRepoInputChange} />
-            <Button onClick={handleRepoClick}>Send</Button>
+          <header className="border p-4">
+            <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
+              <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} required/>
+              <Button  type="submit" >Send</Button>
+            </form>
           </header>
           <main className="h-full">
             <div className="flex flex-row" >

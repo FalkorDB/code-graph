@@ -34,6 +34,7 @@ export function Chat() {
 
     // A function that handles the click event
     async function handleQueryClick(event: any) {
+        event.preventDefault();
 
         setMessages((messages) => [...messages, { text: query, type: MessageTypes.Query }]);
 
@@ -49,16 +50,9 @@ export function Chat() {
             })
     }
 
-    // useEffect(() => {
-    //     const socket = io();
-    //     socket.on("message", (message: Message) => {
-    //         setMessages((messages) => [...messages, message]);
-    //     });
-    // }, []);
-
     return (
         <>
-            <main className="border p-4 flex-1 space-y-4">
+            <main className="border p-4 flex-1 space-y-4 overflow-auto">
                 {
                     messages.map((message, index) => {
                         if (message.type === MessageTypes.Query) {
@@ -76,22 +70,12 @@ export function Chat() {
                         }
                     })
                 }
-                {/* <div className="space-y-4">
-                    <div className="flex items-end gap-2">
-                        <div className="rounded-lg bg-zinc-200 dark:bg-zinc-700 p-2">
-                            <p className="text-sm">Hello, how are you?</p>
-                        </div>
-                    </div>
-                    <div className="flex items-end gap-2 justify-end">
-                        <div className="rounded-lg bg-blue-500 text-white p-2">
-                            <p className="text-sm">Im fine, thanks for asking!</p>
-                        </div>
-                    </div>
-                </div> */}
             </main>
-            <footer className="border p-4 flex flex-row gap-2">
-                <Input className="" placeholder="Type a query..." onChange={handleQueryInputChange} />
-                <Button onClick={handleQueryClick}>Send</Button>
+            <footer className="border p-4">
+                <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
+                    <Input className="" placeholder="Type a query..." onChange={handleQueryInputChange} />
+                    <Button>Send</Button>
+                </form>
             </footer>
         </>
     );
