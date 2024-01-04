@@ -25,5 +25,5 @@ export async function GET(request: NextRequest, { params }: { params: { repo: st
     //     return NextResponse.json({ message: err.message }, { status: 400 })
     // }
 
-    return NextResponse.json({ repo, query, type }, { status: 200 })
+    return NextResponse.json({ result: "respose to query: " + query }, { status: 200 })
 }

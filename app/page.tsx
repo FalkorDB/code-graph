@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import ReactECharts from 'echarts-for-react';
 import { useState } from 'react';
+import { Chat } from './chat';
 
 const webkitDep = {
   "type": "force",
@@ -71,7 +72,8 @@ const option = {
 export default function Home() {
 
   const [url, setURL] = useState('');
-  const [query, setQuery] = useState('');
+
+  const [history, addTohistory] = useState([]);
 
   // A function that handles the change event of the url input box
   async function handleRepoInputChange(event: any) {
@@ -98,26 +100,7 @@ export default function Home() {
   }
 
 
-  // A function that handles the change event of the url input box
-  async function handleQueryInputChange(event: any) {
 
-    if (event.key === "Enter") {
-      await handleRepoClick(event);
-    }
-
-    // Get the new value of the input box
-    const value = event.target.value;
-
-    // Update the url state
-    setQuery(value);
-  }
-
-  // A function that handles the click event
-  async function handleQueryClick(event: any) {
-    fetch(`/api/repo/repo1?q=${query}&type=text`, {
-      method: 'GET'
-    })
-  }
 
   return (
     <main className="h-screen p-8">
@@ -135,24 +118,7 @@ export default function Home() {
           </main>
         </section>
         <aside className="flex flex-col w-2/6 border">
-          <main className="border p-4 flex-1">
-            <div className="space-y-4">
-              <div className="flex items-end gap-2">
-                <div className="rounded-lg bg-zinc-200 dark:bg-zinc-700 p-2">
-                  <p className="text-sm">Hello, how are you?</p>
-                </div>
-              </div>
-              <div className="flex items-end gap-2 justify-end">
-                <div className="rounded-lg bg-blue-500 text-white p-2">
-                  <p className="text-sm">Im fine, thanks for asking!</p>
-                </div>
-              </div>
-            </div>
-          </main>
-          <footer className="border p-4 flex flex-row gap-2">
-            <Input className="" placeholder="Type a query..." onChange={handleQueryInputChange}/>
-            <Button onClick={handleQueryClick}>Send</Button>
-          </footer>
+          <Chat />
         </aside>
       </div>
     </main>
