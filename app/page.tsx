@@ -7,6 +7,8 @@ import { useState, useRef } from 'react';
 import { Chat } from './chat';
 import { Graph, SAMPLE_GRAPH } from './api/model';
 import { ZoomIn, ZoomOut } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 
 export default function Home() {
 
@@ -102,7 +104,11 @@ export default function Home() {
         setGraph(data)
       })
       .catch((error) => {
-        console.error('Error:', error);
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Something went wrong.",
+          description: error.message,
+        })
       })
   }
   function handleZoomClick(factor: number) {
@@ -126,8 +132,8 @@ export default function Home() {
         <section className="flex flex-col w-4/6 border">
           <header className="border p-4">
             <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
-              <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} required/>
-              <Button  type="submit" >Send</Button>
+              <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} required />
+              <Button type="submit" >Send</Button>
             </form>
           </header>
           <main className="h-full">

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
 
 
@@ -46,7 +47,11 @@ export function Chat() {
                 setMessages((messages) => [...messages, { text: data.result, type: MessageTypes.Response }]);
             })
             .catch((error) => {
-                console.error('Error:', error);
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description: error.message,
+                })
             })
     }
 
