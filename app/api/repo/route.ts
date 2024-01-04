@@ -4,7 +4,7 @@ import Parser from 'web-tree-sitter';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-
+import simpleGit from 'simple-git';
 
 //const client = createClient();
 //client.connect()
@@ -48,7 +48,6 @@ export async function POST(request: NextRequest) {
 	// clone repo into temporary folder
 	//--------------------------------------------------------------------------
 
-	const simpleGit = require('simple-git');
 	const git = simpleGit({ baseDir: tmp_dir });
 	git.clone(url);
 
