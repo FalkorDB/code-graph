@@ -27,6 +27,8 @@ let function_definition_query: Parser.Query;
 // responsible for matching function calls, in addition to extracting the callee function name
 let function_call_query: Parser.Query;
 
+let param_query: Parser.Query;
+
 // Process Python file (Module)
 function processPythonSource(source_file: string) {
 	// read file
@@ -50,10 +52,10 @@ function processPythonSource(source_file: string) {
 
 // Process Class declaration
 function processClassDeclaration(source_file: string, match: Parser.QueryMatch) {
-	let class_node = match.captures[0].node;
-	let class_name = match.captures[1].node.text;
-	console.log("Class node: " + class_node);
-	console.log("Class name: " + class_name);
+	let class_node      = match.captures[0].node;
+	let class_name      = match.captures[1].node.text;	
+	let class_src_end   = class_node.endPosition.row;
+	let class_src_start = class_node.startPosition.row;
 
 	// Match all function definition within the current class
 	let function_matches = function_definition_query.matches(class_node);
@@ -63,18 +65,37 @@ function processClassDeclaration(source_file: string, match: Parser.QueryMatch) 
 }
 
 // Process function declaration
-function processFunctionDeclaration(source_file: string, match: Parser.QueryMatch) {
-	let function_node = match.captures[0].node;
-	let function_name = match.captures[1].node.text;
-	//console.log("Function definition Node: " + function_node);
-	console.log("Function name: " + function_name);
+function processFunctionDeclaration(source_file: string, match: Parser.QueryMatch) {	
+	let function_node   = match.captures[0].node;
+	let function_name   = match.captures[1].node.text;
+	let function_params = match.captures[2].node;
+
+	//-------------------------------------------------------------------------
+	// Extract function params
+	//-------------------------------------------------------------------------
+
+	let params: string[] = [];
+	for (let i = 0; i < function_params.namedChildCount; i++) {
+		let child_node = function_params.namedChild(i);
+		// if parameter is an identifier e.g. f(a)
+		// then simply 
+		if(child_node.type == 'identifier') {
+			params.push(child_node.text);
+		} else {
+			let identifier_matches = param_query.matches(child_node)[0].captures;
+			const identifierNode = identifier_matches[0].node;
+			params.push(identifierNode.text);
+		}
+	}
+
+	let function_src_end   = function_node.endPosition.row;
+	let function_src_start = function_node.startPosition.row;
 
 	// Match all function calls within the current function
 	let function_call_matches = function_call_query.matches(function_node);
 
 	for (let function_call of function_call_matches) {
 		let callee = function_call.captures[0].node.text;
-		console.log(function_name + " calls: " + callee);
 	}
 }
 
@@ -95,9 +116,10 @@ export async function POST(request: NextRequest) {
 	// Tree-Sitter AST queries
 	//-------------------------------------------------------------------------
 	
+	param_query               = Python.query(`((identifier) @identifier)`);
 	function_call_query 	  = Python.query(`((call function: (identifier) @function-name))`);
 	class_definition_query    = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
-	function_definition_query = Python.query(`(function_definition name: (identifier) @function-name) @function-definition`);
+	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
 
 	// Download Github Repo into a temporary folder
 	// Create temporary folder
@@ -109,6 +131,7 @@ export async function POST(request: NextRequest) {
 
 	let body = await request.json();
 	let url = body.url;
+	url = "https://github.com/falkorDB/falkordb-py";
 	console.log("Processing url: " + url);
 
 	//--------------------------------------------------------------------------
