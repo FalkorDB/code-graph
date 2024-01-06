@@ -10,6 +10,210 @@ import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falko
 // client.connect()
 
 //-----------------------------------------------------------------------------
+// Graph operations
+//-----------------------------------------------------------------------------
+
+function create_indices(graph: Graph) {
+    console.log("Creating indices");
+
+    //-------------------------------------------------------------------------
+    // index "name" attribute
+    //-------------------------------------------------------------------------
+
+    console.log("Creating range index on Class.name");
+    graph.query("CREATE INDEX FOR (c:Class) ON (c.name)");    
+
+    console.log("Creating range index on Module.name");
+    graph.query("CREATE INDEX FOR (m:Module) ON (m.name)");
+
+    console.log("Creating range index on Function.name");
+    graph.query("CREATE INDEX FOR (f:Function) ON (f.name)");
+
+    //-------------------------------------------------------------------------
+    // index "src_embeddings" attribute
+    //-------------------------------------------------------------------------
+
+    console.log("Creating vector index on Function.src_embeddings");
+    graph.query("CREATE VECTOR INDEX FOR (f:Function) ON (f.src_embeddings) OPTIONS {dimension:1536, similarityFunction:'euclidean'}");
+}
+
+function create_module(file: string, graph: Graph) {
+    // Create module node
+    const file_name = file.split("/")[-1];
+    const params = {'name': file_name};
+    
+    const q = "MERGE (m:Module {name: $name}) RETURN ID(m)";
+    graph.query(q, {params: params});
+
+    // module imports
+    // for imp in node.body:
+    //     if isinstance(imp, ast.Import):
+    //         for alias in imp.names:
+    //             params = {'m_id': m_id, 'import_name': alias.name}
+    //             q = """MATCH (m:Module)
+    //                    WHERE ID(m) = $m_id
+    //                    MERGE (i:Module {name: $import_name})
+    //                    MERGE (m)-[:IMPORTS]->(i)"""
+    //             graph.query(q, params)
+}
+
+function create_class(file: string, graph: Graph, class_name: string,
+	src_start: int, src_end: int) {
+    
+    // create class node
+    const file_name = file.split("/")[-1];
+
+    const params = {'name': node.name,
+              'file_name': file_name,
+              'src_start': node.lineno,
+              'src_end': node.end_lineno};
+
+    // create Class and connect to Module
+    const q = `MERGE (c:Class {name: $name, file_name: $file_name,
+           src_start:$src_start, src_end: $src_end})
+           WITH c
+           MATCH (m:Module {name: $file_name})
+           MERGE (m)-[:CONTAINS]->(c)`;
+    graph.query(q, {params: params});
+}
+
+function create_function(file: string, graph: Graph, function_name: string,
+	parent: string, args: string[], src_start: int, src_end: int) {
+    // scan function arguments
+    if(args[0] == "self") {
+    	args = args[1:];
+    }
+
+    // create function node
+    const file_name = file.split("/")[-1];
+    
+    // function source code
+    let src_code: string;
+
+    fs.readFile(file, 'utf8', function (err: any, source: string) {
+		if (err) {
+			return console.log(err);
+		}
+		src_code = source;
+	});
+
+    let params = {'name': function_name, 'file_name': file_name, 'src_code': src_code,
+              'src_start': src_start, 'src_end': src_end, 'args': args};
+
+    q = `CREATE (f:Function {name: $name, file_name: $file_name,
+           src_code: $src_code, src_start: $src_start, src_end: $src_end,
+           args: $args})
+           RETURN ID(f)`;
+    f_id = graph.query(q, {params: params}).result_set[0][0];
+
+    
+    // Connect function to parent
+    params = {'f_id': f_id, 'c_name': parent};
+
+    q = `MATCH (c:Class {name: $c_name})
+    MATCH (f:Function) WHERE ID(f) = $f_id
+    MERGE (c)-[:CONTAINS]->(f)`;
+    graph.query(q, params);
+
+    // if isinstance(parent, ast.Module):
+    //     params = {'m_name': file_name, 'f_id': f_id}
+    //     q = """MATCH (m:Module {name: $m_name})
+    //            MATCH (f:Function) WHERE ID(f) = $f_id
+    //            MERGE (m)-[:CONTAINS]->(f)"""
+    //     graph.query(q, params)
+    // elif isinstance(parent, ast.ClassDef):
+    //     params = {'f_id': f_id, 'c_name': parent.name}
+    //     q = """MATCH (c:Class {name: $c_name})
+    //            MATCH (f:Function) WHERE ID(f) = $f_id
+    //            MERGE (c)-[:CONTAINS]->(f)"""
+    //     graph.query(q, params)
+    // elif isinstance(parent, ast.FunctionDef):
+    //     params = {'f_id': f_id,
+    //               'parent_name': parent.name, 'parent_src_start': parent.lineno,
+    //               'parent_src_end': parent.end_lineno, 'file_name': file_name}
+    //     q = """MATCH (p:Function {name: $parent_name, src_start: $parent_src_start, src_end: $parent_src_end, file_name: $file_name})
+    //            MATCH (f2:Function) WHERE ID(f2) = $f_id
+    //            MERGE (p)-[:CONTAINS]->(f2)"""
+    //     graph.query(q, params)
+    // else:
+    //     raise("Unhandled parent type")
+}
+
+function inherit_class(file: string, graph: Graph, node) {
+    //-------------------------------------------------------------------------
+    // determine class inheritance
+    //-------------------------------------------------------------------------
+
+    //inheritance = []
+    //for base in node.bases:
+    //    if isinstance(base, ast.Name):
+    //        inheritance.append(base.id)
+
+    //file_name = file.split("/")[-1]
+    //params = {'name': node.name,
+    //          'file_name': file_name,
+    //          'src_start': node.lineno,
+    //          'src_end': node.end_lineno,
+    //          'inheritance': inheritance}
+
+    //q = """MATCH (c:Class {name: $name, file_name: $file_name,
+    //       src_start:$src_start, src_end: $src_end}), (base:Class)
+    //       WHERE base.name IN $inheritance
+    //       MERGE (c)-[:INHERITS]->(base)"""
+    //
+    //graph.query(q, params)
+}
+
+function create_function_call
+(
+	file: string,	       // file in which call occurred
+	graph: Graph,          // graph object
+	caller: string,        // who've invoked the call
+	callee: string,        // who's being called
+	caller_src_start: int, // caller definition start
+	caller_src_end: int,   // caller definition end
+	call_src_start: int,   // first line on which call occurred
+	call_src_end: int      // last line on which call occurred
+) {
+    // make sure callee exists
+    // determine callee type (either a function or a class)
+    let params = {'name': callee};
+    let q = `OPTIONAL MATCH (c:Class {name: $name})
+           OPTIONAL MATCH (f:Function {name: $name})
+           RETURN ID(c), ID(f) LIMIT 1`;
+
+	let res  = graph.query(q, {params: params}).result_set;
+    let c_id = res[0][0];
+    let f_id = res[0][1];
+
+    const callee_id = c_id !== null ? c_id : f_id;
+    if (callee_id == null) {
+        console.log("Callee not found");
+        return;
+    }
+
+    const file_name = file.split("/")[-1];
+    const params = {'file_name': file_name,
+    				'callee_id': callee_id,
+    				'caller_name': caller,
+    				'caller_src_start': caller_src_start,
+    				'caller_src_end': caller_src_end,
+    				'call_src_start': call_src_end
+    				'call_src_end': call_src_end};
+
+    // connect caller to callee
+    q = `MATCH (callee), (caller)
+    		WHERE ID(callee) = $callee_id AND
+				  caller.name = $caller_name AND
+    		      caller.file_name = $file_name AND
+    		      caller.src_start = $caller_src_start AND
+    		      caller.src_end = $caller_src_end
+			MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
+
+    graph.query(q, {params: params});
+}
+
+//-----------------------------------------------------------------------------
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
 
