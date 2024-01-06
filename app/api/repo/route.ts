@@ -6,9 +6,6 @@ import Parser from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falkordb';
 
-// const client = createClient();
-// client.connect()
-
 //-----------------------------------------------------------------------------
 // Graph operations
 //-----------------------------------------------------------------------------
@@ -37,9 +34,14 @@ function create_indices(graph: Graph) {
     graph.query("CREATE VECTOR INDEX FOR (f:Function) ON (f.src_embeddings) OPTIONS {dimension:1536, similarityFunction:'euclidean'}");
 }
 
-function create_module(file: string, graph: Graph) {
+function create_module
+(
+	file: string,
+	graph: Graph
+) {
     // Create module node
-    const file_name = file.split("/")[-1];
+    const file_components = file.split("/");
+    const file_name = file_components[file_components.length - 1];
     const params = {'name': file_name};
     
     const q = "MERGE (m:Module {name: $name}) RETURN ID(m)";
@@ -57,16 +59,22 @@ function create_module(file: string, graph: Graph) {
     //             graph.query(q, params)
 }
 
-function create_class(file: string, graph: Graph, class_name: string,
-	src_start: int, src_end: int) {
-    
+function create_class
+(
+	file: string,
+	graph: Graph,
+	class_name: string,
+	src_start: int,
+	src_end: int
+) {
     // create class node
-    const file_name = file.split("/")[-1];
+    const file_components = file.split("/");
+    const file_name = file_components[file_components.length - 1];
 
-    const params = {'name': node.name,
+    const params = {'name': class_name,
               'file_name': file_name,
-              'src_start': node.lineno,
-              'src_end': node.end_lineno};
+              'src_start': src_start,
+              'src_end': src_end};
 
     // create Class and connect to Module
     const q = `MERGE (c:Class {name: $name, file_name: $file_name,
@@ -77,43 +85,80 @@ function create_class(file: string, graph: Graph, class_name: string,
     graph.query(q, {params: params});
 }
 
-function create_function(file: string, graph: Graph, function_name: string,
-	parent: string, args: string[], src_start: int, src_end: int) {
+function inherit_class
+(
+	file: string,
+	graph: Graph,
+	node
+) {
+    //-------------------------------------------------------------------------
+    // determine class inheritance
+    //-------------------------------------------------------------------------
+
+    //inheritance = []
+    //for base in node.bases:
+    //    if isinstance(base, ast.Name):
+    //        inheritance.append(base.id)
+
+    //file_name = file.split("/")[-1]
+    //params = {'name': node.name,
+    //          'file_name': file_name,
+    //          'src_start': node.lineno,
+    //          'src_end': node.end_lineno,
+    //          'inheritance': inheritance}
+
+    //q = """MATCH (c:Class {name: $name, file_name: $file_name,
+    //       src_start:$src_start, src_end: $src_end}), (base:Class)
+    //       WHERE base.name IN $inheritance
+    //       MERGE (c)-[:INHERITS]->(base)"""
+    //
+    //graph.query(q, params)
+}
+
+function create_function
+(
+	file: string,
+	graph: Graph,
+	function_name: string,
+	parent: string,
+	args: string[],
+	src_start: int,
+	src_end: int,
+	src: string
+) {
     // scan function arguments
-    if(args[0] == "self") {
-    	args = args[1:];
+    if(args.length > 0 && args[0] == "self") {
+    	args.shift();
     }
 
     // create function node
-    const file_name = file.split("/")[-1];
-    
-    // function source code
-    let src_code: string;
+    const file_components = file.split("/");
+    const file_name = file_components[file_components.length - 1];
 
-    fs.readFile(file, 'utf8', function (err: any, source: string) {
-		if (err) {
-			return console.log(err);
-		}
-		src_code = source;
-	});
+    let params = {'name':      function_name,
+				  'file_name': file_name,
+    			  'src_code':  src,
+    			  'src_start': src_start,
+    			  'src_end':   src_end,
+    			  'args':      args};
 
-    let params = {'name': function_name, 'file_name': file_name, 'src_code': src_code,
-              'src_start': src_start, 'src_end': src_end, 'args': args};
-
-    q = `CREATE (f:Function {name: $name, file_name: $file_name,
+    let q = `CREATE (f:Function {name: $name, file_name: $file_name,
            src_code: $src_code, src_start: $src_start, src_end: $src_end,
            args: $args})
-           RETURN ID(f)`;
-    f_id = graph.query(q, {params: params}).result_set[0][0];
+           RETURN ID(f) as func_id`;
 
-    
+    console.log(JSON.stringify(params, null, 2));
+    let result = await graph.query(q, {params: params});
+    let f_id = result.data[0]['func_id'];
+    console.log("HERE!, f_id: " + f_id);
+
     // Connect function to parent
     params = {'f_id': f_id, 'c_name': parent};
 
     q = `MATCH (c:Class {name: $c_name})
     MATCH (f:Function) WHERE ID(f) = $f_id
     MERGE (c)-[:CONTAINS]->(f)`;
-    graph.query(q, params);
+    graph.query(q, {params: params});
 
     // if isinstance(parent, ast.Module):
     //     params = {'m_name': file_name, 'f_id': f_id}
@@ -137,31 +182,6 @@ function create_function(file: string, graph: Graph, function_name: string,
     //     graph.query(q, params)
     // else:
     //     raise("Unhandled parent type")
-}
-
-function inherit_class(file: string, graph: Graph, node) {
-    //-------------------------------------------------------------------------
-    // determine class inheritance
-    //-------------------------------------------------------------------------
-
-    //inheritance = []
-    //for base in node.bases:
-    //    if isinstance(base, ast.Name):
-    //        inheritance.append(base.id)
-
-    //file_name = file.split("/")[-1]
-    //params = {'name': node.name,
-    //          'file_name': file_name,
-    //          'src_start': node.lineno,
-    //          'src_end': node.end_lineno,
-    //          'inheritance': inheritance}
-
-    //q = """MATCH (c:Class {name: $name, file_name: $file_name,
-    //       src_start:$src_start, src_end: $src_end}), (base:Class)
-    //       WHERE base.name IN $inheritance
-    //       MERGE (c)-[:INHERITS]->(base)"""
-    //
-    //graph.query(q, params)
 }
 
 function create_function_call
@@ -193,12 +213,12 @@ function create_function_call
     }
 
     const file_name = file.split("/")[-1];
-    const params = {'file_name': file_name,
+    params = {'file_name': file_name,
     				'callee_id': callee_id,
     				'caller_name': caller,
     				'caller_src_start': caller_src_start,
     				'caller_src_end': caller_src_end,
-    				'call_src_start': call_src_end
+    				'call_src_start': call_src_end,
     				'call_src_end': call_src_end};
 
     // connect caller to callee
@@ -233,77 +253,103 @@ let function_call_query: Parser.Query;
 
 let param_query: Parser.Query;
 
-// Process Python file (Module)
-function processPythonSource(source_file: string) {
-	// read file
-	fs.readFile(source_file, 'utf8', function (err: any, source: string) {
-		if (err) {
-			return console.log(err);
-		}
-
-		// Construct an AST from source
-		const tree = parser.parse(source);
-		
-		// match all Class definitions
-		let class_matches = class_definition_query.matches(tree.rootNode);
-
-		// Iterate over each matched Class
-		for (let class_match of class_matches) {			
-			processClassDeclaration(source_file, class_match);
-		}
-	});
-}
-
 // Process Class declaration
-function processClassDeclaration(source_file: string, match: Parser.QueryMatch) {
+function processClassDeclaration
+(
+	source_file: string,
+	graph: Graph,
+	match: Parser.QueryMatch
+) {
 	let class_node      = match.captures[0].node;
 	let class_name      = match.captures[1].node.text;	
 	let class_src_end   = class_node.endPosition.row;
 	let class_src_start = class_node.startPosition.row;
 
+	create_class(source_file, graph, class_name, class_src_start, class_src_end);
+
 	// Match all function definition within the current class
 	let function_matches = function_definition_query.matches(class_node);
 	for (let function_match of function_matches) {	
-		processFunctionDeclaration(source_file, function_match);
+		processFunctionDeclaration(source_file, graph, class_name, function_match);
 	}
 }
 
 // Process function declaration
-function processFunctionDeclaration(source_file: string, match: Parser.QueryMatch) {	
-	let function_node   = match.captures[0].node;
-	let function_name   = match.captures[1].node.text;
-	let function_params = match.captures[2].node;
+function processFunctionDeclaration
+(
+	source_file: string,
+	graph: Graph,
+	parent: string,
+	match: Parser.QueryMatch
+) {
+	let function_node = match.captures[0].node;
+	let function_name = match.captures[1].node.text;
+	let function_args = match.captures[2].node;
 
 	//-------------------------------------------------------------------------
-	// Extract function params
+	// Extract function args
 	//-------------------------------------------------------------------------
 
-	let params: string[] = [];
-	for (let i = 0; i < function_params.namedChildCount; i++) {
-		let child_node = function_params.namedChild(i);
+	let args: string[] = [];
+	for (let i = 0; i < function_args.namedChildCount; i++) {
+		let child_node = function_args.namedChild(i);
 		// if parameter is an identifier e.g. f(a)
 		// then simply 
 		if(child_node.type == 'identifier') {
-			params.push(child_node.text);
+			args.push(child_node.text);
 		} else {
 			let identifier_matches = param_query.matches(child_node)[0].captures;
 			const identifierNode = identifier_matches[0].node;
-			params.push(identifierNode.text);
+			args.push(identifierNode.text);
 		}
 	}
 
+	let src                = function_node.text;
 	let function_src_end   = function_node.endPosition.row;
 	let function_src_start = function_node.startPosition.row;
 
-	// Match all function calls within the current function
-	let function_call_matches = function_call_query.matches(function_node);
+	create_function(source_file, graph, function_name, parent, args,
+		function_src_start, function_src_end, src);
 
-	for (let function_call of function_call_matches) {
-		let callee = function_call.captures[0].node.text;
+	// Match all function calls within the current function
+	// let function_call_matches = function_call_query.matches(function_node);
+
+	// for (let function_call of function_call_matches) {
+	// 	let callee = function_call.captures[0].node.text;
+	// }
+}
+
+function processFirstPass(source_files: string[], graph: Graph) {
+	for (let source_file of source_files) {
+		console.log("Processing file: " + source_file);
+				
+		create_module(source_file, graph);
+		
+		const src = fs.readFileSync(source_file, 'utf8');
+
+		// Construct an AST from src
+		const tree = parser.parse(src);
+		
+		// Match all Class definitions
+		let class_matches = class_definition_query.matches(tree.rootNode);
+
+		// Iterate over each matched Class
+		for (let class_match of class_matches) {			
+			processClassDeclaration(source_file, graph, class_match);
+		}
 	}
 }
 
-export async function POST(request: NextRequest) {
+function processSecondPass(source_files: string[], graph: Graph) {
+
+}
+
+export async function POST(request: NextRequest) {	
+
+	// Connect to FalkorDB	
+	const client = createClient();
+	await client.connect();
+
 	// Initialize Tree-Sitter parser
 	await Parser.init({
 		locateFile(scriptName: string, scriptDirectory: string) {
@@ -338,6 +384,14 @@ export async function POST(request: NextRequest) {
 	url = "https://github.com/falkorDB/falkordb-py";
 	console.log("Processing url: " + url);
 
+	let urlParts       = url.split('/');
+	const organization = urlParts[urlParts.length - 2];
+	const repo         = urlParts[urlParts.length - 1];
+	const graphId      = `${organization}-${repo}`;
+	const graph        = new Graph(client, graphId);
+
+	create_indices(graph);
+
 	//--------------------------------------------------------------------------
 	// clone repo into temporary folder
 	//--------------------------------------------------------------------------
@@ -350,9 +404,8 @@ export async function POST(request: NextRequest) {
 	//--------------------------------------------------------------------------
 	// process repo
 	//--------------------------------------------------------------------------
-
-	let repo_name = url.split("/").pop();
-	let repo_root = path.join(tmp_dir, repo_name);
+	
+	let repo_root = path.join(tmp_dir, repo);
 	console.log("repo_root: " + repo_root);
 
 	//--------------------------------------------------------------------------
@@ -375,10 +428,13 @@ export async function POST(request: NextRequest) {
 	// process each source file
 	//--------------------------------------------------------------------------
 
-	for (let source_file of source_files) {
-		console.log("Processing file: " + source_file);
-		processPythonSource(source_file);
-	}
+	// first pass, declarations only.
+	processFirstPass(source_files, graph);
+
+	// second pass calls.
+	processSecondPass(source_files, graph);
+
+	console.log("All done!");
 
 	return NextResponse.json({ message: "in progress..." }, { status: 201 })
 }
