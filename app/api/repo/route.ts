@@ -150,15 +150,13 @@ async function create_function
            args: $args})
            RETURN ID(f) as func_id`;
 
-    console.log(JSON.stringify(params, null, 2));
     let result: any = await graph.query(q, {params: params});
     let f_id = result.data[0]['func_id'];
-    console.log("HERE!, f_id: " + f_id);
 
     // Connect function to parent
-    params = {'f_id': f_id, 'c_name': parent};
+    params = {'f_id': f_id, 'parent': parent};
 
-    q = `MATCH (c:Class {name: $c_name})
+    q = `MATCH (parent {name: $parent})
     MATCH (f:Function) WHERE ID(f) = $f_id
     MERGE (c)-[:CONTAINS]->(f)`;
     await graph.query(q, {params: params});
@@ -270,7 +268,7 @@ let function_definition_query: Parser.Query;
 // responsible for matching function calls, in addition to extracting the callee function name
 let function_call_query: Parser.Query;
 
-let param_query: Parser.Query;
+let identifier_query: Parser.Query;
 
 // Process Class declaration
 async function processClassDeclaration
@@ -285,12 +283,6 @@ async function processClassDeclaration
 	let class_src_start = class_node.startPosition.row;
 
 	await create_class(source_file, graph, class_name, class_src_start, class_src_end);
-
-	// Match all function definition within the current class
-	let function_matches = function_definition_query.matches(class_node);
-	for (let function_match of function_matches) {	
-		await processFunctionDeclaration(source_file, graph, class_name, function_match);
-	}
 }
 
 // Process function declaration
@@ -298,12 +290,31 @@ async function processFunctionDeclaration
 (
 	source_file: string,
 	graph: Graph,
-	parent: string,
 	match: Parser.QueryMatch
 ) {
 	let function_node = match.captures[0].node;
 	let function_name = match.captures[1].node.text;
 	let function_args = match.captures[2].node;
+
+	//-------------------------------------------------------------------------
+	// Determine function parent
+	//-------------------------------------------------------------------------
+
+	let parent: any = function_node.parent;
+
+	while(parent != null && parent.type != 'class_definition') {
+		parent = parent.parent;
+	}
+
+	if(parent == null) {
+		// create function node
+	    const file_components = source_file.split("/");
+	    parent = file_components[file_components.length - 1];
+	} else {	
+		let identifier_matches = identifier_query.matches(parent)[0].captures;
+		const identifierNode   = identifier_matches[0].node;
+		parent = identifierNode.text;
+	}
 
 	//-------------------------------------------------------------------------
 	// Extract function args
@@ -317,7 +328,7 @@ async function processFunctionDeclaration
 		if(child_node.type == 'identifier') {
 			args.push(child_node.text);
 		} else {
-			let identifier_matches = param_query.matches(child_node)[0].captures;
+			let identifier_matches = identifier_query.matches(child_node)[0].captures;
 			const identifierNode = identifier_matches[0].node;
 			args.push(identifierNode.text);
 		}
@@ -376,6 +387,12 @@ async function processFirstPass
 		// Iterate over each matched Class
 		for (let class_match of class_matches) {			
 			await processClassDeclaration(source_file, graph, class_match);
+		}
+
+		// Match all function definition within the current class
+		let function_matches = function_definition_query.matches(tree.rootNode);
+		for (let function_match of function_matches) {
+			await processFunctionDeclaration(source_file, graph, function_match);
 		}
 	}
 }
@@ -437,7 +454,7 @@ export async function POST(request: NextRequest) {
 	// Tree-Sitter AST queries
 	//-------------------------------------------------------------------------
 	
-	param_query               = Python.query(`((identifier) @identifier)`);
+	identifier_query          = Python.query(`((identifier) @identifier)`);
 	function_call_query 	  = Python.query(`((call function: (identifier) @function-name) @function-call)`);
 	class_definition_query    = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
 	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
