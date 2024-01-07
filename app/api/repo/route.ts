@@ -1,6 +1,6 @@
-import os        from 'os';
-import path      from 'path';
-import Parser    from 'web-tree-sitter';
+import os from 'os';
+import path from 'path';
+import Parser from 'web-tree-sitter';
 import simpleGit from 'simple-git';
 
 
@@ -14,218 +14,224 @@ import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falko
 //-----------------------------------------------------------------------------
 
 async function create_indices(graph: Graph) {
-    console.log("Creating indices");
+	console.log("Creating indices");
 
-    //-------------------------------------------------------------------------
-    // index "name" attribute
-    //-------------------------------------------------------------------------
+	//-------------------------------------------------------------------------
+	// index "name" attribute
+	//-------------------------------------------------------------------------
 
-    console.log("Creating range index on Class.name");
-    await graph.query("CREATE INDEX FOR (c:Class) ON (c.name)");    
+	console.log("Creating range index on Class.name");
+	await graph.query("CREATE INDEX FOR (c:Class) ON (c.name)");
 
-    console.log("Creating range index on Module.name");
-    await graph.query("CREATE INDEX FOR (m:Module) ON (m.name)");
+	console.log("Creating range index on Module.name");
+	await graph.query("CREATE INDEX FOR (m:Module) ON (m.name)");
 
-    console.log("Creating range index on Function.name");
-    await graph.query("CREATE INDEX FOR (f:Function) ON (f.name)");
+	console.log("Creating range index on Function.name");
+	await graph.query("CREATE INDEX FOR (f:Function) ON (f.name)");
 
-    //-------------------------------------------------------------------------
-    // index "src_embeddings" attribute
-    //-------------------------------------------------------------------------
+	//-------------------------------------------------------------------------
+	// index "src_embeddings" attribute
+	//-------------------------------------------------------------------------
 
-    console.log("Creating vector index on Function.src_embeddings");
-    await graph.query("CREATE VECTOR INDEX FOR (f:Function) ON (f.src_embeddings) OPTIONS {dimension:1536, similarityFunction:'euclidean'}");
+	console.log("Creating vector index on Function.src_embeddings");
+	await graph.query("CREATE VECTOR INDEX FOR (f:Function) ON (f.src_embeddings) OPTIONS {dimension:1536, similarityFunction:'euclidean'}");
 }
 
 async function create_module
-(
-	file: string,
-	graph: Graph
-) {
-    // Create module node
-    const file_components = file.split("/");
-    const file_name = file_components[file_components.length - 1];
-    const params = {'name': file_name};
-    
-    const q = "MERGE (m:Module {name: $name}) RETURN ID(m)";
-    await graph.query(q, {params: params});
+	(
+		file: string,
+		graph: Graph
+	) {
+	// Create module node
+	const file_components = file.split("/");
+	const file_name = file_components[file_components.length - 1];
+	const params = { 'name': file_name };
 
-    // module imports
-    // for imp in node.body:
-    //     if isinstance(imp, ast.Import):
-    //         for alias in imp.names:
-    //             params = {'m_id': m_id, 'import_name': alias.name}
-    //             q = """MATCH (m:Module)
-    //                    WHERE ID(m) = $m_id
-    //                    MERGE (i:Module {name: $import_name})
-    //                    MERGE (m)-[:IMPORTS]->(i)"""
-    //             graph.query(q, params)
+	const q = "MERGE (m:Module {name: $name}) RETURN ID(m)";
+	await graph.query(q, { params: params });
+
+	// module imports
+	// for imp in node.body:
+	//     if isinstance(imp, ast.Import):
+	//         for alias in imp.names:
+	//             params = {'m_id': m_id, 'import_name': alias.name}
+	//             q = """MATCH (m:Module)
+	//                    WHERE ID(m) = $m_id
+	//                    MERGE (i:Module {name: $import_name})
+	//                    MERGE (m)-[:IMPORTS]->(i)"""
+	//             graph.query(q, params)
 }
 
 async function create_class
-(
-	file: string,
-	graph: Graph,
-	class_name: string,
-	src_start: number,
-	src_end: number
-) {
-    // create class node
-    const file_components = file.split("/");
-    const file_name = file_components[file_components.length - 1];
+	(
+		file: string,
+		graph: Graph,
+		class_name: string,
+		src_start: number,
+		src_end: number
+	) {
+	// create class node
+	const file_components = file.split("/");
+	const file_name = file_components[file_components.length - 1];
 
-    const params = {'name': class_name,
-              'file_name': file_name,
-              'src_start': src_start,
-              'src_end': src_end};
+	const params = {
+		'name': class_name,
+		'file_name': file_name,
+		'src_start': src_start,
+		'src_end': src_end
+	};
 
-    // create Class and connect to Module
-    const q = `MERGE (c:Class {name: $name, file_name: $file_name,
+	// create Class and connect to Module
+	const q = `MERGE (c:Class {name: $name, file_name: $file_name,
            src_start:$src_start, src_end: $src_end})
            WITH c
            MATCH (m:Module {name: $file_name})
            MERGE (m)-[:CONTAINS]->(c)`;
-    await graph.query(q, {params: params});
+	await graph.query(q, { params: params });
 }
 
 function inherit_class
-(
-	file: string,
-	graph: Graph,
-	node: any
-) {
-    //-------------------------------------------------------------------------
-    // determine class inheritance
-    //-------------------------------------------------------------------------
+	(
+		file: string,
+		graph: Graph,
+		node: any
+	) {
+	//-------------------------------------------------------------------------
+	// determine class inheritance
+	//-------------------------------------------------------------------------
 
-    //inheritance = []
-    //for base in node.bases:
-    //    if isinstance(base, ast.Name):
-    //        inheritance.append(base.id)
+	//inheritance = []
+	//for base in node.bases:
+	//    if isinstance(base, ast.Name):
+	//        inheritance.append(base.id)
 
-    //file_name = file.split("/")[-1]
-    //params = {'name': node.name,
-    //          'file_name': file_name,
-    //          'src_start': node.lineno,
-    //          'src_end': node.end_lineno,
-    //          'inheritance': inheritance}
+	//file_name = file.split("/")[-1]
+	//params = {'name': node.name,
+	//          'file_name': file_name,
+	//          'src_start': node.lineno,
+	//          'src_end': node.end_lineno,
+	//          'inheritance': inheritance}
 
-    //q = """MATCH (c:Class {name: $name, file_name: $file_name,
-    //       src_start:$src_start, src_end: $src_end}), (base:Class)
-    //       WHERE base.name IN $inheritance
-    //       MERGE (c)-[:INHERITS]->(base)"""
-    //
-    //graph.query(q, params)
+	//q = """MATCH (c:Class {name: $name, file_name: $file_name,
+	//       src_start:$src_start, src_end: $src_end}), (base:Class)
+	//       WHERE base.name IN $inheritance
+	//       MERGE (c)-[:INHERITS]->(base)"""
+	//
+	//graph.query(q, params)
 }
 
 async function create_function
-(
-	file: string,
-	graph: Graph,
-	function_name: string,
-	parent: string,
-	args: string[],
-	src_start: number,
-	src_end: number,
-	src: string
-) {
-    // scan function arguments
-    if(args.length > 0 && args[0] == "self") {
-    	args.shift();
-    }
+	(
+		file: string,
+		graph: Graph,
+		function_name: string,
+		parent: string,
+		args: string[],
+		src_start: number,
+		src_end: number,
+		src: string
+	) {
+	// scan function arguments
+	if (args.length > 0 && args[0] == "self") {
+		args.shift();
+	}
 
-    // create function node
-    const file_components = file.split("/");
-    const file_name = file_components[file_components.length - 1];
+	// create function node
+	const file_components = file.split("/");
+	const file_name = file_components[file_components.length - 1];
 
-    let params: any = {'name':      function_name,
-				  'file_name': file_name,
-    			  'src_code':  src,
-    			  'src_start': src_start,
-    			  'src_end':   src_end,
-    			  'args':      args};
+	let params: any = {
+		'name': function_name,
+		'file_name': file_name,
+		'src_code': src,
+		'src_start': src_start,
+		'src_end': src_end,
+		'args': args
+	};
 
-    let q = `CREATE (f:Function {name: $name, file_name: $file_name,
+	let q = `CREATE (f:Function {name: $name, file_name: $file_name,
            src_code: $src_code, src_start: $src_start, src_end: $src_end,
            args: $args})
            RETURN ID(f) as func_id`;
 
-    let result: any = await graph.query(q, {params: params});
-    let f_id = result.data[0]['func_id'];
+	let result: any = await graph.query(q, { params: params });
+	let f_id = result.data[0]['func_id'];
 
-    // Connect function to parent
-    params = {'f_id': f_id, 'parent': parent};
+	// Connect function to parent
+	params = { 'f_id': f_id, 'parent': parent };
 
-    q = `MATCH (parent {name: $parent})
+	q = `MATCH (parent {name: $parent})
     MATCH (f:Function) WHERE ID(f) = $f_id
     MERGE (parent)-[:CONTAINS]->(f)`;
-    await graph.query(q, {params: params});
+	await graph.query(q, { params: params });
 
-    // if isinstance(parent, ast.Module):
-    //     params = {'m_name': file_name, 'f_id': f_id}
-    //     q = """MATCH (m:Module {name: $m_name})
-    //            MATCH (f:Function) WHERE ID(f) = $f_id
-    //            MERGE (m)-[:CONTAINS]->(f)"""
-    //     graph.query(q, params)
-    // elif isinstance(parent, ast.ClassDef):
-    //     params = {'f_id': f_id, 'c_name': parent.name}
-    //     q = """MATCH (c:Class {name: $c_name})
-    //            MATCH (f:Function) WHERE ID(f) = $f_id
-    //            MERGE (c)-[:CONTAINS]->(f)"""
-    //     graph.query(q, params)
-    // elif isinstance(parent, ast.FunctionDef):
-    //     params = {'f_id': f_id,
-    //               'parent_name': parent.name, 'parent_src_start': parent.lineno,
-    //               'parent_src_end': parent.end_lineno, 'file_name': file_name}
-    //     q = """MATCH (p:Function {name: $parent_name, src_start: $parent_src_start, src_end: $parent_src_end, file_name: $file_name})
-    //            MATCH (f2:Function) WHERE ID(f2) = $f_id
-    //            MERGE (p)-[:CONTAINS]->(f2)"""
-    //     graph.query(q, params)
-    // else:
-    //     raise("Unhandled parent type")
+	// if isinstance(parent, ast.Module):
+	//     params = {'m_name': file_name, 'f_id': f_id}
+	//     q = """MATCH (m:Module {name: $m_name})
+	//            MATCH (f:Function) WHERE ID(f) = $f_id
+	//            MERGE (m)-[:CONTAINS]->(f)"""
+	//     graph.query(q, params)
+	// elif isinstance(parent, ast.ClassDef):
+	//     params = {'f_id': f_id, 'c_name': parent.name}
+	//     q = """MATCH (c:Class {name: $c_name})
+	//            MATCH (f:Function) WHERE ID(f) = $f_id
+	//            MERGE (c)-[:CONTAINS]->(f)"""
+	//     graph.query(q, params)
+	// elif isinstance(parent, ast.FunctionDef):
+	//     params = {'f_id': f_id,
+	//               'parent_name': parent.name, 'parent_src_start': parent.lineno,
+	//               'parent_src_end': parent.end_lineno, 'file_name': file_name}
+	//     q = """MATCH (p:Function {name: $parent_name, src_start: $parent_src_start, src_end: $parent_src_end, file_name: $file_name})
+	//            MATCH (f2:Function) WHERE ID(f2) = $f_id
+	//            MERGE (p)-[:CONTAINS]->(f2)"""
+	//     graph.query(q, params)
+	// else:
+	//     raise("Unhandled parent type")
 }
 
 async function create_function_call
-(
-	file: string,	          // file in which call occurred
-	graph: Graph,             // graph object
-	caller: string,           // who've invoked the call
-	callee: string,           // who's being called
-	caller_src_start: number, // caller definition start
-	caller_src_end: number,   // caller definition end
-	call_src_start: number,   // first line on which call occurred
-	call_src_end: number      // last line on which call occurred
-) {
-    // make sure callee exists
-    // determine callee type (either a function or a class)
-    let params: any = {'name': callee};
-    let q = `OPTIONAL MATCH (c:Class {name: $name})
+	(
+		file: string,	          // file in which call occurred
+		graph: Graph,             // graph object
+		caller: string,           // who've invoked the call
+		callee: string,           // who's being called
+		caller_src_start: number, // caller definition start
+		caller_src_end: number,   // caller definition end
+		call_src_start: number,   // first line on which call occurred
+		call_src_end: number      // last line on which call occurred
+	) {
+	// make sure callee exists
+	// determine callee type (either a function or a class)
+	let params: any = { 'name': callee };
+	let q = `OPTIONAL MATCH (c:Class {name: $name})
            OPTIONAL MATCH (f:Function {name: $name})
            RETURN ID(c) as c_id, ID(f) as f_id LIMIT 1`;
 
-	let res: any = await graph.query(q, {params: params});
-    let c_id = res.data[0]['c_id'];
-    let f_id = res.data[0]['f_id'];
+	let res: any = await graph.query(q, { params: params });
+	let c_id = res.data[0]['c_id'];
+	let f_id = res.data[0]['f_id'];
 
-    const callee_id = c_id !== null ? c_id : f_id;
-    if (callee_id == null) {
-        //console.log("Callee: " + callee + " not found");
-        return;
-    }
+	const callee_id = c_id !== null ? c_id : f_id;
+	if (callee_id == null) {
+		//console.log("Callee: " + callee + " not found");
+		return;
+	}
 
-    // create function node
-    const file_components = file.split("/");
-    const file_name = file_components[file_components.length - 1];
+	// create function node
+	const file_components = file.split("/");
+	const file_name = file_components[file_components.length - 1];
 
-    params = {'file_name':         file_name,
-			   'callee_id':        callee_id,
-    		   'caller_name':      caller,
-    		   'caller_src_start': caller_src_start,
-    		   'caller_src_end':   caller_src_end,
-    		   'call_src_start':   call_src_end,
-    		   'call_src_end':     call_src_end};
+	params = {
+		'file_name': file_name,
+		'callee_id': callee_id,
+		'caller_name': caller,
+		'caller_src_start': caller_src_start,
+		'caller_src_end': caller_src_end,
+		'call_src_start': call_src_end,
+		'call_src_end': call_src_end
+	};
 
-    // connect caller to callee
+	// connect caller to callee
 	q = `MATCH (callee), (caller)
 		 WHERE ID(callee) = $callee_id AND
 			   caller.name = $caller_name AND
@@ -234,13 +240,13 @@ async function create_function_call
     		   caller.src_end = $caller_src_end
 		 MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
 
-    await graph.query(q, {params: params});
+	await graph.query(q, { params: params });
 }
 
 async function projectGraph
-(
-	graph: Graph
-) {
+	(
+		graph: Graph
+	) {
 	let result = await graph.query(`MATCH (n) RETURN n`);
 	let nodes = result.data;
 
@@ -275,14 +281,14 @@ let identifier_query: Parser.Query;
 
 // Process Class declaration
 async function processClassDeclaration
-(
-	source_file: string,
-	graph: Graph,
-	match: Parser.QueryMatch
-) {
-	let class_node      = match.captures[0].node;
-	let class_name      = match.captures[1].node.text;	
-	let class_src_end   = class_node.endPosition.row;
+	(
+		source_file: string,
+		graph: Graph,
+		match: Parser.QueryMatch
+	) {
+	let class_node = match.captures[0].node;
+	let class_name = match.captures[1].node.text;
+	let class_src_end = class_node.endPosition.row;
 	let class_src_start = class_node.startPosition.row;
 
 	await create_class(source_file, graph, class_name, class_src_start, class_src_end);
@@ -290,11 +296,11 @@ async function processClassDeclaration
 
 // Process function declaration
 async function processFunctionDeclaration
-(
-	source_file: string,
-	graph: Graph,
-	match: Parser.QueryMatch
-) {
+	(
+		source_file: string,
+		graph: Graph,
+		match: Parser.QueryMatch
+	) {
 	let function_node = match.captures[0].node;
 	let function_name = match.captures[1].node.text;
 	let function_args = match.captures[2].node;
@@ -305,17 +311,17 @@ async function processFunctionDeclaration
 
 	let parent: any = function_node.parent;
 
-	while(parent != null && parent.type != 'class_definition') {
+	while (parent != null && parent.type != 'class_definition') {
 		parent = parent.parent;
 	}
 
-	if(parent == null) {
+	if (parent == null) {
 		// create function node
-	    const file_components = source_file.split("/");
-	    parent = file_components[file_components.length - 1];
-	} else {	
+		const file_components = source_file.split("/");
+		parent = file_components[file_components.length - 1];
+	} else {
 		let identifier_matches = identifier_query.matches(parent)[0].captures;
-		const identifierNode   = identifier_matches[0].node;
+		const identifierNode = identifier_matches[0].node;
 		parent = identifierNode.text;
 	}
 
@@ -328,7 +334,7 @@ async function processFunctionDeclaration
 		let child_node: SyntaxNode = function_args.namedChild(i) as SyntaxNode;
 		// if parameter is an identifier e.g. f(a)
 		// then simply 
-		if(child_node.type == 'identifier') {
+		if (child_node.type == 'identifier') {
 			args.push(child_node.text);
 		} else {
 			let identifier_matches = identifier_query.matches(child_node)[0].captures;
@@ -337,8 +343,8 @@ async function processFunctionDeclaration
 		}
 	}
 
-	let src                = function_node.text;
-	let function_src_end   = function_node.endPosition.row;
+	let src = function_node.text;
+	let function_src_end = function_node.endPosition.row;
 	let function_src_start = function_node.startPosition.row;
 
 	await create_function(source_file, graph, function_name, parent, args,
@@ -347,17 +353,17 @@ async function processFunctionDeclaration
 
 // Process function call
 async function processFunctionCall
-(
-	source_file: string,
-	graph: Graph,
-	caller: string,
-	caller_src_start: number,
-	caller_src_end: number,
-	match: Parser.QueryMatch
-) {
-	let call           = match.captures[0].node;
-	let callee         = match.captures[1].node.text;
-	let call_src_end   = call.endPosition.row;
+	(
+		source_file: string,
+		graph: Graph,
+		caller: string,
+		caller_src_start: number,
+		caller_src_end: number,
+		match: Parser.QueryMatch
+	) {
+	let call = match.captures[0].node;
+	let callee = match.captures[1].node.text;
+	let call_src_end = call.endPosition.row;
 	let call_src_start = call.startPosition.row;
 
 	console.log(caller + " calls " + callee);
@@ -372,25 +378,25 @@ async function processFunctionCall
 // 2. Class declarations
 // 3. Function declarations
 async function processFirstPass
-(
-	source_files: string[],
-	graph: Graph
-) {
+	(
+		source_files: string[],
+		graph: Graph
+	) {
 	for (let source_file of source_files) {
 		console.log("Processing file: " + source_file);
-				
+
 		await create_module(source_file, graph);
-		
+
 		const src = await fs.readFile(source_file, 'utf8');
 
 		// Construct an AST from src
 		const tree = parser.parse(src);
-		
+
 		// Match all Class definitions
 		let class_matches = class_definition_query.matches(tree.rootNode);
 
 		// Iterate over each matched Class
-		for (let class_match of class_matches) {			
+		for (let class_match of class_matches) {
 			await processClassDeclaration(source_file, graph, class_match);
 		}
 
@@ -406,28 +412,28 @@ async function processFirstPass
 // Introduces:
 // 1. Function calls
 async function processSecondPass
-(
-	source_files: string[],
-	graph: Graph
-) {
+	(
+		source_files: string[],
+		graph: Graph
+	) {
 	// for each source file
 	for (let source_file of source_files) {
 		const src = await fs.readFile(source_file, 'utf8');
 
 		// Construct an AST from src
 		const tree = parser.parse(src);
-		
+
 		// Match all Function definitions
 		let function_matches = function_definition_query.matches(tree.rootNode);
 
 		// Iterate over each matched Function
 		for (let function_match of function_matches) {
-			let function_node      = function_match.captures[0].node;
-			let function_name      = function_match.captures[1].node.text;
+			let function_node = function_match.captures[0].node;
+			let function_name = function_match.captures[1].node.text;
 			let function_src_start = function_node.startPosition.row;
-			let function_src_end   = function_node.endPosition.row;
+			let function_src_end = function_node.endPosition.row;
 
-			if(function_name == "query") {
+			if (function_name == "query") {
 				console.log("function_node: " + function_node);
 			}
 
@@ -443,16 +449,19 @@ async function processSecondPass
 			for (let function_call_match of function_call_matches) {
 				let function_call_node = function_call_match.captures[0].node;
 				await processFunctionCall(source_file, graph, function_name,
-				function_src_start, function_src_end, function_call_match);
+					function_src_start, function_src_end, function_call_match);
 			}
 		}
 	}
 }
 
-export async function POST(request: NextRequest) {	
+export async function POST(request: NextRequest) {
 
 	// Connect to FalkorDB	
-	const client = createClient();
+	const client = createClient({
+		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
+	});
+	
 	await client.connect();
 
 	// Initialize Tree-Sitter parser
@@ -470,11 +479,11 @@ export async function POST(request: NextRequest) {
 	//-------------------------------------------------------------------------
 	// Tree-Sitter AST queries
 	//-------------------------------------------------------------------------
-	
-	identifier_query          = Python.query(`((identifier) @identifier)`);
-	function_call_query 	  = Python.query(`((call function: (identifier) @function-name) @function-call)`);
-	function_attr_call_query  = Python.query(`((call function: (attribute object: (identifier) attribute: (identifier) @function-name )) @function-call)`);
-	class_definition_query    = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
+
+	identifier_query = Python.query(`((identifier) @identifier)`);
+	function_call_query = Python.query(`((call function: (identifier) @function-name) @function-call)`);
+	function_attr_call_query = Python.query(`((call function: (attribute object: (identifier) attribute: (identifier) @function-name )) @function-call)`);
+	class_definition_query = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
 	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
 
 	// Download Github Repo into a temporary folder
@@ -490,11 +499,11 @@ export async function POST(request: NextRequest) {
 	url = "https://github.com/falkorDB/falkordb-py";
 	console.log("Processing url: " + url);
 
-	let urlParts       = url.split('/');
+	let urlParts = url.split('/');
 	const organization = urlParts[urlParts.length - 2];
-	const repo         = urlParts[urlParts.length - 1];
-	const graphId      = `${organization}-${repo}`;
-	const graph        = new Graph(client, graphId);
+	const repo = urlParts[urlParts.length - 1];
+	const graphId = `${organization}-${repo}`;
+	const graph = new Graph(client, graphId);
 
 	create_indices(graph);
 
@@ -510,7 +519,7 @@ export async function POST(request: NextRequest) {
 	//--------------------------------------------------------------------------
 	// process repo
 	//--------------------------------------------------------------------------
-	
+
 	let repo_root = path.join(tmp_dir, repo);
 	console.log("repo_root: " + repo_root);
 
@@ -529,7 +538,7 @@ export async function POST(request: NextRequest) {
 		}
 	}
 	await walk(repo_root);
-	
+
 	//--------------------------------------------------------------------------
 	// process each source file
 	//--------------------------------------------------------------------------
@@ -544,5 +553,5 @@ export async function POST(request: NextRequest) {
 
 	console.log("All done!");
 
-	return NextResponse.json({id:graphId, nodes:code_graph[0], edges:code_graph[1]}, { status: 201 })
+	return NextResponse.json({ id: graphId, nodes: code_graph[0], edges: code_graph[1] }, { status: 201 })
 }
