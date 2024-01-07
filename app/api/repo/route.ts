@@ -189,10 +189,10 @@ async function create_function
 
 async function create_function_call
 (
-	file: string,	       // file in which call occurred
-	graph: Graph,          // graph object
-	caller: string,        // who've invoked the call
-	callee: string,        // who's being called
+	file: string,	          // file in which call occurred
+	graph: Graph,             // graph object
+	caller: string,           // who've invoked the call
+	callee: string,           // who's being called
 	caller_src_start: number, // caller definition start
 	caller_src_end: number,   // caller definition end
 	call_src_start: number,   // first line on which call occurred
@@ -211,18 +211,21 @@ async function create_function_call
 
     const callee_id = c_id !== null ? c_id : f_id;
     if (callee_id == null) {
-        console.log("Callee not found");
+        console.log("Callee: " + callee + " not found");
         return;
     }
 
-    const file_name = file.split("/")[-1];
-    params = {'file_name': file_name,
-    				'callee_id': callee_id,
-    				'caller_name': caller,
-    				'caller_src_start': caller_src_start,
-    				'caller_src_end': caller_src_end,
-    				'call_src_start': call_src_end,
-    				'call_src_end': call_src_end};
+    // create function node
+    const file_components = file.split("/");
+    const file_name = file_components[file_components.length - 1];
+
+    params = {'file_name':         file_name,
+			   'callee_id':        callee_id,
+    		   'caller_name':      caller,
+    		   'caller_src_start': caller_src_start,
+    		   'caller_src_end':   caller_src_end,
+    		   'call_src_start':   call_src_end,
+    		   'call_src_end':     call_src_end};
 
     // connect caller to callee
     q = `MATCH (callee), (caller)
@@ -233,7 +236,7 @@ async function create_function_call
     		      caller.src_end = $caller_src_end
 			MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
 
-    graph.query(q, {params: params});
+    await graph.query(q, {params: params});
 }
 
 async function projectGraph
@@ -326,16 +329,37 @@ async function processFunctionDeclaration
 
 	await create_function(source_file, graph, function_name, parent, args,
 		function_src_start, function_src_end, src);
-
-	// Match all function calls within the current function
-	// let function_call_matches = function_call_query.matches(function_node);
-
-	// for (let function_call of function_call_matches) {
-	// 	let callee = function_call.captures[0].node.text;
-	// }
 }
 
-async function processFirstPass(source_files: string[], graph: Graph) {
+// Process function call
+async function processFunctionCall
+(
+	source_file: string,
+	graph: Graph,
+	parent: string,
+	parent_src_start: number,
+	parent_src_end: number,
+	match: Parser.QueryMatch
+) {
+	let call           = match.captures[0].node;
+	let callee         = match.captures[1].node.text;
+	let call_src_end   = call.endPosition.row;
+	let call_src_start = call.startPosition.row;
+
+	await create_function_call(source_file, graph, parent, callee,
+		parent_src_start, parent_src_end, call_src_start, call_src_end);
+}
+
+// Process first pass
+// Introduces:
+// 1. Modules
+// 2. Class declarations
+// 3. Function declarations
+async function processFirstPass
+(
+	source_files: string[],
+	graph: Graph
+) {
 	for (let source_file of source_files) {
 		console.log("Processing file: " + source_file);
 				
@@ -356,8 +380,39 @@ async function processFirstPass(source_files: string[], graph: Graph) {
 	}
 }
 
-function processSecondPass(source_files: string[], graph: Graph) {
+// Process second pass
+// Introduces:
+// 1. Function calls
+async function processSecondPass
+(
+	source_files: string[],
+	graph: Graph
+) {
+	// for each source file
+	for (let source_file of source_files) {
+		const src = await fs.readFile(source_file, 'utf8');
 
+		// Construct an AST from src
+		const tree = parser.parse(src);
+		
+		// Match all Function definitions
+		let function_matches = function_definition_query.matches(tree.rootNode);
+
+		// Iterate over each matched Function
+		for (let function_match of function_matches) {
+			let function_node      = function_match.captures[0].node;
+			let function_name      = function_match.captures[1].node.text;
+			let function_src_start = function_node.startPosition.row;
+			let function_src_end   = function_node.endPosition.row;
+
+			// Match all function calls within the current function
+			let function_call_matches = function_call_query.matches(function_node);
+			for (let function_call_match of function_call_matches) {
+				await processFunctionCall(source_file, graph, function_name,
+					function_src_start, function_src_end, function_call_match);
+			}
+		}
+	}
 }
 
 export async function POST(request: NextRequest) {	
@@ -383,7 +438,7 @@ export async function POST(request: NextRequest) {
 	//-------------------------------------------------------------------------
 	
 	param_query               = Python.query(`((identifier) @identifier)`);
-	function_call_query 	  = Python.query(`((call function: (identifier) @function-name))`);
+	function_call_query 	  = Python.query(`((call function: (identifier) @function-name) @function-call)`);
 	class_definition_query    = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
 	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
 
@@ -448,7 +503,7 @@ export async function POST(request: NextRequest) {
 	await processFirstPass(source_files, graph);
 
 	// second pass calls.
-	processSecondPass(source_files, graph);
+	await processSecondPass(source_files, graph);
 
 	let code_graph = projectGraph(graph);
 
