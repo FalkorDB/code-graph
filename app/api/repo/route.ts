@@ -505,9 +505,9 @@ export async function POST(request: NextRequest) {
 	// second pass calls.
 	await processSecondPass(source_files, graph);
 
-	let code_graph = projectGraph(graph);
+	let code_graph = await projectGraph(graph);
 
 	console.log("All done!");
 
-	return NextResponse.json({ message: "in progress..." }, { status: 201 })
+	return NextResponse.json({id:graphId, nodes:code_graph[0], edges:code_graph[1]}, { status: 201 })
 }

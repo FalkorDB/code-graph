@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import ReactECharts, { EChartsInstance } from 'echarts-for-react';
 import { useState, useRef } from 'react';
 import { Chat } from './chat';
-import { Graph, SAMPLE_GRAPH } from './api/model';
+import { Graph, extractData } from './model';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
@@ -13,7 +13,7 @@ import { ToastAction } from '@/components/ui/toast';
 export default function Home() {
 
   const [url, setURL] = useState('https://github.com/falkorDB/falkordb-py');
-  const [graph, setGraph] = useState<Graph>(SAMPLE_GRAPH);
+  const [graph, setGraph] = useState<Graph>({id: '', nodes: [], edges: [], categories: []});
   const echartRef = useRef<EChartsInstance | null>(null)
 
   const option = {
@@ -45,10 +45,8 @@ export default function Home() {
         }
       },
       draggable: true,
-      data: graph.nodes.map(function (node: any, idx) {
-        node.id = idx;
-        return node;
-      }),
+      nodes: graph.nodes,
+      edges: graph.edges,
       categories: graph.categories,
       force: {
         // initLayout: 'circular'
@@ -57,7 +55,6 @@ export default function Home() {
         repulsion: 20,
         gravity: 0.2
       },
-      edges: graph.edges,
       //emphasis: {
       //  focus: 'adjacency',
       //  label: {
@@ -100,8 +97,8 @@ export default function Home() {
       })
     }).then(response => response.json())
       .then(data => {
-        console.log(data)
-        setGraph(data)
+        let graph = extractData(data)
+        setGraph(graph)
       })
       .catch((error) => {
         toast({
