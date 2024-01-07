@@ -114,33 +114,8 @@ export default function Home() {
     factor.current *= changefactor
     let chart = echartRef.current
     if (chart) {
-      // let option = chart.getOption()
-      // let zoom = factor * option.series[0].zoom
-      // let edgeSize = factor * option.series[0].edgeLabel.fontSize
-      // let labelSize = factor * option.series[0].label.fontSize
-      // let lineWidth = factor * option.series[0].lineStyle.width
-      // let edgeSymbolSize = factor * option.series[0].edgeSymbolSize
-      // let symbolSize = factor * option.series[0].symbolSize
       let options = getOptions(graph)
       chart.setOption(options)
-      // chart.setOption({
-      //   series: [
-      //     {
-      //       symbolSize,
-      //       edgeSymbolSize,
-      //       edgeLabel: {
-      //         fontSize: edgeSize
-      //       },
-      //       label: {
-      //         fontSize: labelSize
-      //       },
-      //       lineStyle: {
-      //         width: lineWidth
-      //       },
-      //       zoom,
-      //     }
-      //   ]
-      // })
     }
   }
 
@@ -162,7 +137,14 @@ export default function Home() {
             <ReactECharts
               option={getOptions(graph)}
               style={{ height: '100%', width: '100%' }}
-              onChartReady={(e) => { echartRef.current = e }}
+              onChartReady={(e) => { 
+                echartRef.current = e
+              }}
+              onEvents={{
+                graphRoam: (params:any) => {
+                  handleZoomClick(params.zoom)
+                }
+              }}
             />
           </main>
         </section>
