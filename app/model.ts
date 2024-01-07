@@ -8,7 +8,6 @@ export interface Node {
   name: string,
   value: any,
   category: number,
-  label: any,
 }
 
 export interface Edge {
@@ -42,7 +41,12 @@ export function extractData(results: any | null): Graph {
     // check if node already exists in nodes or fake node was created
     let node = nodes.get(nodeData.id)
     if (!node) {
-      node = { id: nodeData.id.toString(), name: nodeData.properties.name, value: JSON.stringify(nodeData.properties), category: category.index, label: { show: true } }
+      node = { 
+        id: nodeData.id.toString(), 
+        name: nodeData.properties.name, 
+        value: JSON.stringify(nodeData.properties), 
+        category: category.index
+      }
       nodes.set(nodeData.id, node)
     }
   })
@@ -66,13 +70,13 @@ export function extractData(results: any | null): Graph {
     // creates a fakeS node for the source and target
     let source = nodes.get(edgeData.sourceId)
     if (!source) {
-      source = { id: sourceId, name: sourceId, value: "", category: 0, label: { show: true } }
+      source = { id: sourceId, name: sourceId, value: "", category: 0 }
       nodes.set(edgeData.sourceId, source)
     }
 
     let destination = nodes.get(edgeData.destinationId)
     if (!destination) {
-      destination = { id: destinationId, name: destinationId, value: "", category: 0, label: { show: true } }
+      destination = { id: destinationId, name: destinationId, value: "", category: 0}
       nodes.set(edgeData.destinationId, destination)
     }
   })

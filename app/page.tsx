@@ -13,64 +13,66 @@ import { ToastAction } from '@/components/ui/toast';
 export default function Home() {
 
   const [url, setURL] = useState('https://github.com/falkorDB/falkordb-py');
-  const [graph, setGraph] = useState<Graph>({id: '', nodes: [], edges: [], categories: []});
+  const [graph, setGraph] = useState<Graph>({ id: '', nodes: [], edges: [], categories: [] });
+  
   const echartRef = useRef<EChartsInstance | null>(null)
+  const factor = useRef<number>(1)
 
-  const option = {
-    tooltip: {
-      position: 'right',
-    },
-    legend: [
-      {
-        data: graph.categories.map(function (c) {
-          return c.name;
-        })
-      }
-    ],
-    toolbox: {
-      show: true,
-      feature: {
-        restore: {},
-        saveAsImage: {}
-      }
-    },
-    series: [{
-      type: 'graph',
-      layout: 'force',
-      animation: false,
-      label: {
-        normal: {
-          position: 'right',
-          formatter: '{b}'
+  function getOptions(graph: Graph) {
+    const currentFactor = factor.current
+    return {
+      name: graph.id,
+      tooltip: {
+        position: 'right',
+      },
+      legend: [
+        {
+          data: graph.categories.map(function (c) {
+            return c.name;
+          })
+        }
+      ],
+      toolbox: {
+        show: true,
+        feature: {
+          restore: {},
+          saveAsImage: {}
         }
       },
-      draggable: true,
-      nodes: graph.nodes,
-      edges: graph.edges,
-      categories: graph.categories,
-      force: {
-        // initLayout: 'circular'
-        // repulsion: 20,
-        edgeLength: 5,
-        repulsion: 20,
-        gravity: 0.2
-      },
-      //emphasis: {
-      //  focus: 'adjacency',
-      //  label: {
-      //   position: 'right',
-      //    show: true
-      //  }
-      //},
-      roam: true,
-      lineStyle: {
-        //color: 'source',
-        width: 1.5,
-        curveness: 0.1,
-        opacity: 0.7
-      },
-    }]
-  };
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        animation: false,
+        label: {
+          show: true,
+          position: 'inside',
+          fontSize: 2*currentFactor
+        },
+        symbolSize: 10, 
+        edgeSymbol: ['none', 'arrow'],
+        edgeSymbolSize: 2*currentFactor,
+        draggable: true,
+        nodes: graph.nodes,
+        edges: graph.edges,
+        categories: graph.categories,
+        force: {
+          edgeLength: 40, 
+          repulsion: 20, 
+          gravity: 0.2,
+        },
+        edgeLabel: {
+          fontSize: 2*currentFactor
+        },
+        roam: true,
+        autoCurveness: true,
+        lineStyle: {
+          width: 1*currentFactor,
+          opacity: 0.7
+        },
+        zoom: currentFactor
+      }]
+    }
+  }
 
   // A function that handles the change event of the url input box
   async function handleRepoInputChange(event: any) {
@@ -108,18 +110,37 @@ export default function Home() {
         })
       })
   }
-  function handleZoomClick(factor: number) {
+  function handleZoomClick(changefactor: number) {
+    factor.current *= changefactor
     let chart = echartRef.current
     if (chart) {
-      let option = chart.getOption()
-      let zoom = factor * option.series[0].zoom
-      chart.setOption({
-        series: [
-          {
-            zoom,
-          }
-        ]
-      })
+      // let option = chart.getOption()
+      // let zoom = factor * option.series[0].zoom
+      // let edgeSize = factor * option.series[0].edgeLabel.fontSize
+      // let labelSize = factor * option.series[0].label.fontSize
+      // let lineWidth = factor * option.series[0].lineStyle.width
+      // let edgeSymbolSize = factor * option.series[0].edgeSymbolSize
+      // let symbolSize = factor * option.series[0].symbolSize
+      let options = getOptions(graph)
+      chart.setOption(options)
+      // chart.setOption({
+      //   series: [
+      //     {
+      //       symbolSize,
+      //       edgeSymbolSize,
+      //       edgeLabel: {
+      //         fontSize: edgeSize
+      //       },
+      //       label: {
+      //         fontSize: labelSize
+      //       },
+      //       lineStyle: {
+      //         width: lineWidth
+      //       },
+      //       zoom,
+      //     }
+      //   ]
+      // })
     }
   }
 
@@ -139,14 +160,14 @@ export default function Home() {
               <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(0.9)}><ZoomOut /></Button>
             </div>
             <ReactECharts
-              option={option}
+              option={getOptions(graph)}
               style={{ height: '100%', width: '100%' }}
               onChartReady={(e) => { echartRef.current = e }}
             />
           </main>
         </section>
         <aside className="flex flex-col w-2/6 border">
-          <Chat repo={graph.id}/>
+          <Chat repo={graph.id} />
         </aside>
       </div>
     </main>
