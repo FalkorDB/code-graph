@@ -467,12 +467,12 @@ export async function POST(request: NextRequest) {
 	// Initialize Tree-Sitter parser
 	await Parser.init({
 		locateFile(scriptName: string, scriptDirectory: string) {
-			return path.join(process.cwd(), 'app/api/repo', scriptName);
+			return path.join(process.cwd(), 'app/parsers', scriptName);
 		},
 	});
 
 	parser = new Parser();
-	const Python = await Parser.Language.load(path.join(process.cwd(), 'app/api/repo/tree-sitter-python.wasm'));
+	const Python = await Parser.Language.load(path.join(process.cwd(), 'app/parsers/tree-sitter-python.wasm'));
 
 	parser.setLanguage(Python);
 
