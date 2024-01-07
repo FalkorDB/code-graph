@@ -512,7 +512,7 @@ export async function POST(request: NextRequest) {
 	//--------------------------------------------------------------------------
 
 	const git = simpleGit({ baseDir: tmp_dir });
-	git.clone(url);
+	await git.clone(url);
 
 	console.log("Cloned repo");
 
