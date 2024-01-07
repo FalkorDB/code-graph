@@ -1,8 +1,11 @@
-import os from 'os';
-import fs from 'fs';
-import path from 'path';
+import os        from 'os';
+import path      from 'path';
+import Parser    from 'web-tree-sitter';
 import simpleGit from 'simple-git';
-import Parser from 'web-tree-sitter';
+
+
+import { promises as fs } from 'fs';
+import { SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falkordb';
 
@@ -10,7 +13,7 @@ import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falko
 // Graph operations
 //-----------------------------------------------------------------------------
 
-function create_indices(graph: Graph) {
+async function create_indices(graph: Graph) {
     console.log("Creating indices");
 
     //-------------------------------------------------------------------------
@@ -18,23 +21,23 @@ function create_indices(graph: Graph) {
     //-------------------------------------------------------------------------
 
     console.log("Creating range index on Class.name");
-    graph.query("CREATE INDEX FOR (c:Class) ON (c.name)");    
+    await graph.query("CREATE INDEX FOR (c:Class) ON (c.name)");    
 
     console.log("Creating range index on Module.name");
-    graph.query("CREATE INDEX FOR (m:Module) ON (m.name)");
+    await graph.query("CREATE INDEX FOR (m:Module) ON (m.name)");
 
     console.log("Creating range index on Function.name");
-    graph.query("CREATE INDEX FOR (f:Function) ON (f.name)");
+    await graph.query("CREATE INDEX FOR (f:Function) ON (f.name)");
 
     //-------------------------------------------------------------------------
     // index "src_embeddings" attribute
     //-------------------------------------------------------------------------
 
     console.log("Creating vector index on Function.src_embeddings");
-    graph.query("CREATE VECTOR INDEX FOR (f:Function) ON (f.src_embeddings) OPTIONS {dimension:1536, similarityFunction:'euclidean'}");
+    await graph.query("CREATE VECTOR INDEX FOR (f:Function) ON (f.src_embeddings) OPTIONS {dimension:1536, similarityFunction:'euclidean'}");
 }
 
-function create_module
+async function create_module
 (
 	file: string,
 	graph: Graph
@@ -45,7 +48,7 @@ function create_module
     const params = {'name': file_name};
     
     const q = "MERGE (m:Module {name: $name}) RETURN ID(m)";
-    graph.query(q, {params: params});
+    await graph.query(q, {params: params});
 
     // module imports
     // for imp in node.body:
@@ -59,13 +62,13 @@ function create_module
     //             graph.query(q, params)
 }
 
-function create_class
+async function create_class
 (
 	file: string,
 	graph: Graph,
 	class_name: string,
-	src_start: int,
-	src_end: int
+	src_start: number,
+	src_end: number
 ) {
     // create class node
     const file_components = file.split("/");
@@ -82,14 +85,14 @@ function create_class
            WITH c
            MATCH (m:Module {name: $file_name})
            MERGE (m)-[:CONTAINS]->(c)`;
-    graph.query(q, {params: params});
+    await graph.query(q, {params: params});
 }
 
 function inherit_class
 (
 	file: string,
 	graph: Graph,
-	node
+	node: any
 ) {
     //-------------------------------------------------------------------------
     // determine class inheritance
@@ -115,15 +118,15 @@ function inherit_class
     //graph.query(q, params)
 }
 
-function create_function
+async function create_function
 (
 	file: string,
 	graph: Graph,
 	function_name: string,
 	parent: string,
 	args: string[],
-	src_start: int,
-	src_end: int,
+	src_start: number,
+	src_end: number,
 	src: string
 ) {
     // scan function arguments
@@ -135,7 +138,7 @@ function create_function
     const file_components = file.split("/");
     const file_name = file_components[file_components.length - 1];
 
-    let params = {'name':      function_name,
+    let params: any = {'name':      function_name,
 				  'file_name': file_name,
     			  'src_code':  src,
     			  'src_start': src_start,
@@ -148,7 +151,7 @@ function create_function
            RETURN ID(f) as func_id`;
 
     console.log(JSON.stringify(params, null, 2));
-    let result = await graph.query(q, {params: params});
+    let result: any = await graph.query(q, {params: params});
     let f_id = result.data[0]['func_id'];
     console.log("HERE!, f_id: " + f_id);
 
@@ -158,7 +161,7 @@ function create_function
     q = `MATCH (c:Class {name: $c_name})
     MATCH (f:Function) WHERE ID(f) = $f_id
     MERGE (c)-[:CONTAINS]->(f)`;
-    graph.query(q, {params: params});
+    await graph.query(q, {params: params});
 
     // if isinstance(parent, ast.Module):
     //     params = {'m_name': file_name, 'f_id': f_id}
@@ -184,27 +187,27 @@ function create_function
     //     raise("Unhandled parent type")
 }
 
-function create_function_call
+async function create_function_call
 (
 	file: string,	       // file in which call occurred
 	graph: Graph,          // graph object
 	caller: string,        // who've invoked the call
 	callee: string,        // who's being called
-	caller_src_start: int, // caller definition start
-	caller_src_end: int,   // caller definition end
-	call_src_start: int,   // first line on which call occurred
-	call_src_end: int      // last line on which call occurred
+	caller_src_start: number, // caller definition start
+	caller_src_end: number,   // caller definition end
+	call_src_start: number,   // first line on which call occurred
+	call_src_end: number      // last line on which call occurred
 ) {
     // make sure callee exists
     // determine callee type (either a function or a class)
-    let params = {'name': callee};
+    let params: any = {'name': callee};
     let q = `OPTIONAL MATCH (c:Class {name: $name})
            OPTIONAL MATCH (f:Function {name: $name})
            RETURN ID(c), ID(f) LIMIT 1`;
 
-	let res  = graph.query(q, {params: params}).result_set;
-    let c_id = res[0][0];
-    let f_id = res[0][1];
+	let res: any = await graph.query(q, {params: params});
+    let c_id = res.data[0][0];
+    let f_id = res.data[0][1];
 
     const callee_id = c_id !== null ? c_id : f_id;
     if (callee_id == null) {
@@ -233,6 +236,19 @@ function create_function_call
     graph.query(q, {params: params});
 }
 
+async function projectGraph
+(
+	graph: Graph
+) {
+	let result = await graph.query(`MATCH (n) RETURN n`);
+	let nodes = result.data;
+
+	result = await graph.query(`MATCH ()-[e]->() RETURN e`);
+	let edges = result.data;
+
+	return [nodes, edges];
+}
+
 //-----------------------------------------------------------------------------
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
@@ -254,7 +270,7 @@ let function_call_query: Parser.Query;
 let param_query: Parser.Query;
 
 // Process Class declaration
-function processClassDeclaration
+async function processClassDeclaration
 (
 	source_file: string,
 	graph: Graph,
@@ -265,17 +281,17 @@ function processClassDeclaration
 	let class_src_end   = class_node.endPosition.row;
 	let class_src_start = class_node.startPosition.row;
 
-	create_class(source_file, graph, class_name, class_src_start, class_src_end);
+	await create_class(source_file, graph, class_name, class_src_start, class_src_end);
 
 	// Match all function definition within the current class
 	let function_matches = function_definition_query.matches(class_node);
 	for (let function_match of function_matches) {	
-		processFunctionDeclaration(source_file, graph, class_name, function_match);
+		await processFunctionDeclaration(source_file, graph, class_name, function_match);
 	}
 }
 
 // Process function declaration
-function processFunctionDeclaration
+async function processFunctionDeclaration
 (
 	source_file: string,
 	graph: Graph,
@@ -292,7 +308,7 @@ function processFunctionDeclaration
 
 	let args: string[] = [];
 	for (let i = 0; i < function_args.namedChildCount; i++) {
-		let child_node = function_args.namedChild(i);
+		let child_node: SyntaxNode = function_args.namedChild(i) as SyntaxNode;
 		// if parameter is an identifier e.g. f(a)
 		// then simply 
 		if(child_node.type == 'identifier') {
@@ -308,7 +324,7 @@ function processFunctionDeclaration
 	let function_src_end   = function_node.endPosition.row;
 	let function_src_start = function_node.startPosition.row;
 
-	create_function(source_file, graph, function_name, parent, args,
+	await create_function(source_file, graph, function_name, parent, args,
 		function_src_start, function_src_end, src);
 
 	// Match all function calls within the current function
@@ -319,13 +335,13 @@ function processFunctionDeclaration
 	// }
 }
 
-function processFirstPass(source_files: string[], graph: Graph) {
+async function processFirstPass(source_files: string[], graph: Graph) {
 	for (let source_file of source_files) {
 		console.log("Processing file: " + source_file);
 				
-		create_module(source_file, graph);
+		await create_module(source_file, graph);
 		
-		const src = fs.readFileSync(source_file, 'utf8');
+		const src = await fs.readFile(source_file, 'utf8');
 
 		// Construct an AST from src
 		const tree = parser.parse(src);
@@ -335,7 +351,7 @@ function processFirstPass(source_files: string[], graph: Graph) {
 
 		// Iterate over each matched Class
 		for (let class_match of class_matches) {			
-			processClassDeclaration(source_file, graph, class_match);
+			await processClassDeclaration(source_file, graph, class_match);
 		}
 	}
 }
@@ -413,26 +429,28 @@ export async function POST(request: NextRequest) {
 	//--------------------------------------------------------------------------
 
 	let source_files: string[] = [];
-	let walk = function (dir: string) {
-		let files = fs.readdirSync(dir);
+	let walk = async function (dir: string) {
+		let files = await fs.readdir(dir);
 		for (let file of files) {
 			let file_path = path.join(dir, file);
-			let file_stat = fs.statSync(file_path);
-			if (file_stat.isDirectory()) { walk(file_path); }
+			let file_stat = await fs.stat(file_path);
+			if (file_stat.isDirectory()) { await walk(file_path); }
 			else if (file.endsWith(".py")) { source_files.push(file_path); }
 		}
 	}
-	walk(repo_root);
+	await walk(repo_root);
 	
 	//--------------------------------------------------------------------------
 	// process each source file
 	//--------------------------------------------------------------------------
 
 	// first pass, declarations only.
-	processFirstPass(source_files, graph);
+	await processFirstPass(source_files, graph);
 
 	// second pass calls.
 	processSecondPass(source_files, graph);
+
+	let code_graph = projectGraph(graph);
 
 	console.log("All done!");
 

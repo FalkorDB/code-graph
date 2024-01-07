@@ -12,7 +12,7 @@ import { ToastAction } from '@/components/ui/toast';
 
 export default function Home() {
 
-  const [url, setURL] = useState('');
+  const [url, setURL] = useState('https://github.com/falkorDB/falkordb-py');
   const [graph, setGraph] = useState<Graph>(SAMPLE_GRAPH);
   const echartRef = useRef<EChartsInstance | null>(null)
 
@@ -132,7 +132,7 @@ export default function Home() {
         <section className="flex flex-col w-4/6 border">
           <header className="border p-4">
             <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
-              <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} required />
+              <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} />
               <Button type="submit" >Send</Button>
             </form>
           </header>
