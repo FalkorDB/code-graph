@@ -203,11 +203,11 @@ async function create_function_call
     let params: any = {'name': callee};
     let q = `OPTIONAL MATCH (c:Class {name: $name})
            OPTIONAL MATCH (f:Function {name: $name})
-           RETURN ID(c), ID(f) LIMIT 1`;
+           RETURN ID(c) as c_id, ID(f) as f_id LIMIT 1`;
 
 	let res: any = await graph.query(q, {params: params});
-    let c_id = res.data[0][0];
-    let f_id = res.data[0][1];
+    let c_id = res.data[0]['c_id'];
+    let f_id = res.data[0]['f_id'];
 
     const callee_id = c_id !== null ? c_id : f_id;
     if (callee_id == null) {
