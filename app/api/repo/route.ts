@@ -1,8 +1,8 @@
 import os from 'os';
 import path from 'path';
 import Parser from 'web-tree-sitter';
-import simpleGit from 'simple-git';
-
+import git from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
 
 import { promises as fs } from 'fs';
 import { SyntaxNode } from 'web-tree-sitter';
@@ -461,7 +461,7 @@ export async function POST(request: NextRequest) {
 	const client = createClient({
 		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
 	});
-	
+
 	await client.connect();
 
 	// Initialize Tree-Sitter parser
@@ -508,20 +508,25 @@ export async function POST(request: NextRequest) {
 	create_indices(graph);
 
 	//--------------------------------------------------------------------------
-	// clone repo into temporary folder
-	//--------------------------------------------------------------------------
-
-	const git = simpleGit({ baseDir: tmp_dir });
-	await git.clone(url);
-
-	console.log("Cloned repo");
-
-	//--------------------------------------------------------------------------
 	// process repo
 	//--------------------------------------------------------------------------
 
 	let repo_root = path.join(tmp_dir, repo);
 	console.log("repo_root: " + repo_root);
+
+	//--------------------------------------------------------------------------
+	// clone repo into temporary folder
+	//--------------------------------------------------------------------------
+	await git
+		.clone({ fs, http, dir: repo_root, url })
+		.then(function a(response){
+			console.log("response: " + response);
+		})
+		.catch(function b(error){
+			console.log("error: " + error);
+		});
+
+	console.log("Cloned repo");
 
 	//--------------------------------------------------------------------------
 	// collect all source files in repo
