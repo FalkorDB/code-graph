@@ -226,19 +226,13 @@ async function create_function_call
     		   'call_src_end':     call_src_end};
 
     // connect caller to callee
-//    q = `MATCH (callee), (caller)
-//    		WHERE ID(callee) = $callee_id AND
-//				  caller.name = $caller_name AND
-//    		      caller.file_name = $file_name AND
-//    		      caller.src_start = $caller_src_start AND
-//    		      caller.src_end = $caller_src_end
-//			MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
-
 	q = `MATCH (callee), (caller)
-    		WHERE ID(callee) = $callee_id AND
-				  caller.name = $caller_name AND
-    		      caller.file_name = $file_name
-			MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
+		 WHERE ID(callee) = $callee_id AND
+			   caller.name = $caller_name AND
+    		   caller.file_name = $file_name AND
+    		   caller.src_start = $caller_src_start AND
+    		   caller.src_end = $caller_src_end
+		 MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
 
     await graph.query(q, {params: params});
 }
