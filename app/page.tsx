@@ -69,7 +69,7 @@ export default function Home() {
           width: 1*currentFactor,
           opacity: 0.7
         },
-        zoom: currentFactor
+        // zoom: currentFactor
       }]
     }
   }
@@ -142,7 +142,9 @@ export default function Home() {
               }}
               onEvents={{
                 graphRoam: (params:any) => {
-                  handleZoomClick(params.zoom)
+                  if(params.zoom) {
+                    handleZoomClick(params.zoom)
+                  }
                 }
               }}
             />
