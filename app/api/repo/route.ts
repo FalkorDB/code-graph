@@ -209,7 +209,7 @@ async function create_function_call
 
     const callee_id = c_id !== null ? c_id : f_id;
     if (callee_id == null) {
-        console.log("Callee: " + callee + " not found");
+        //console.log("Callee: " + callee + " not found");
         return;
     }
 
@@ -226,12 +226,18 @@ async function create_function_call
     		   'call_src_end':     call_src_end};
 
     // connect caller to callee
-    q = `MATCH (callee), (caller)
+//    q = `MATCH (callee), (caller)
+//    		WHERE ID(callee) = $callee_id AND
+//				  caller.name = $caller_name AND
+//    		      caller.file_name = $file_name AND
+//    		      caller.src_start = $caller_src_start AND
+//    		      caller.src_end = $caller_src_end
+//			MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
+
+	q = `MATCH (callee), (caller)
     		WHERE ID(callee) = $callee_id AND
 				  caller.name = $caller_name AND
-    		      caller.file_name = $file_name AND
-    		      caller.src_start = $caller_src_start AND
-    		      caller.src_end = $caller_src_end
+    		      caller.file_name = $file_name
 			MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
 
     await graph.query(q, {params: params});
@@ -267,6 +273,9 @@ let function_definition_query: Parser.Query;
 // function call tree-sitter query
 // responsible for matching function calls, in addition to extracting the callee function name
 let function_call_query: Parser.Query;
+
+// self.f()
+let function_attr_call_query: Parser.Query;
 
 let identifier_query: Parser.Query;
 
@@ -347,9 +356,9 @@ async function processFunctionCall
 (
 	source_file: string,
 	graph: Graph,
-	parent: string,
-	parent_src_start: number,
-	parent_src_end: number,
+	caller: string,
+	caller_src_start: number,
+	caller_src_end: number,
 	match: Parser.QueryMatch
 ) {
 	let call           = match.captures[0].node;
@@ -357,8 +366,10 @@ async function processFunctionCall
 	let call_src_end   = call.endPosition.row;
 	let call_src_start = call.startPosition.row;
 
-	await create_function_call(source_file, graph, parent, callee,
-		parent_src_start, parent_src_end, call_src_start, call_src_end);
+	console.log(caller + " calls " + callee);
+
+	await create_function_call(source_file, graph, caller, callee,
+		caller_src_start, caller_src_end, call_src_start, call_src_end);
 }
 
 // Process first pass
@@ -422,11 +433,23 @@ async function processSecondPass
 			let function_src_start = function_node.startPosition.row;
 			let function_src_end   = function_node.endPosition.row;
 
+			if(function_name == "query") {
+				console.log("function_node: " + function_node);
+			}
+
 			// Match all function calls within the current function
 			let function_call_matches = function_call_query.matches(function_node);
 			for (let function_call_match of function_call_matches) {
 				await processFunctionCall(source_file, graph, function_name,
 					function_src_start, function_src_end, function_call_match);
+			}
+
+			// Match all function calls within the current function
+			function_call_matches = function_attr_call_query.matches(function_node);
+			for (let function_call_match of function_call_matches) {
+				let function_call_node = function_call_match.captures[0].node;
+				await processFunctionCall(source_file, graph, function_name,
+				function_src_start, function_src_end, function_call_match);
 			}
 		}
 	}
@@ -456,6 +479,7 @@ export async function POST(request: NextRequest) {
 	
 	identifier_query          = Python.query(`((identifier) @identifier)`);
 	function_call_query 	  = Python.query(`((call function: (identifier) @function-name) @function-call)`);
+	function_attr_call_query  = Python.query(`((call function: (attribute object: (identifier) attribute: (identifier) @function-name )) @function-call)`);
 	class_definition_query    = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
 	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
 
