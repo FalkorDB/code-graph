@@ -158,7 +158,7 @@ async function create_function
 
     q = `MATCH (parent {name: $parent})
     MATCH (f:Function) WHERE ID(f) = $f_id
-    MERGE (c)-[:CONTAINS]->(f)`;
+    MERGE (parent)-[:CONTAINS]->(f)`;
     await graph.query(q, {params: params});
 
     // if isinstance(parent, ast.Module):
