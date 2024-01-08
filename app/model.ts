@@ -92,13 +92,12 @@ export class Graph {
       }
     })
 
-    let edges = new Set<Edge>()
     results.edges.forEach((row: any) => {
       let edgeData = row.e;
 
       let sourceId = edgeData.sourceId.toString();
       let destinationId = edgeData.destinationId.toString()
-      edges.add({
+      this.edgesSet.add({
         source: sourceId, target: destinationId, label:
         {
           show: true,
