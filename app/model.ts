@@ -133,7 +133,7 @@ export class Graph {
     })
 
     this.edges = new Array<Edge>()
-    edges.forEach((edge) => {
+    this.edgesSet.forEach((edge) => {
       this.edges.push(edge)
     })
   }
