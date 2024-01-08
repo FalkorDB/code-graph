@@ -6,15 +6,15 @@ import ReactECharts, { EChartsInstance } from 'echarts-for-react';
 import { useState, useRef } from 'react';
 import { Chat } from './chat';
 import { Graph, extractData } from './model';
-import { ZoomIn, ZoomOut } from 'lucide-react';
+import { Github, HomeIcon, ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { ToastAction } from '@/components/ui/toast';
+import Link from 'next/link';
 
 export default function Home() {
 
   const [url, setURL] = useState('https://github.com/falkorDB/falkordb-py');
   const [graph, setGraph] = useState<Graph>({ id: '', nodes: [], edges: [], categories: [] });
-  
+
   const echartRef = useRef<EChartsInstance | null>(null)
   const factor = useRef<number>(1)
 
@@ -36,8 +36,29 @@ export default function Home() {
         show: true,
         feature: {
           restore: {},
-          saveAsImage: {}
+          saveAsImage: {},
+
+          // Shows zoom in and zoom out custom buttons
+          dataZoom: {
+            show: true,
+            title: {
+              zoom: 'Zoom-In',
+              back: 'Zoom-Out'
+            },
+            onclick: function (chart: any, option: any, feature: any) {
+              if (feature.title.zoom == 'Zoom-In') {
+                handleZoomClick(1.1)
+              } else {
+                handleZoomClick(0.9)
+              }
+            },
+            yAxisIndex: false
+          },
+
+
         }
+        
+
       },
       series: [{
         type: 'graph',
@@ -46,9 +67,9 @@ export default function Home() {
         label: {
           show: true,
           position: 'inside',
-          fontSize: 2*currentFactor
+          fontSize: 2 * currentFactor
         },
-        symbolSize: 10, 
+        symbolSize: 10,
         edgeSymbol: ['none', 'arrow'],
         edgeSymbolSize: 0.8*currentFactor,
         draggable: true,
@@ -56,12 +77,12 @@ export default function Home() {
         edges: graph.edges,
         categories: graph.categories,
         force: {
-          edgeLength: 40, 
-          repulsion: 20, 
+          edgeLength: 40,
+          repulsion: 20,
           gravity: 0.2,
         },
         edgeLabel: {
-          fontSize: 2*currentFactor
+          fontSize: 2 * currentFactor
         },
         roam: true,
         autoCurveness: true,
@@ -69,7 +90,7 @@ export default function Home() {
           width: 0.3*currentFactor,
           opacity: 0.7
         },
-        // zoom: currentFactor
+        zoom: currentFactor
       }]
     }
   }
@@ -121,6 +142,19 @@ export default function Home() {
 
   return (
     <main className="h-screen p-8">
+      <header className="flex items-center justify-between p-4 border">
+        <Link href="https://www.falkordb.com" target='_blank'>
+          <HomeIcon className="h-6 w-6" />
+        </Link>
+        <h1 className='font-extrabold'>
+          Code Graph by <Link href="https://www.falkordb.com">FalkorDB</Link>
+        </h1>
+        <nav className="space-x-4">
+          <Link className="text-gray-600 hover:text-gray-900" href="https://github.com/FalkorDB/code-graph" target='_blank'>
+            <Github />
+          </Link>
+        </nav>
+      </header>
       <div className="w-full flex flex-row h-full">
         <section className="flex flex-col w-4/6 border">
           <header className="border p-4">
@@ -137,12 +171,12 @@ export default function Home() {
             <ReactECharts
               option={getOptions(graph)}
               style={{ height: '100%', width: '100%' }}
-              onChartReady={(e) => { 
+              onChartReady={(e) => {
                 echartRef.current = e
               }}
               onEvents={{
-                graphRoam: (params:any) => {
-                  if(params.zoom) {
+                graphRoam: (params: any) => {
+                  if (params.zoom) {
                     handleZoomClick(params.zoom)
                   }
                 }
