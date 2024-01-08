@@ -253,7 +253,6 @@ export async function graphSchema
 
     for (let i = 0; i < labels.length; i++) {
         let label = labels[i]['label'];
-        console.log('label: ' + label);
         schema['labels'][label] = { };
 
         // number labeld nodes
@@ -306,8 +305,7 @@ export async function graphSchema
     let relationships: any = res.data;
 
     for (let i = 0; i < relationships.length; i++) {
-        let relation = relationships[i]['relation'];
-        console.log('relation: ' + relation);
+        let relation = relationships[i]['relation'];        
         schema['relations'][relation] = { };
         schema['relations'][relation]['connect'] = [];
 
