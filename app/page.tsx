@@ -50,7 +50,7 @@ export default function Home() {
         },
         symbolSize: 10, 
         edgeSymbol: ['none', 'arrow'],
-        edgeSymbolSize: 2*currentFactor,
+        edgeSymbolSize: 0.8*currentFactor,
         draggable: true,
         nodes: graph.nodes,
         edges: graph.edges,
@@ -66,7 +66,7 @@ export default function Home() {
         roam: true,
         autoCurveness: true,
         lineStyle: {
-          width: 1*currentFactor,
+          width: 0.3*currentFactor,
           opacity: 0.7
         },
         // zoom: currentFactor
