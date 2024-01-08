@@ -212,25 +212,18 @@ async function processSecondPass
 	}
 }
 
-async function ReBuildGraph(client: any, commit_hash: string, graphId: string, graph: Graph, repo_root: string) {
-	console.log("ReBuildGraph");
-	// delete old graph
-	await client.del(graphId);
-	
-	// delete graph git hash
-	await client.del(graphId + "git-hash");
-
-	// construct graph
-	await BuildGraph(client, commit_hash, graphId, graph, repo_root);
-}
-
-async function BuildGraph(client: any, commit_hash: string, graphId: string, graph: Graph, repo_root: string) {
+async function BuildGraph
+(
+	client: any,
+	commit_hash: string,
+	graphId: string,
+	graph: Graph,
+	repo_root: string
+) {
 	console.log("BuildGraph");
+
 	// Initialize Tree-Sitter
 	await InitializeTreeSitter();
-
-	// Create graph commit hash
-	client.set(graphId + "git-hash", commit_hash);
 
 	// Create graph indicies
 	GraphOps.create_indices(graph);
@@ -260,6 +253,9 @@ async function BuildGraph(client: any, commit_hash: string, graphId: string, gra
 
 	// second pass calls.
 	await processSecondPass(source_files, graph);
+
+	// set graph expiry, expire in 24 hours
+	await client.expire(graphId, 86400);
 }
 
 async function InitializeTreeSitter() {
@@ -309,9 +305,7 @@ export async function POST(request: NextRequest) {
 
 	let urlParts = url.split('/');
 	const organization = urlParts[urlParts.length - 2];
-	const repo = urlParts[urlParts.length - 1];
-	const graphId = `${organization}-${repo}`;
-	const graph = new Graph(client, graphId);
+	const repo = urlParts[urlParts.length - 1];	
 
 	//--------------------------------------------------------------------------
 	// process repo
@@ -339,23 +333,22 @@ export async function POST(request: NextRequest) {
 	let commits = await git.log({ fs, dir: repo_root, depth: 1 });
 	let commit_hash: string = commits[0].oid;
 
+	const graphId = `${organization}-${repo}-${commit_hash}`;
+	const graph = new Graph(client, graphId);
+
 	let graph_exists = await client.exists(graphId);
-	if (graph_exists) {
-		let processed_hash = await client.get(graphId + "git-hash");
-		if(processed_hash != commit_hash) {
-			await ReBuildGraph(client, commit_hash, graphId, graph, repo_root);
-		}
-	} else {
+	if (!graph_exists) {
 		await BuildGraph(client, commit_hash, graphId, graph, repo_root);
+	} else {
+		// reset graph expiry
+		await client.expire(graphId, 86400);
 	}
 
-	let code_graph = await GraphOps.projectGraph(graph);
-
+	let code_graph   = await GraphOps.projectGraph(graph);
 	let graph_schema = await GraphOps.graphSchema(graph);
+
     console.log("graph_schema");
     console.log(JSON.stringify(graph_schema, null, 2));
-
-
 	console.log("All done!");
 
 	return NextResponse.json({ id: graphId, nodes: code_graph[0], edges: code_graph[1] }, { status: 201 })
