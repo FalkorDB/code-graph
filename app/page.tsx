@@ -35,30 +35,26 @@ export default function Home() {
       toolbox: {
         show: true,
         feature: {
+          // Shows zoom in and zoom out custom buttons
+          myZoomIn: {
+            show: true,
+            title: 'Zoom In',
+            icon: 'path://M19 11 C19 15.41 15.41 19 11 19 6.58 19 3 15.41 3 11 3 6.58 6.58 3 11 3 15.41 3 19 6.58 19 11 zM21 21 C19.55 19.55 18.09 18.09 16.64 16.64 M11 8 C11 10 11 12 11 14 M8 11 C10 11 12 11 14 11',
+            onclick: function () {
+              handleZoomClick(1.1)
+            }
+          },
+          myZoomOut: {
+            show: true,
+            title: 'Zoom Out',
+            icon: 'path://M19 11 C19 15.41 15.41 19 11 19 6.58 19 3 15.41 3 11 3 6.58 6.58 3 11 3 15.41 3 19 6.58 19 11 zM21 21 C19.55 19.55 18.09 18.09 16.64 16.64 M8 11 C10 11 12 11 14 11',
+            onclick: function () {
+              handleZoomClick(0.9)
+            }
+          },
           restore: {},
           saveAsImage: {},
-
-          // Shows zoom in and zoom out custom buttons
-          dataZoom: {
-            show: true,
-            title: {
-              zoom: 'Zoom-In',
-              back: 'Zoom-Out'
-            },
-            onclick: function (chart: any, option: any, feature: any) {
-              if (feature.title.zoom == 'Zoom-In') {
-                handleZoomClick(1.1)
-              } else {
-                handleZoomClick(0.9)
-              }
-            },
-            yAxisIndex: false
-          },
-
-
         }
-        
-
       },
       series: [{
         type: 'graph',
@@ -71,7 +67,7 @@ export default function Home() {
         },
         symbolSize: 10,
         edgeSymbol: ['none', 'arrow'],
-        edgeSymbolSize: 0.8*currentFactor,
+        edgeSymbolSize: 0.8 * currentFactor,
         draggable: true,
         nodes: graph.nodes,
         edges: graph.edges,
@@ -87,7 +83,7 @@ export default function Home() {
         roam: true,
         autoCurveness: true,
         lineStyle: {
-          width: 0.3*currentFactor,
+          width: 0.3 * currentFactor,
           opacity: 0.7
         },
         zoom: currentFactor
@@ -164,10 +160,6 @@ export default function Home() {
             </form>
           </header>
           <main className="h-full">
-            <div className="flex flex-row" >
-              <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(1.1)}><ZoomIn /></Button>
-              <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(0.9)}><ZoomOut /></Button>
-            </div>
             <ReactECharts
               option={getOptions(graph)}
               style={{ height: '100%', width: '100%' }}
