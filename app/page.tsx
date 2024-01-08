@@ -13,7 +13,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 export default function Home() {
 
-  const [url, setURL] = useState('https://github.com/falkorDB/falkordb-py');
+  const [url, setURL] = useState('');
   const [graph, setGraph] = useState<Graph>( Graph.empty());
 
   const echartRef = useRef<EChartsInstance | null>(null)
@@ -98,7 +98,8 @@ export default function Home() {
     }
 
     // Get the new value of the input box
-    const value = event.target.value;
+    let value : string = event.target.value;
+
 
     // Update the url state
     setURL(value);
@@ -108,10 +109,16 @@ export default function Home() {
   async function handleSubmit(event: any) {
     event.preventDefault();
 
+
+    let value = url;
+    if (!value || value.length === 0) {
+      value = 'https://github.com/falkorDB/falkordb-py'
+    }
+
     fetch('/api/repo', {
       method: 'POST',
       body: JSON.stringify({
-        url: url
+        url: value
       })
     }).then(response => response.json())
       .then(data => {

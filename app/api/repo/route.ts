@@ -300,9 +300,6 @@ export async function POST(request: NextRequest) {
 
 	let body = await request.json();
 	let url = body.url;
-	url = "https://github.com/falkorDB/falkordb-py";
-	console.log("Processing url: " + url);
-
 	let urlParts = url.split('/');
 	const organization = urlParts[urlParts.length - 2];
 	const repo = urlParts[urlParts.length - 1];	
