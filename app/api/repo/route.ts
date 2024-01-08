@@ -282,6 +282,84 @@ async function InitializeTreeSitter() {
 	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
 }
 
+// convert a structured graph schema into a string representation
+// used in a model prompt
+async function GraphSchemaToPrompt(graph: Graph) {
+	// Retrieve graph schema
+	let schema = await GraphOps.graphSchema(graph);
+
+	// Build a string description of graph schema
+	let desc: string = "The knowladge graph schema is as follows:\n";
+
+	//-------------------------------------------------------------------------
+	// Describe labels
+	//-------------------------------------------------------------------------
+
+	// list labels
+	desc = desc + "The graph contains the following node labels:\n";
+	for (const lbl in schema["labels"]) {
+		desc = desc + `${lbl}\n`;
+	}
+
+	// specify attributes associated with each label
+	for (const lbl in schema["labels"]) {
+		let node_count = schema["labels"][lbl]['node_count'];
+		let attributes = schema["labels"][lbl]['attributes'];
+		let attr_count = Object.keys(attributes).length;
+
+		if(attr_count == 0) {
+			desc = desc + `the ${lbl} label has ${node_count} nodes and has no attributes\n`;
+		} else {
+			desc = desc + `the ${lbl} label has ${node_count} nodes and is associated with the following attribute(s):\n`;
+			for (const attr in attributes) {
+				let type = attributes[attr]['type'];			
+				desc = desc + `'${attr}' which is of type ${type}\n`;
+			}
+		}
+	}
+
+	desc = desc + "The graph contains the following relationship types:\n"
+	
+	//-------------------------------------------------------------------------
+	// Describe relationships
+	//-------------------------------------------------------------------------
+
+	// list relations
+	for (const relation in schema["relations"]) {
+		desc = desc + `${relation}\n`;
+	}
+
+	// specify attributes associated with each relationship
+	for (const relation in schema["relations"]) {
+		let connect    = schema["relations"][relation]['connect'];
+		let edge_count = schema["relations"][relation]['edge_count'];
+		let attributes = schema["relations"][relation]['attributes'];
+		let attr_count = Object.keys(attributes).length;
+
+		if(attr_count == 0) {
+			desc = desc + `the ${relation} relationship has ${edge_count} edges and has no attributes\n`;
+		} else {
+			desc = desc + `the ${relation} relationship has ${edge_count} edges and is associated with the following attribute(s):\n`;
+			for (const attr in attributes) {
+				let type = attributes[attr]['type'];			
+				desc = desc + `'${attr}' which is of type ${type}\n`;
+			}
+		}
+
+		if(connect.length > 0) {
+			desc = desc + `the ${relation} relationship connects the following labels:\n`
+			for(let i = 0; i < connect.length; i+=2) {
+				let src = connect[i];
+				let dest = connect[i+1];
+				desc = desc + `${src} is connected via ${relation} to ${dest}\n`;
+			}
+		}
+	}
+
+	desc = desc + `This is the end of the knowladge graph schema description.\n`
+	return desc;
+}
+
 export async function POST(request: NextRequest) {
 
 	//-------------------------------------------------------------------------
@@ -341,11 +419,9 @@ export async function POST(request: NextRequest) {
 		await client.expire(graphId, 86400);
 	}
 
-	let code_graph   = await GraphOps.projectGraph(graph);
-	let graph_schema = await GraphOps.graphSchema(graph);
+	let code_graph = await GraphOps.projectGraph(graph);
+	let graph_schema_desc = await GraphSchemaToPrompt(graph);
 
-    console.log("graph_schema");
-    console.log(JSON.stringify(graph_schema, null, 2));
 	console.log("All done!");
 
 	return NextResponse.json({ id: graphId, nodes: code_graph[0], edges: code_graph[1] }, { status: 201 })

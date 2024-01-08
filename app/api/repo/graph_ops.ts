@@ -309,6 +309,7 @@ export async function graphSchema
         let relation = relationships[i]['relation'];
         console.log('relation: ' + relation);
         schema['relations'][relation] = { };
+        schema['relations'][relation]['connect'] = [];
 
         // number edges
         let query = `MATCH ()-[e:${relation}]->()
@@ -346,6 +347,26 @@ export async function graphSchema
                 schema['relations'][relation]['attributes'][attr]['count'] = count;
             }
         }
+    }
+
+    // type or relations:
+    // relationship type 'R' connect src label 'A' to dest label 'B'
+    query = `MATCH (a)-[e]->(b)
+             RETURN type(e) as rel, collect(distinct {src: labels(a)[0], dest:labels(b)[0]}) as ends`
+    res = await graph.query(query);
+    let connections: any = res.data;
+    for (let i = 0; i < connections.length; i++) {
+        let connection = connections[i];
+        let relation   = connection['rel'];
+        let ends       = connection['ends'];
+
+        for(let j = 0; j < ends.length; j++) {
+            let src  = ends[j]['src'];
+            let dest = ends[j]['dest'];
+
+            schema['relations'][relation]['connect'].push(src);
+            schema['relations'][relation]['connect'].push(dest);
+        }        
     }
 
     return schema;
