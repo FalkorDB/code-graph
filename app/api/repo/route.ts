@@ -1,232 +1,21 @@
-import os from 'os';
-import path from 'path';
-import git from 'isomorphic-git';
-import http from 'isomorphic-git/http/node';
+import os     from 'os';
+import path   from 'path';
+import git    from 'isomorphic-git';
+import http   from 'isomorphic-git/http/node';
+import Parser from 'web-tree-sitter';
 
 import { promises as fs } from 'fs';
-import { Parser, SyntaxNode } from 'web-tree-sitter';
+import { Language, SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falkordb';
 import { create_indices, create_module, create_class, create_function, create_function_call, projectGraph } from './graph_ops';
-
-//-----------------------------------------------------------------------------
-// Graph operations
-//-----------------------------------------------------------------------------
-
-async function create_indices(graph: Graph) {
-	console.log("Creating indices");
-
-	//-------------------------------------------------------------------------
-	// index "name" attribute
-	//-------------------------------------------------------------------------
-
-	console.log("Creating range index on Class.name");
-	await graph.query("CREATE INDEX FOR (c:Class) ON (c.name)");
-
-	console.log("Creating range index on Module.name");
-	await graph.query("CREATE INDEX FOR (m:Module) ON (m.name)");
-
-	console.log("Creating range index on Function.name");
-	await graph.query("CREATE INDEX FOR (f:Function) ON (f.name)");
-
-	//-------------------------------------------------------------------------
-	// index "src_embeddings" attribute
-	//-------------------------------------------------------------------------
-
-	console.log("Creating vector index on Function.src_embeddings");
-	await graph.query("CREATE VECTOR INDEX FOR (f:Function) ON (f.src_embeddings) OPTIONS {dimension:1536, similarityFunction:'euclidean'}");
-}
-
-async function create_module
-(
-	file: string,
-	graph: Graph
-) {
-	// Create module node
-	const file_components = file.split("/");
-	const file_name = file_components[file_components.length - 1];
-	const params = { 'name': file_name };
-
-	const q = "MERGE (m:Module {name: $name}) RETURN ID(m)";
-	await graph.query(q, { params: params });
-}
-
-async function create_class
-(
-	file: string,
-	graph: Graph,
-	class_name: string,
-	src_start: number,
-	src_end: number
-) {
-	// create class node
-	const file_components = file.split("/");
-	const file_name = file_components[file_components.length - 1];
-
-	const params = {
-		'name': class_name,
-		'file_name': file_name,
-		'src_start': src_start,
-		'src_end': src_end
-	};
-
-	// create Class and connect to Module
-	const q = `MERGE (c:Class {name: $name, file_name: $file_name,
-           src_start:$src_start, src_end: $src_end})
-           WITH c
-           MATCH (m:Module {name: $file_name})
-           MERGE (m)-[:CONTAINS]->(c)`;
-	await graph.query(q, { params: params });
-}
-
-function inherit_class
-(
-	file: string,
-	graph: Graph,
-	node: any
-) {
-	//-------------------------------------------------------------------------
-	// determine class inheritance
-	//-------------------------------------------------------------------------
-
-	//inheritance = []
-	//for base in node.bases:
-	//    if isinstance(base, ast.Name):
-	//        inheritance.append(base.id)
-
-	//file_name = file.split("/")[-1]
-	//params = {'name': node.name,
-	//          'file_name': file_name,
-	//          'src_start': node.lineno,
-	//          'src_end': node.end_lineno,
-	//          'inheritance': inheritance}
-
-	//q = """MATCH (c:Class {name: $name, file_name: $file_name,
-	//       src_start:$src_start, src_end: $src_end}), (base:Class)
-	//       WHERE base.name IN $inheritance
-	//       MERGE (c)-[:INHERITS]->(base)"""
-	//
-	//graph.query(q, params)
-}
-
-async function create_function
-(
-	file: string,
-	graph: Graph,
-	function_name: string,
-	parent: string,
-	args: string[],
-	src_start: number,
-	src_end: number,
-	src: string
-) {
-	// scan function arguments
-	if (args.length > 0 && args[0] == "self") {
-		args.shift();
-	}
-
-	// create function node
-	const file_components = file.split("/");
-	const file_name = file_components[file_components.length - 1];
-
-	let params: any = {
-		'name': function_name,
-		'file_name': file_name,
-		'src_code': src,
-		'src_start': src_start,
-		'src_end': src_end,
-		'args': args
-	};
-
-	let q = `CREATE (f:Function {name: $name, file_name: $file_name,
-           src_code: $src_code, src_start: $src_start, src_end: $src_end,
-           args: $args})
-           RETURN ID(f) as func_id`;
-
-	let result: any = await graph.query(q, { params: params });
-	let f_id = result.data[0]['func_id'];
-
-	// Connect function to parent
-	params = { 'f_id': f_id, 'parent': parent };
-
-	q = `MATCH (parent {name: $parent})
-    MATCH (f:Function) WHERE ID(f) = $f_id
-    MERGE (parent)-[:CONTAINS]->(f)`;
-	await graph.query(q, { params: params });
-}
-
-async function create_function_call
-(
-	file: string,	          // file in which call occurred
-	graph: Graph,             // graph object
-	caller: string,           // who've invoked the call
-	callee: string,           // who's being called
-	caller_src_start: number, // caller definition start
-	caller_src_end: number,   // caller definition end
-	call_src_start: number,   // first line on which call occurred
-	call_src_end: number      // last line on which call occurred
-) {
-	// make sure callee exists
-	// determine callee type (either a function or a class)
-	let params: any = { 'name': callee };
-	let q = `OPTIONAL MATCH (c:Class {name: $name})
-           OPTIONAL MATCH (f:Function {name: $name})
-           RETURN ID(c) as c_id, ID(f) as f_id LIMIT 1`;
-
-	let res: any = await graph.query(q, { params: params });
-	let c_id = res.data[0]['c_id'];
-	let f_id = res.data[0]['f_id'];
-
-	const callee_id = c_id !== null ? c_id : f_id;
-	if (callee_id == null) {
-		//console.log("Callee: " + callee + " not found");
-		return;
-	}
-
-	// create function node
-	const file_components = file.split("/");
-	const file_name = file_components[file_components.length - 1];
-
-	params = {
-		'file_name': file_name,
-		'callee_id': callee_id,
-		'caller_name': caller,
-		'caller_src_start': caller_src_start,
-		'caller_src_end': caller_src_end,
-		'call_src_start': call_src_end,
-		'call_src_end': call_src_end
-	};
-
-	// connect caller to callee
-	q = `MATCH (callee), (caller)
-		 WHERE ID(callee) = $callee_id AND
-			   caller.name = $caller_name AND
-    		   caller.file_name = $file_name AND
-    		   caller.src_start = $caller_src_start AND
-    		   caller.src_end = $caller_src_end
-		 MERGE (caller)-[:CALLS {file_name: $file_name, src_start: $call_src_start, src_end:$call_src_end}]->(callee)`;
-
-	await graph.query(q, { params: params });
-}
-
-async function projectGraph
-(
-	graph: Graph
-) {
-	let result = await graph.query(`MATCH (n) RETURN n`);
-	let nodes = result.data;
-
-	result = await graph.query(`MATCH ()-[e]->() RETURN e`);
-	let edges = result.data;
-
-	return [nodes, edges];
-}
 
 //-----------------------------------------------------------------------------
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
 
 let parser: Parser;
+let Python: Language;
 
 // class definition tree-sitter query
 // responsible for matching class definition, in addition to extracting the class name
@@ -422,78 +211,28 @@ async function processSecondPass
 	}
 }
 
-export async function POST(request: NextRequest) {
+async function ReBuildGraph(client: any, commit_hash: string, graphId: string, graph: Graph, repo_root: string) {
+	console.log("ReBuildGraph");
+	// delete old graph
+	await client.del(graphId);
+	
+	// delete graph git hash
+	await client.del(graphId + "git-hash");
 
-	// Connect to FalkorDB	
-	const client = createClient({
-		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
-	});
+	// construct graph
+	await BuildGraph(client, commit_hash, graphId, graph, repo_root);
+}
 
-	await client.connect();
+async function BuildGraph(client: any, commit_hash: string, graphId: string, graph: Graph, repo_root: string) {
+	console.log("BuildGraph");
+	// Initialize Tree-Sitter
+	await InitializeTreeSitter();
 
-	// Initialize Tree-Sitter parser
-	await Parser.init({
-		locateFile(scriptName: string, scriptDirectory: string) {
-			return path.join(process.cwd(), 'app/parsers', scriptName);
-		},
-	});
+	// Create graph commit hash
+	client.set(graphId + "git-hash", commit_hash);
 
-	parser = new Parser();
-	const Python = await Parser.Language.load(path.join(process.cwd(), 'app/parsers/tree-sitter-python.wasm'));
-
-	parser.setLanguage(Python);
-
-	//-------------------------------------------------------------------------
-	// Tree-Sitter AST queries
-	//-------------------------------------------------------------------------
-
-	identifier_query = Python.query(`((identifier) @identifier)`);
-	function_call_query = Python.query(`((call function: (identifier) @function-name) @function-call)`);
-	function_attr_call_query = Python.query(`((call function: (attribute object: (identifier) attribute: (identifier) @function-name )) @function-call)`);
-	class_definition_query = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
-	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
-
-	// Download Github Repo into a temporary folder
-	// Create temporary folder
-
-	const tmp_dir = os.tmpdir();
-	console.log("Temporary directory: " + tmp_dir);
-
-	let body = await request.json();
-	let url = body.url;
-	url = "https://github.com/falkorDB/falkordb-py";
-	console.log("Processing url: " + url);
-
-	let urlParts = url.split('/');
-	const organization = urlParts[urlParts.length - 2];
-	const repo = urlParts[urlParts.length - 1];
-	const graphId = `${organization}-${repo}`;
-	const graph = new Graph(client, graphId);
-
-	delete_graph(graph, graphId);
+	// Create graph indicies
 	create_indices(graph);
-
-	//--------------------------------------------------------------------------
-	// process repo
-	//--------------------------------------------------------------------------
-
-	let repo_root = path.join(tmp_dir, repo);
-	console.log("repo_root: " + repo_root);
-
-	//--------------------------------------------------------------------------
-	// clone repo into temporary folder
-	//--------------------------------------------------------------------------
-
-	await git
-		.clone({ fs, http, dir: repo_root, url })
-		.then(function a(response){
-			console.log("response: " + response);
-		})
-		.catch(function b(error){
-			console.log("error: " + error);
-		});
-
-	console.log("Cloned repo");
 
 	//--------------------------------------------------------------------------
 	// collect all source files in repo
@@ -520,9 +259,96 @@ export async function POST(request: NextRequest) {
 
 	// second pass calls.
 	await processSecondPass(source_files, graph);
+}
+
+async function InitializeTreeSitter() {
+	// Initialize Tree-Sitter parser
+	await Parser.init({
+		locateFile(scriptName: string, scriptDirectory: string) {
+			return path.join(process.cwd(), 'app/parsers', scriptName);
+		},
+	});
+
+	parser = new Parser();
+	Python = await Parser.Language.load(path.join(process.cwd(), 'app/parsers/tree-sitter-python.wasm'));
+
+	parser.setLanguage(Python);
+
+	//-------------------------------------------------------------------------
+	// Tree-Sitter AST queries
+	//-------------------------------------------------------------------------
+
+	identifier_query = Python.query(`((identifier) @identifier)`);
+	function_call_query = Python.query(`((call function: (identifier) @function-name) @function-call)`);
+	function_attr_call_query = Python.query(`((call function: (attribute object: (identifier) attribute: (identifier) @function-name )) @function-call)`);
+	class_definition_query = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
+	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
+}
+
+export async function POST(request: NextRequest) {
+
+	//-------------------------------------------------------------------------
+	// Connect to FalkorDB
+	//-------------------------------------------------------------------------
+
+	const client = createClient({
+		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
+	});
+	await client.connect();
+
+	// Download Github Repo into a temporary folder
+	// Create temporary folder
+
+	const tmp_dir = os.tmpdir();
+
+	let body = await request.json();
+	let url = body.url;
+	url = "https://github.com/falkorDB/falkordb-py";
+	console.log("Processing url: " + url);
+
+	let urlParts = url.split('/');
+	const organization = urlParts[urlParts.length - 2];
+	const repo = urlParts[urlParts.length - 1];
+	const graphId = `${organization}-${repo}`;
+	const graph = new Graph(client, graphId);
+
+	//--------------------------------------------------------------------------
+	// process repo
+	//--------------------------------------------------------------------------
+
+	let repo_root = path.join(tmp_dir, repo);
+	console.log("repo_root: " + repo_root);
+
+	//--------------------------------------------------------------------------
+	// clone repo into temporary folder
+	//--------------------------------------------------------------------------
+
+	await git
+		.clone({ fs, http, dir: repo_root, url })
+		.then(function a(response){
+			console.log("response: " + response);
+		})
+		.catch(function b(error){
+			console.log("error: " + error);
+		});
+
+	console.log("Cloned repo");
+	
+	// latest git commit
+	let commits = await git.log({ fs, dir: repo_root, depth: 1 });
+	let commit_hash: string = commits[0].oid;
+
+	let graph_exists = await client.exists(graphId);
+	if (graph_exists) {
+		let processed_hash = await client.get(graphId + "git-hash");
+		if(processed_hash != commit_hash) {
+			await ReBuildGraph(client, commit_hash, graphId, graph, repo_root);
+		}
+	} else {
+		await BuildGraph(client, commit_hash, graphId, graph, repo_root);
+	}
 
 	let code_graph = await projectGraph(graph);
-
 	console.log("All done!");
 
 	return NextResponse.json({ id: graphId, nodes: code_graph[0], edges: code_graph[1] }, { status: 201 })
