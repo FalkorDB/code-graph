@@ -16,85 +16,127 @@ export interface Edge {
   label: any,
 }
 
-export interface Graph {
-  id: string,
-  categories: Category[],
-  nodes: Node[],
-  edges: Edge[],
-}
+export class Graph {
 
-export function extractData(results: any | null): Graph {
-  let categories = new Map<String, Category>()
-  let nodes = new Map<number, Node>()
+  private id: string;
+  private categories: Category[];
+  private nodes: Node[];
+  private edges: Edge[];
 
-  results.nodes.forEach((row: any) => {
+  private categoriesMap: Map<String, Category>;
+  private nodesMap: Map<number, Node>;
+  private edgesSet: Set<Edge>;
 
-    let nodeData = row.n;
-    let label = nodeData.labels[0]
-    // check if category already exists in categories
-    let category = categories.get(label)
-    if (!category) {
-      category = { name: label, index: categories.size }
-      categories.set(label, category)
-    }
+  private constructor(id: string, categories: Category[], nodes: Node[], edges: Edge[],
+    categoriesMap: Map<String, Category>, nodesMap: Map<number, Node>, edgesSet: Set<Edge>
+  ) {
+    this.id = id;
+    this.categories = categories;
+    this.nodes = nodes;
+    this.edges = edges;
+    this.categoriesMap = categoriesMap;
+    this.nodesMap = nodesMap;
+    this.edgesSet = edgesSet;
+  }
 
-    // check if node already exists in nodes or fake node was created
-    let node = nodes.get(nodeData.id)
-    if (!node) {
-      node = { 
-        id: nodeData.id.toString(), 
-        name: nodeData.properties.name, 
-        value: JSON.stringify(nodeData.properties), 
-        category: category.index
+  get Id(): string {
+    return this.id;
+  }
+
+  get Categories(): Category[] {
+    return this.categories;
+  }
+
+  get Nodes(): Node[] {
+    return this.nodes;
+  }
+
+  get Edges(): Edge[] {
+    return this.edges;
+  }
+
+  public static empty(): Graph{
+    return new Graph("", [], [], [], new Map<String, Category>(), new Map<number, Node>(), new Set<Edge>())
+  }
+
+  public static create(results: any | null): Graph{
+    let graph = Graph.empty()
+    graph.extend(results)
+    graph.id = results.id
+    return graph
+  }
+
+  public extend(results: any | null) {
+
+    results.nodes.forEach((row: any) => {
+
+      let nodeData = row.n;
+      let label = nodeData.labels[0]
+      // check if category already exists in categories
+      let category = this.categoriesMap.get(label)
+      if (!category) {
+        category = { name: label, index: this.categoriesMap.size }
+        this.categoriesMap.set(label, category)
       }
-      nodes.set(nodeData.id, node)
-    }
-  })
 
-  let edges = new Set<Edge>()
-  results.edges.forEach((row: any) => {
-    let edgeData = row.e;
-
-    let sourceId = edgeData.sourceId.toString();
-    let destinationId = edgeData.destinationId.toString()
-    edges.add({
-      source: sourceId, target: destinationId, label:
-      {
-        show: true,
-        formatter: (params: any) => {
-          return edgeData.relationshipType
+      // check if node already exists in nodes or fake node was created
+      let node = this.nodesMap.get(nodeData.id)
+      if (!node) {
+        node = {
+          id: nodeData.id.toString(),
+          name: nodeData.properties.name,
+          value: JSON.stringify(nodeData.properties),
+          category: category.index
         }
+        this.nodesMap.set(nodeData.id, node)
       }
     })
 
-    // creates a fakeS node for the source and target
-    let source = nodes.get(edgeData.sourceId)
-    if (!source) {
-      source = { id: sourceId, name: sourceId, value: "", category: 0 }
-      nodes.set(edgeData.sourceId, source)
-    }
+    let edges = new Set<Edge>()
+    results.edges.forEach((row: any) => {
+      let edgeData = row.e;
 
-    let destination = nodes.get(edgeData.destinationId)
-    if (!destination) {
-      destination = { id: destinationId, name: destinationId, value: "", category: 0}
-      nodes.set(edgeData.destinationId, destination)
-    }
-  })
+      let sourceId = edgeData.sourceId.toString();
+      let destinationId = edgeData.destinationId.toString()
+      edges.add({
+        source: sourceId, target: destinationId, label:
+        {
+          show: true,
+          formatter: (params: any) => {
+            return edgeData.relationshipType
+          }
+        }
+      })
 
-  let categoriesArray = new Array<Category>()
-  categories.forEach((category) => {
-    categoriesArray[category.index] = category
-  })
+      // creates a fakeS node for the source and target
+      let source = this.nodesMap.get(edgeData.sourceId)
+      if (!source) {
+        source = { id: sourceId, name: sourceId, value: "", category: 0 }
+        this.nodesMap.set(edgeData.sourceId, source)
+      }
 
-  let nodesArray = new Array<Node>()
-  nodes.forEach((node) => {
-    nodesArray.push(node)
-  })
+      let destination = this.nodesMap.get(edgeData.destinationId)
+      if (!destination) {
+        destination = { id: destinationId, name: destinationId, value: "", category: 0 }
+        this.nodesMap.set(edgeData.destinationId, destination)
+      }
+    })
 
-  let edgesArray = new Array<Edge>()
-  edges.forEach((edge) => {
-    edgesArray.push(edge)
-  })
+    this.categories = new Array<Category>()
+    this.categoriesMap.forEach((category) => {
+      this.categories[category.index] = category
+    })
 
-  return { id: results.id, categories: categoriesArray, nodes: nodesArray, edges: edgesArray }
+    this.nodes = new Array<Node>()
+    this.nodesMap.forEach((node) => {
+      this.nodes.push(node)
+    })
+
+    this.edges = new Array<Edge>()
+    edges.forEach((edge) => {
+      this.edges.push(edge)
+    })
+  }
 }
+
+

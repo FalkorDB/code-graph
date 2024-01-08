@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import ReactECharts, { EChartsInstance } from 'echarts-for-react';
 import { useState, useRef } from 'react';
 import { Chat } from './chat';
-import { Graph, extractData } from './model';
+import { Graph } from './model';
 import { Github, HomeIcon, ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import Link from 'next/link';
@@ -13,7 +13,7 @@ import Link from 'next/link';
 export default function Home() {
 
   const [url, setURL] = useState('https://github.com/falkorDB/falkordb-py');
-  const [graph, setGraph] = useState<Graph>({ id: '', nodes: [], edges: [], categories: [] });
+  const [graph, setGraph] = useState<Graph>( Graph.empty());
 
   const echartRef = useRef<EChartsInstance | null>(null)
   const factor = useRef<number>(1)
@@ -21,13 +21,13 @@ export default function Home() {
   function getOptions(graph: Graph) {
     const currentFactor = factor.current
     return {
-      name: graph.id,
+      name: graph.Id,
       tooltip: {
         position: 'right',
       },
       legend: [
         {
-          data: graph.categories.map(function (c) {
+          data: graph.Categories.map(function (c) {
             return c.name;
           })
         }
@@ -69,9 +69,9 @@ export default function Home() {
         edgeSymbol: ['none', 'arrow'],
         edgeSymbolSize: 0.8 * currentFactor,
         draggable: true,
-        nodes: graph.nodes,
-        edges: graph.edges,
-        categories: graph.categories,
+        nodes: graph.Nodes,
+        edges: graph.Edges,
+        categories: graph.Categories,
         force: {
           repulsion: 100,
         },
@@ -114,7 +114,7 @@ export default function Home() {
       })
     }).then(response => response.json())
       .then(data => {
-        let graph = extractData(data)
+        let graph = Graph.create(data)
         setGraph(graph)
       })
       .catch((error) => {
@@ -178,12 +178,12 @@ export default function Home() {
                   }
                   let node = JSON.parse(value)
 
-                  fetch(`/api/repo/${graph.id}/${node.name}`, {
+                  fetch(`/api/repo/${graph.Id}/${node.name}`, {
                     method: 'GET'
                   })
                     .then(response => response.json())
                     .then(data => {
-                      let graph = extractData(data)
+                      graph.extend(data)
                       setGraph(graph)
                     })
                     .catch((error) => {
@@ -199,7 +199,7 @@ export default function Home() {
           </main>
         </section>
         <aside className="flex flex-col w-2/6 border">
-          <Chat repo={graph.id} />
+          <Chat repo={graph.Id} />
         </aside>
       </div>
     </main>
