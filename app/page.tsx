@@ -73,9 +73,7 @@ export default function Home() {
         edges: graph.edges,
         categories: graph.categories,
         force: {
-          edgeLength: 40,
-          repulsion: 20,
-          gravity: 0.2,
+          repulsion: 100,
         },
         edgeLabel: {
           fontSize: 2 * currentFactor
