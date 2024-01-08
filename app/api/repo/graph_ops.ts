@@ -219,3 +219,134 @@ export async function projectGraph
 
 	return [nodes, edges];
 }
+
+// returns graph's schema
+// labels and all attributes associated with them,
+// relationship-types and all attributes associated with them.
+export async function graphSchema
+(
+    graph: Graph
+) {
+    // graph schema
+    let schema: {
+        node_count: number;
+        edge_count: number;
+        labels: Record<string, any>;
+        relations: Record<string, any>;
+    } = {
+        'node_count': 0,
+        'edge_count': 0,
+        'labels': {},
+        'relations': {}
+    };
+
+    //-------------------------------------------------------------------------
+    // collect labels and the attributes associated with them
+    //-------------------------------------------------------------------------
+
+    let query = `CALL db.labels()
+                 YIELD label
+                 RETURN label AS label`;
+
+    let res = await graph.query(query);
+    let labels: any = res.data;
+
+    for (let i = 0; i < labels.length; i++) {
+        let label = labels[i]['label'];
+        console.log('label: ' + label);
+        schema['labels'][label] = { };
+
+        // number labeld nodes
+        let query = `MATCH (n:${label})
+                     RETURN count(n) as node_count`;
+        let res: any = await graph.query(query);
+        let node_count: number = res.data[0]['node_count'];
+        schema['labels'][label]['node_count'] = node_count;
+
+        // collect label attributes
+        query = `MATCH (n:${label})
+                 WITH keys(n) AS keys
+                 UNWIND keys as key
+                 RETURN collect(distinct key) AS attributes`;
+        res = await graph.query(query);
+        let attributes: string[] = res.data[0]['attributes'];  
+        schema['labels'][label]['attributes'] = { };
+        for (let j = 0; j < attributes.length; j++) {
+            let attr = attributes[j];
+            schema['labels'][label]['attributes'][attr] = { 'type': 'unknown', 'count':0 };
+        }
+
+        // determine dominante type for each attribute
+        query = `MATCH (n:${label})
+                 WITH n, keys(n) AS keys
+                 UNWIND keys as key
+                 RETURN key as attr, typeOf(n[key]) AS attr_type, count(1) as count`
+        res = await graph.query(query);
+        for (let j = 0; j < res.data.length; j++) {
+            let record = res.data[j];
+            let attr   = record['attr'];
+            let count  = record['count'];
+            let type   = record['attr_type'];
+            if(schema['labels'][label]['attributes'][attr]['count'] < count) {          
+                schema['labels'][label]['attributes'][attr]['type'] = type;
+                schema['labels'][label]['attributes'][attr]['count'] = count;
+            }
+        }
+    }
+
+    //-------------------------------------------------------------------------
+    // collect relations and the attributes associated with them
+    //-------------------------------------------------------------------------
+
+    query = `CALL db.relationshiptypes()
+             YIELD relationshipType
+             RETURN relationshipType as relation`;
+
+    res = await graph.query(query);
+    let relationships: any = res.data;
+
+    for (let i = 0; i < relationships.length; i++) {
+        let relation = relationships[i]['relation'];
+        console.log('relation: ' + relation);
+        schema['relations'][relation] = { };
+
+        // number edges
+        let query = `MATCH ()-[e:${relation}]->()
+                     RETURN count(e) as edge_count`;
+        let res: any = await graph.query(query);
+        let edge_count: number = res.data[0]['edge_count'];
+        schema['relations'][relation]['edge_count'] = edge_count;
+
+        // collect relation attributes
+        query = `MATCH ()-[e:${relation}]->()
+                     WITH keys(e) AS keys
+                     UNWIND keys as key
+                     RETURN collect(distinct key) AS attributes`;
+        res = await graph.query(query);
+        let attributes: string[] = res.data[0]['attributes'];
+        schema['relations'][relation]['attributes'] = { };
+        for (let j = 0; j < attributes.length; j++) {
+            let attr = attributes[j];
+            schema['relations'][relation]['attributes'][attr] = { 'type': 'unknown', 'count':0 };
+        }
+
+        // determine dominante type for each attribute
+        query = `MATCH ()-[e:${relation}]->()
+                 WITH e, keys(e) AS keys
+                 UNWIND keys as key
+                 RETURN key as attr, typeOf(e[key]) AS attr_type, count(1) as count`
+        res = await graph.query(query);
+        for (let j = 0; j < res.data.length; j++) {
+            let record = res.data[j];
+            let attr   = record['attr'];
+            let count  = record['count'];
+            let type   = record['attr_type'];
+            if(schema['relations'][relation]['attributes'][attr]['count'] < count) {
+                schema['relations'][relation]['attributes'][attr]['type'] = type;
+                schema['relations'][relation]['attributes'][attr]['count'] = count;
+            }
+        }
+    }
+
+    return schema;
+}

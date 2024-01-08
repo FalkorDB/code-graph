@@ -8,7 +8,8 @@ import { promises as fs } from 'fs';
 import { Language, SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falkordb';
-import { create_indices, create_module, create_class, create_function, create_function_call, projectGraph } from './graph_ops';
+
+const GraphOps = require('./graph_ops');
 
 //-----------------------------------------------------------------------------
 // Tree-Sitter queries
@@ -51,7 +52,7 @@ async function processClassDeclaration
 	let class_src_start = class_node.startPosition.row;
 
 	// Create Class node
-	await create_class(source_file, graph, class_name, class_src_start, class_src_end);
+	await GraphOps.create_class(source_file, graph, class_name, class_src_start, class_src_end);
 }
 
 // Process function declaration
@@ -109,7 +110,7 @@ async function processFunctionDeclaration
 	let function_src_start = function_node.startPosition.row;
 
 	// Create Function node
-	await create_function(source_file, graph, function_name, parent, args,
+	await GraphOps.create_function(source_file, graph, function_name, parent, args,
 		function_src_start, function_src_end, src);
 }
 
@@ -129,7 +130,7 @@ async function processFunctionCall
 	let call_src_start = call.startPosition.row;       // call ends on this line number
 
 	// Create Function call edge
-	await create_function_call(source_file, graph, caller, callee,
+	await GraphOps.create_function_call(source_file, graph, caller, callee,
 		caller_src_start, caller_src_end, call_src_start, call_src_end);
 }
 
@@ -146,7 +147,7 @@ async function processFirstPass
 	for (let source_file of source_files) {
 		console.log("Processing file: " + source_file);
 
-		await create_module(source_file, graph);
+		await GraphOps.create_module(source_file, graph);
 
 		const src = await fs.readFile(source_file, 'utf8');
 
@@ -232,7 +233,7 @@ async function BuildGraph(client: any, commit_hash: string, graphId: string, gra
 	client.set(graphId + "git-hash", commit_hash);
 
 	// Create graph indicies
-	create_indices(graph);
+	GraphOps.create_indices(graph);
 
 	//--------------------------------------------------------------------------
 	// collect all source files in repo
@@ -348,7 +349,13 @@ export async function POST(request: NextRequest) {
 		await BuildGraph(client, commit_hash, graphId, graph, repo_root);
 	}
 
-	let code_graph = await projectGraph(graph);
+	let code_graph = await GraphOps.projectGraph(graph);
+
+	let graph_schema = await GraphOps.graphSchema(graph);
+    console.log("graph_schema");
+    console.log(JSON.stringify(graph_schema, null, 2));
+
+
 	console.log("All done!");
 
 	return NextResponse.json({ id: graphId, nodes: code_graph[0], edges: code_graph[1] }, { status: 201 })
