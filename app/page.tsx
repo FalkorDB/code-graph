@@ -169,6 +169,30 @@ export default function Home() {
                   if (params.zoom) {
                     handleZoomClick(params.zoom)
                   }
+                },
+                dblclick: async (params: any) => {
+
+                  let value = params?.data?.value;
+                  if (!value) {
+                    return
+                  }
+                  let node = JSON.parse(value)
+
+                  fetch(`/api/repo/${graph.id}/${node.name}`, {
+                    method: 'GET'
+                  })
+                    .then(response => response.json())
+                    .then(data => {
+                      let graph = extractData(data)
+                      setGraph(graph)
+                    })
+                    .catch((error) => {
+                      toast({
+                        variant: "destructive",
+                        title: "Uh oh! Something went wrong.",
+                        description: error.message,
+                      })
+                    })
                 }
               }}
             />
