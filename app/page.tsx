@@ -9,6 +9,7 @@ import { Graph } from './model';
 import { Github, HomeIcon, ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import Link from 'next/link';
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 export default function Home() {
 
@@ -149,8 +150,8 @@ export default function Home() {
           </Link>
         </nav>
       </header>
-      <div className="w-full flex flex-row h-full">
-        <section className="flex flex-col w-4/6 border">
+      <PanelGroup direction="horizontal" className="w-full h-full">
+        <Panel defaultSize={75} className="flex flex-col border" collapsible={true} minSize={30}>
           <header className="border p-4">
             <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
               <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} />
@@ -197,11 +198,12 @@ export default function Home() {
               }}
             />
           </main>
-        </section>
-        <aside className="flex flex-col w-2/6 border">
+        </Panel>
+        <PanelResizeHandle  className="w-1 bg-gray-500"/>
+        <Panel className="flex flex-col border" defaultSize={25} collapsible={true} minSize={10}>
           <Chat repo={graph.Id} />
-        </aside>
-      </div>
+        </Panel>
+      </PanelGroup>
     </main>
   )
 }

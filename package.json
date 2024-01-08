@@ -20,6 +20,7 @@
     "next": "14.0.4",
     "react": "^18",
     "react-dom": "^18",
+    "react-resizable-panels": "^1.0.7",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
     "web-tree-sitter": "^0.20.8"
