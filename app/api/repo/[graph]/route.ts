@@ -122,10 +122,14 @@ export async function GET(request: NextRequest, { params }: { params: { graph_id
     });
 
     const output_text = completion.choices[0]['message']['content'];
-    console.log(output_text);
     
     query = output_text;
     console.log(`query: ${query}\n`);
+
+    if(!query) {
+        return NextResponse.json({ result: "No query generated" }, { status: 500 });
+    }
+    
     let result   = await graph.query(query);
     let response = JSON.stringify(result.data);
 
