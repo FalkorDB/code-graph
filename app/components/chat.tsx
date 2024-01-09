@@ -40,18 +40,22 @@ export function Chat(props: { repo: string }) {
 
         fetch(`/api/repo/${props.repo}?q=${query}&type=text`, {
             method: 'GET'
-        })
-            .then(response => response.json())
-            .then(data => {
-                setMessages((messages) => [...messages, { text: data.result, type: MessageTypes.Response }]);
-            })
-            .catch((error) => {
-                toast({
-                    variant: "destructive",
-                    title: "Uh oh! Something went wrong.",
-                    description: error.message,
-                });
+        }).then(async (result) => {
+            if (result.status >= 300) {
+                throw Error(await result.text())
+
+            }
+
+            return result.json()
+        }).then(data => {
+            setMessages((messages) => [...messages, { text: data.result, type: MessageTypes.Response }]);
+        }).catch((error) => {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: error.message,
             });
+        });
     }
 
     // A function that handles the click event

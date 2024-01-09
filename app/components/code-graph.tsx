@@ -48,18 +48,23 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
             body: JSON.stringify({
                 url: value
             })
-        }).then(response => response.json())
-            .then(data => {
-                let graph = Graph.create(data);
-                parmas.setGraph(graph);
-            })
-            .catch((error) => {
-                toast({
-                    variant: "destructive",
-                    title: "Uh oh! Something went wrong.",
-                    description: error.message,
-                });
+        }).then(async (result) => {
+            if (result.status >= 300) {
+                throw Error(await result.text())
+
+            }
+
+            return result.json()
+        }).then(data => {
+            let graph = Graph.create(data);
+            parmas.setGraph(graph);
+        }).catch((error) => {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: error.message,
             });
+        });
     }
 
     function handleZoomClick(changefactor: number) {
@@ -191,19 +196,23 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
 
                             fetch(`/api/repo/${parmas.graph.Id}/${node.name}`, {
                                 method: 'GET'
+                            }).then(async (result) => {
+                                if (result.status >= 300) {
+                                    throw Error(await result.text())
+
+                                }
+
+                                return result.json()
+                            }).then(data => {
+                                parmas.graph.extend(data)
+                                parmas.setGraph(parmas.graph)
+                            }).catch((error) => {
+                                toast({
+                                    variant: "destructive",
+                                    title: "Uh oh! Something went wrong.",
+                                    description: error.message,
+                                })
                             })
-                                .then(response => response.json())
-                                .then(data => {
-                                    parmas.graph.extend(data)
-                                    parmas.setGraph(parmas.graph)
-                                })
-                                .catch((error) => {
-                                    toast({
-                                        variant: "destructive",
-                                        title: "Uh oh! Something went wrong.",
-                                        description: error.message,
-                                    })
-                                })
                         }
                     }}
                 />
