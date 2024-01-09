@@ -99,8 +99,13 @@ async function processFunctionDeclaration
 		if (child_node.type == 'identifier') {
 			args.push(child_node.text);
 		} else {
-			let identifier_matches = identifier_query.matches(child_node)[0].captures;
-			const identifierNode = identifier_matches[0].node;
+			let identifier_matches = identifier_query.matches(child_node)
+			if(identifier_matches.length == 0) {
+				console.log("Investigate!");
+				continue;
+			}			
+			let captures = identifier_matches[0].captures;
+			const identifierNode = captures[0].node;
 			args.push(identifierNode.text);
 		}
 	}
@@ -164,7 +169,7 @@ async function processFirstPass
 
 		// Match all function definition within the current class
 		let function_matches = function_definition_query.matches(tree.rootNode);
-		for (let function_match of function_matches) {
+		for (let function_match of function_matches) {			
 			await processFunctionDeclaration(source_file, graph, function_match);
 		}
 	}
