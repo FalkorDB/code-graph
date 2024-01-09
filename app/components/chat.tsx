@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { QUESTIONS } from "./questions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 enum MessageTypes {
@@ -14,7 +16,7 @@ interface Message {
     type: MessageTypes;
 }
 
-export function Chat(props: {repo: string} ) {
+export function Chat(props: { repo: string }) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [query, setQuery] = useState('');
 
@@ -33,10 +35,7 @@ export function Chat(props: {repo: string} ) {
         setQuery(value);
     }
 
-    // A function that handles the click event
-    async function handleQueryClick(event: any) {
-        event.preventDefault();
-
+    function sendQuery() {
         setMessages((messages) => [...messages, { text: query, type: MessageTypes.Query }]);
 
         fetch(`/api/repo/${props.repo}?q=${query}&type=text`, {
@@ -51,8 +50,19 @@ export function Chat(props: {repo: string} ) {
                     variant: "destructive",
                     title: "Uh oh! Something went wrong.",
                     description: error.message,
-                  })
-            })
+                });
+            });
+    }
+
+    // A function that handles the click event
+    async function handleQueryClick(event: any) {
+        event.preventDefault();
+        sendQuery();
+    }
+
+    function onQuestionSelected(value: string): void {
+        setQuery(value)
+        sendQuery()
     }
 
     return (
@@ -78,7 +88,19 @@ export function Chat(props: {repo: string} ) {
             </main>
             <footer className="border p-4">
                 <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
-                    <Input className="" placeholder="Type a query..." onChange={handleQueryInputChange} />
+                    <Select onValueChange={onQuestionSelected}>
+                        <SelectTrigger className="w-1/3">
+                            <SelectValue placeholder="Suggested questions" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {
+                                QUESTIONS.map((question, index) => {
+                                    return <SelectItem key={index} value={question}>{question}</SelectItem>
+                                })
+                            }
+                        </SelectContent>
+                    </Select>
+                    <Input placeholder="Type a question..." onChange={handleQueryInputChange} />
                     <Button>Send</Button>
                 </form>
             </footer>
