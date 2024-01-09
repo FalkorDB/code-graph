@@ -2,10 +2,9 @@ import { Graph, createClient } from "falkordb";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, { params }: { params: { graph: string, node: string } }) {
-
+    
+    const node    = params.node;
     const graphId = params.graph;
-    const node = params.node;
-
 
     const client = createClient({
 		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
@@ -14,9 +13,11 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     const graph = new Graph(client, graphId);
 
-    // Get the node neighbors, the edges and their properties 
-    let nodes = await graph.query(`MATCH ({name:'${node}'})-[]-(n) RETURN n`);
-    let edges = await graph.query(`MATCH ({name:'${node}'})-[e]-() RETURN e`);
+    // Get node's neighbors
+    let res: any = await graph.query(`MATCH ({name:'${node}'})-[e]-(n)
+                                 RETURN collect(distinct n) as nodes, collect(e) as edges`);
+    let nodes = res.data[0]['nodes'];
+    let edges = res.data[0]['edges'];
 
-    return NextResponse.json({ id: graphId, nodes: nodes.data, edges: edges.data }, { status: 200 })
+    return NextResponse.json({ id: graphId, nodes: nodes, edges: edges }, { status: 200 })
 }

@@ -256,6 +256,9 @@ async function BuildGraph
 
 	// set graph expiry, expire in 24 hours
 	await client.expire(graphId, 86400);
+
+	// create schema graph
+	await GraphOps.graphCreateSchema(graph, graphId, client);
 }
 
 async function InitializeTreeSitter() {

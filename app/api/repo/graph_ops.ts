@@ -220,25 +220,21 @@ export async function projectGraph
 	return [nodes, edges];
 }
 
-// returns graph's schema
-// labels and all attributes associated with them,
-// relationship-types and all attributes associated with them.
-export async function graphSchema
+// creates a schema graph
+export async function graphCreateSchema
 (
-    graph: Graph
+    graph: Graph,
+    graphId: string,
+    client: any
 ) {
-    // graph schema
-    let schema: {
-        node_count: number;
-        edge_count: number;
-        labels: Record<string, any>;
-        relations: Record<string, any>;
-    } = {
-        'node_count': 0,
-        'edge_count': 0,
-        'labels': {},
-        'relations': {}
-    };
+    const schema_graph_id = graphId + '-schema';
+
+    if(await client.exists(schema_graph_id)) {
+        console.log(`${schema_graph_id} already exists`);
+        return;
+    }
+
+    const schema_graph = new Graph(client, schema_graph_id);
 
     //-------------------------------------------------------------------------
     // collect labels and the attributes associated with them
@@ -252,45 +248,86 @@ export async function graphSchema
     let labels: any = res.data;
 
     for (let i = 0; i < labels.length; i++) {
-        let label = labels[i]['label'];
-        schema['labels'][label] = { };
+        let label = labels[i]['label'];        
 
         // number labeld nodes
-        let query = `MATCH (n:${label})
-                     RETURN count(n) as node_count`;
+        let query = `MATCH (n:${label}) RETURN count(n) as node_count`;
         let res: any = await graph.query(query);
         let node_count: number = res.data[0]['node_count'];
-        schema['labels'][label]['node_count'] = node_count;
 
+        //---------------------------------------------------------------------
+        // create label node
+        //---------------------------------------------------------------------
+
+        let params = {'name': label, 'count': node_count};
+        query = `CREATE (:Label {name:$name, count:$count})`;
+        await schema_graph.query(query, {'params': params});
+
+        //---------------------------------------------------------------------
         // collect label attributes
+        //---------------------------------------------------------------------
+
         query = `MATCH (n:${label})
                  WITH keys(n) AS keys
                  UNWIND keys as key
                  RETURN collect(distinct key) AS attributes`;
-        res = await graph.query(query);
-        let attributes: string[] = res.data[0]['attributes'];  
-        schema['labels'][label]['attributes'] = { };
+        res = await graph.query(query);        
+        let attributes: string[] = res.data[0]['attributes'];
+
         for (let j = 0; j < attributes.length; j++) {
-            let attr = attributes[j];
-            schema['labels'][label]['attributes'][attr] = { 'type': 'unknown', 'count':0 };
+            let attr   = attributes[j];
+            let params = {'name': label, 'attr': attr};
+            let query  = `MATCH (l:Label {name: $name})
+                          CREATE (l)-[:HAS]->(a:Attribute {name:$attr, type:'unknown'})`;
+            await schema_graph.query(query, {'params': params});
         }
 
+        //---------------------------------------------------------------------
         // determine dominante type for each attribute
+        //---------------------------------------------------------------------
+
         query = `MATCH (n:${label})
                  WITH n, keys(n) AS keys
                  UNWIND keys as key
-                 RETURN key as attr, typeOf(n[key]) AS attr_type, count(1) as count`
+                 RETURN key as attr, typeOf(n[key]) AS attr_type, count(1) as count
+                 ORDER BY attr`;
         res = await graph.query(query);
+        
+        let current_attr = null;
+        let max_count;
+        let dominant_type;
+
         for (let j = 0; j < res.data.length; j++) {
             let record = res.data[j];
             let attr   = record['attr'];
             let count  = record['count'];
             let type   = record['attr_type'];
-            if(schema['labels'][label]['attributes'][attr]['count'] < count) {          
-                schema['labels'][label]['attributes'][attr]['type'] = type;
-                schema['labels'][label]['attributes'][attr]['count'] = count;
+
+            // done processing current attribute
+            if (current_attr != attr) {
+                if(current_attr != null) {
+                    let params = {'name': label, 'attr': current_attr, 'type': dominant_type};
+                    let query  = `MATCH (l:Label{name:$name})-[:HAS]->(a:Attribute{name:$attr})
+                                  SET a.type = $type`;
+                    await schema_graph.query(query, {'params': params});
+                }
+
+                // reset state
+                max_count     = count;
+                current_attr  = attr;
+                dominant_type = type;
+            }
+
+            if(max_count < count) {
+                max_count     = count;
+                dominant_type = type;
             }
         }
+
+        // handle last attribute
+        query = `MATCH (l:Label{name:$name})-[:HAS]->(a:Attribute{name:$attr})
+                 SET a.type = $type`;
+        await schema_graph.query(query, {'params': {'name': label, 'attr': current_attr, 'type': dominant_type}});
     }
 
     //-------------------------------------------------------------------------
@@ -305,16 +342,17 @@ export async function graphSchema
     let relationships: any = res.data;
 
     for (let i = 0; i < relationships.length; i++) {
-        let relation = relationships[i]['relation'];        
-        schema['relations'][relation] = { };
-        schema['relations'][relation]['connect'] = [];
-
+        let relation = relationships[i]['relation'];
+        
         // number edges
         let query = `MATCH ()-[e:${relation}]->()
                      RETURN count(e) as edge_count`;
         let res: any = await graph.query(query);
         let edge_count: number = res.data[0]['edge_count'];
-        schema['relations'][relation]['edge_count'] = edge_count;
+        
+        // Create Relation node
+        query  = `CREATE (r:Relation {name:$name, count:$count})`
+        await schema_graph.query(query, {params: {'name': relation, 'count': edge_count}});
 
         // collect relation attributes
         query = `MATCH ()-[e:${relation}]->()
@@ -323,27 +361,58 @@ export async function graphSchema
                      RETURN collect(distinct key) AS attributes`;
         res = await graph.query(query);
         let attributes: string[] = res.data[0]['attributes'];
-        schema['relations'][relation]['attributes'] = { };
         for (let j = 0; j < attributes.length; j++) {
-            let attr = attributes[j];
-            schema['relations'][relation]['attributes'][attr] = { 'type': 'unknown', 'count':0 };
+            let attr   = attributes[j];
+            let params = {'name': relation, 'attr': attr};
+            let query  = `MATCH (r:Relation {name:$name})
+                          CREATE (r)-[:HAS]->(:Attribute {name: $attr})`
+            await schema_graph.query(query, {'params': params});
         }
 
         // determine dominante type for each attribute
         query = `MATCH ()-[e:${relation}]->()
                  WITH e, keys(e) AS keys
                  UNWIND keys as key
-                 RETURN key as attr, typeOf(e[key]) AS attr_type, count(1) as count`
+                 RETURN key as attr, typeOf(e[key]) AS attr_type, count(1) as count
+                 ORDER BY attr`
         res = await graph.query(query);
+
+        let current_attr = null;
+        let max_count;
+        let dominant_type;
+
         for (let j = 0; j < res.data.length; j++) {
             let record = res.data[j];
             let attr   = record['attr'];
             let count  = record['count'];
             let type   = record['attr_type'];
-            if(schema['relations'][relation]['attributes'][attr]['count'] < count) {
-                schema['relations'][relation]['attributes'][attr]['type'] = type;
-                schema['relations'][relation]['attributes'][attr]['count'] = count;
+
+            // done processing current attribute
+            if (current_attr != attr) {
+                if(current_attr != null) {                    
+                    let params = {'name': relation, 'attr': current_attr, 'type': dominant_type};
+                    let query  = `MATCH (r:Relation{name:$name})-[:HAS]->(a:Attribute{name:$attr})
+                                  SET a.type = $type`;
+                    await schema_graph.query(query, {'params': params});
+                }
+
+                // reset state
+                max_count     = count;
+                current_attr  = attr;
+                dominant_type = type;
             }
+
+            if(max_count < count) {
+                max_count     = count;
+                dominant_type = type;
+            }
+        }
+
+        if(current_attr != null) {
+            // handle last attribute
+            query = `MATCH (r:Relation{name:$name})-[:HAS]->(a:Attribute{name:$attr})
+                     SET a.type = $type`;
+            await schema_graph.query(query, {'params': {'name': relation, 'attr': current_attr, 'type': dominant_type}});
         }
     }
 
@@ -353,18 +422,108 @@ export async function graphSchema
              RETURN type(e) as rel, collect(distinct {src: labels(a)[0], dest:labels(b)[0]}) as ends`
     res = await graph.query(query);
     let connections: any = res.data;
+
     for (let i = 0; i < connections.length; i++) {
         let connection = connections[i];
         let relation   = connection['rel'];
         let ends       = connection['ends'];
+        let connects   = [];
 
         for(let j = 0; j < ends.length; j++) {
             let src  = ends[j]['src'];
             let dest = ends[j]['dest'];
+            connects.push(src);
+            connects.push(dest);
+        }
 
-            schema['relations'][relation]['connect'].push(src);
-            schema['relations'][relation]['connect'].push(dest);
-        }        
+        let params = {'name': relation, 'connects': connects};
+        let query  = `MATCH (r:Relation {name:$name})
+                      SET r.connects = $connects`
+        await schema_graph.query(query, {'params': params});
+    }
+}
+
+// returns graph's schema
+// labels and all attributes associated with them,
+// relationship-types and all attributes associated with them.
+export async function graphSchema
+(
+    graph: Graph,
+    graphId: string,
+    client: any
+) {
+    const schema_graph_id = graphId + '-schema';
+
+    if(!await client.exists(schema_graph_id)) {
+        console.log(`${schema_graph_id} is missing!`);
+        return null;
+    }
+
+    const schema_graph = new Graph(client, schema_graph_id);
+
+    // graph schema
+    let schema: {
+        labels: Record<string, any>;
+        relations: Record<string, any>;
+    } = {
+        'labels': {},
+        'relations': {}
+    };
+
+    //-------------------------------------------------------------------------
+    // collect labels and the attributes associated with them
+    //-------------------------------------------------------------------------
+
+    let query = `MATCH (l:Label)-[:HAS]->(a:Attribute)
+                 OPTIONAL MATCH (l)-[:HAS]->(a:Attribute)
+                 RETURN l.name as label, l.count as node_count, collect(a) as attributes`;
+    let res = await schema_graph.query(query);
+    let labels: any = res.data;
+
+    for (let i = 0; i < labels.length; i++) {
+        let label: string      = labels[i]['label'];
+        let node_count: number = labels[i]['node_count'];
+        let attributes: any[]  = labels[i]['attributes'];
+        
+        schema['labels'][label] = { };
+        schema['labels'][label]['node_count'] = node_count;
+        schema['labels'][label]['attributes'] = { };
+
+        for (let j = 0; j < attributes.length; j++) {
+            let attr      = attributes[j].properties.name;
+            let attr_type = attributes[j].properties.type;
+            schema['labels'][label]['attributes'][attr] = { 'type': attr_type };
+        }
+    }
+
+    //-------------------------------------------------------------------------
+    // collect relations and the attributes associated with them
+    //-------------------------------------------------------------------------
+
+    query = `MATCH (r:Relation)
+             OPTIONAL MATCH (r)-[:HAS]->(a:Attribute)
+             RETURN r as r, collect(a) as attributes`;
+    res = await schema_graph.query(query);
+    let relationships: any = res.data;
+
+    for (let i = 0; i < relationships.length; i++) {
+        let r: any  = relationships[i]['r'];
+        let attributes: any[] = relationships[i]['attributes'];
+
+        let relation   = r.properties.name;
+        let connects   = r.properties.connects;
+        let edge_count = r.properties.count;
+
+        schema['relations'][relation] = { };        
+        schema['relations'][relation]['connect']    = connects;
+        schema['relations'][relation]['edge_count'] = edge_count;
+        schema['relations'][relation]['attributes'] = { };
+
+        for (let j = 0; j < attributes.length; j++) {
+            let attr      = attributes[j].properties.name;
+            let attr_type = attributes[j].properties.type;
+            schema['relations'][relation]['attributes'][attr] = { 'type': attr_type };
+        }
     }
 
     return schema;

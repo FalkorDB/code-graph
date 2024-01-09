@@ -6,9 +6,13 @@ import OpenAI from "openai";
 
 // convert a structured graph schema into a string representation
 // used in a model prompt
-async function GraphSchemaToPrompt(graph: Graph) {
+async function GraphSchemaToPrompt(
+    graph: Graph,
+    graphId: string,
+    client: any
+) {
     // Retrieve graph schema
-    let schema = await graphSchema(graph);
+    let schema: any = await graphSchema(graph, graphId, client);
 
     // Build a string description of graph schema
     let desc: string = "The knowladge graph schema is as follows:\n";
@@ -82,8 +86,8 @@ async function GraphSchemaToPrompt(graph: Graph) {
     return desc;
 }
 
-export async function GET(request: NextRequest, { params }: { params: { graph_id: string } }) {    
-    const graph_id = params.graph_id;
+export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {    
+    const graph_id = params.graph;
     let query = request.nextUrl.searchParams.get("q");
     // const type = request.nextUrl.searchParams.get("type");
     
@@ -92,14 +96,13 @@ export async function GET(request: NextRequest, { params }: { params: { graph_id
     //-------------------------------------------------------------------------
 
     // hard coded graph id
-    let _graph_id = "falkorDB-falkordb-py-0c9dd39062819cf43cacf745137b69344b23a7e7";
     const client = createClient({
         url: process.env.FALKORDB_URL || 'redis://localhost:6379',
-    });
+    });    
     await client.connect();
-    const graph = new Graph(client, _graph_id);
 
-    let graph_schema = await GraphSchemaToPrompt(graph);
+    const graph = new Graph(client, graph_id);
+    let graph_schema = await GraphSchemaToPrompt(graph, graph_id, client);
 
     // let prompt: string = `You are a Cypher expert, with access to the following graph:\n
     // ${graph_schema}\n
