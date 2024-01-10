@@ -13,7 +13,7 @@ export default function Home() {
   const [graph, setGraph] = useState(Graph.empty());
 
   return (
-    <main className="h-screen p-8">
+    <main className="h-screen flex flex-col">
       <header className="flex items-center justify-between p-4 border">
         <Link href="https://www.falkordb.com" target='_blank'>
           <HomeIcon className="h-6 w-6" />
