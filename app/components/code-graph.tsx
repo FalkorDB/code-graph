@@ -130,7 +130,6 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
                     show: true,
                     fontSize: 2 * currentFactor,
                     formatter: function (params: any) {
-                        console.log(params)
                         return params.data.relationshipType;
                     }
                 },

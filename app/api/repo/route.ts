@@ -352,5 +352,5 @@ export async function POST(request: NextRequest) {
 
 	let code_graph = await GraphOps.projectGraph(graph);
 
-	return NextResponse.json({ id: graphId, nodes: code_graph[0], edges: code_graph[1] }, { status: 201 })
+	return NextResponse.json({ id: graphId, nodes: code_graph.nodes, edges: code_graph.edges }, { status: 201 })
 }

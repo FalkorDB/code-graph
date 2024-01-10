@@ -211,13 +211,9 @@ export async function projectGraph
 (
 	graph: Graph
 ) {
-	let result = await graph.query(`MATCH (n) RETURN n`);
-	let nodes = result.data;
+    let result: any = await graph.query(`MATCH (n) optional match (n)-[e]->() RETURN collect(n) as nodes, collect(e) as edges`);
 
-	result = await graph.query(`MATCH ()-[e]->() RETURN e`);
-	let edges = result.data;
-
-	return [nodes, edges];
+	return result.data[0];
 }
 
 // creates a schema graph

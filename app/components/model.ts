@@ -26,10 +26,10 @@ export class Graph {
 
   private categoriesMap: Map<String, Category>;
   private nodesMap: Map<number, Node>;
-  private edgesSet: Set<Edge>;
+  private edgesMap: Map<number, Edge>;
 
   private constructor(id: string, categories: Category[], nodes: Node[], edges: Edge[],
-    categoriesMap: Map<String, Category>, nodesMap: Map<number, Node>, edgesSet: Set<Edge>
+    categoriesMap: Map<String, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Edge>
   ) {
     this.id = id;
     this.categories = categories;
@@ -37,7 +37,7 @@ export class Graph {
     this.edges = edges;
     this.categoriesMap = categoriesMap;
     this.nodesMap = nodesMap;
-    this.edgesSet = edgesSet;
+    this.edgesMap = edgesMap;
   }
 
   get Id(): string {
@@ -57,7 +57,7 @@ export class Graph {
   }
 
   public static empty(): Graph{
-    return new Graph("", [], [], [], new Map<String, Category>(), new Map<number, Node>(), new Set<Edge>())
+    return new Graph("", [], [], [], new Map<String, Category>(), new Map<number, Node>(), new Map<number, Edge>())
   }
 
   public static create(results: any | null): Graph{
@@ -69,9 +69,8 @@ export class Graph {
 
   public extend(results: any | null) {
 
-    results.nodes.forEach((row: any) => {
-
-      let nodeData = row.n;
+    console.log("Graph.extend: results = ", results)
+    results.nodes.forEach((nodeData: any) => {
       let label = nodeData.labels[0]
       // check if category already exists in categories
       let category = this.categoriesMap.get(label)
@@ -93,12 +92,15 @@ export class Graph {
       }
     })
 
-    results.edges.forEach((row: any) => {
-      let edgeData = row.e;
+    results.edges.forEach((edgeData: any) => {
+      let edgeId = this.edgesMap.get(edgeData.id)
+      if(edgeId){
+        return
+      }
 
       let sourceId = edgeData.sourceId.toString();
       let destinationId = edgeData.destinationId.toString()
-      this.edgesSet.add({
+      this.edgesMap.set(edgeData.id, {
         source: sourceId, 
         target: destinationId, 
         relationshipType: edgeData.relationshipType,
@@ -130,7 +132,7 @@ export class Graph {
     })
 
     this.edges = new Array<Edge>()
-    this.edgesSet.forEach((edge) => {
+    this.edgesMap.forEach((edge) => {
       this.edges.push(edge)
     })
   }
