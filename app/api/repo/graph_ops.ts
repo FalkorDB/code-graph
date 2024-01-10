@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import { Graph } from 'falkordb';
 
 //-----------------------------------------------------------------------------
@@ -127,17 +128,26 @@ export async function create_function
     const file_components = file.split("/");
     const file_name = file_components[file_components.length - 1];
 
-    let params: any = {'name':       function_name,
-                       'file_name':  file_name,
-    			        'src_code':  src,
-    			        'src_start': src_start,
-    			        'src_end':   src_end,
-    			        'args':      args};
+    //-------------------------------------------------------------------------
+    // create function source embeddings
+    //-------------------------------------------------------------------------
+
+    const openai    = new OpenAI();
+    console.log(`Creating embeddings for: ${src}`)
+    const embedding = await openai.embeddings.create({model: "text-embedding-ada-002", input: src});
+    const vector    = embedding.data[0].embedding;
+
+    let params: any = {'name':            function_name,
+                       'file_name':       file_name,
+    			        'src_code':       src,
+                        'src_embeddings': vector,
+    			        'src_start':      src_start,
+    			        'src_end':        src_end,
+    			        'args':           args};
 
     let q = `CREATE (f:Function {name: $name, file_name: $file_name,
-           src_code: $src_code, src_start: $src_start, src_end: $src_end,
-           args: $args})
-           RETURN ID(f) as func_id`;
+             src_code: $src_code, src_embeddings:vecf32($src_embeddings), src_start: $src_start, src_end: $src_end, args: $args})
+             RETURN ID(f) as func_id`;
 
     let result: any = await graph.query(q, {params: params});
     let f_id = result.data[0]['func_id'];
@@ -223,8 +233,12 @@ export async function graphCreateSchema
     graphId: string,
     client: any
 ) {
+    // graph schema is an additional graph key sharing the same
+    // key name as the graph it describes with the addition of '-schema'
+    // to the key.
     const schema_graph_id = graphId + '-schema';
 
+    // return if schema already exists
     if(await client.exists(schema_graph_id)) {
         console.log(`${schema_graph_id} already exists`);
         return;
@@ -444,18 +458,17 @@ export async function graphCreateSchema
 // relationship-types and all attributes associated with them.
 export async function graphSchema
 (
-    graph: Graph,
     graphId: string,
     client: any
 ) {
-    const schema_graph_id = graphId + '-schema';
+    const schemaGraphId = graphId + '-schema';
 
-    if(!await client.exists(schema_graph_id)) {
-        console.log(`${schema_graph_id} is missing!`);
+    if(!await client.exists(schemaGraphId)) {
+        console.log(`${schemaGraphId} is missing!`);
         return null;
     }
 
-    const schema_graph = new Graph(client, schema_graph_id);
+    const schemaGraph = new Graph(client, schemaGraphId);
 
     // graph schema
     let schema: {
@@ -473,7 +486,7 @@ export async function graphSchema
     let query = `MATCH (l:Label)-[:HAS]->(a:Attribute)
                  OPTIONAL MATCH (l)-[:HAS]->(a:Attribute)
                  RETURN l.name as label, l.count as node_count, collect(a) as attributes`;
-    let res = await schema_graph.query(query);
+    let res = await schemaGraph.query(query);
     let labels: any = res.data;
 
     for (let i = 0; i < labels.length; i++) {
@@ -499,7 +512,7 @@ export async function graphSchema
     query = `MATCH (r:Relation)
              OPTIONAL MATCH (r)-[:HAS]->(a:Attribute)
              RETURN r as r, collect(a) as attributes`;
-    res = await schema_graph.query(query);
+    res = await schemaGraph.query(query);
     let relationships: any = res.data;
 
     for (let i = 0; i < relationships.length; i++) {

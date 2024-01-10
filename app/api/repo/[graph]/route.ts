@@ -12,7 +12,7 @@ async function GraphSchemaToPrompt(
     client: any
 ) {
     // Retrieve graph schema
-    let schema: any = await graphSchema(graph, graphId, client);
+    let schema: any = await graphSchema(graphId, client);
 
     // Build a string description of graph schema
     let desc: string = "The knowladge graph schema is as follows:\n";
@@ -83,7 +83,83 @@ async function GraphSchemaToPrompt(
     }
 
     desc = desc + `This is the end of the knowladge graph schema description.\n`
+
+    //-------------------------------------------------------------------------
+    // include graph indices
+    //-------------------------------------------------------------------------
+
+    // vector indices
+    let query = `CALL db.indexes() YIELD label, properties, types, entitytype`;
+    let res = await graph.query(query);
+    
+    // process indexes
+    let indexes: any = res.data;
+    if(indexes.length > 0) {
+        let index_prompt = "The knowladge graph contains the following indexes:\n"
+        for(let i = 0; i < indexes.length; i++) {
+            const index = indexes[i];
+            const label: string      = index['label'];
+            const entityType: string = index['entitytype'];
+            const props              = index['properties'];
+            const types              = index['types'];
+
+            for(const prop of props) {
+                const propTypes: string[] = types[prop];
+                for(let j = 0; j < propTypes.length; j++) {
+                    const idxType: string = propTypes[j];
+                    index_prompt += `${entityType} of type ${label} have a ${idxType} index indexing its ${prop} attribute\n`;
+                }
+            }
+        }
+        index_prompt += `This is the end of our indexes list
+        To use a Vector index use the following procedure:
+        CALL db.idx.vector.queryNodes(<LABEL>, <PROPERTY>, <N>, vecf32(<array_of_vector_elements>)) YIELD node
+
+        The procedure returns up to N nodes that have a <PROPERTY> value which is semanticly close to
+        the query vector.
+
+        Here are a few question / answer examples of using the vector index:
+        Question: Find 3 functions which have nested loops, return a list of callers
+        Your response should be: GENERATE EMBEDDINGS "nested loops" and run the following query:
+        CALL db.idx.vector.queryNodes('Function', 'source', 3, vecf32($embedding)) YIELD node MATCH (f)-[:CALLS]->(node) RETURN node.name
+
+        Question: List 5 Classes which contain a function that raise an exception
+        Your response should be: GENERATE EMBEDDINGS "raise exception" and run the following:
+        CALL db.idx.vector.queryNodes('Function', 'source', 5, vecf32($embedding)) YIELD node MATCH (c:Class)-[:CONTAINS]->(node) RETURN class.name, node.name
+    `;
+
+        desc += index_prompt;
+
+    }  
+
     return desc;
+}
+
+async function HandleInstruction
+(
+    instruction: string,
+    graph:Graph
+) {
+    instruction = instruction.trim();
+    if (instruction.startsWith("RUN QUERY")) {
+        let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
+        let result = await graph.roQuery(query);
+        return result.data;
+    } else if (instruction.indexOf("GENERATE EMBEDDINGS") >= 0) {
+        // GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.
+        let start_idx = instruction.indexOf("GENERATE EMBEDDINGS") + "GENERATE EMBEDDINGS".length;
+        let end_idx = "RUN QUERY";
+        let text = instruction.substring(start_idx, end_idx);
+
+        const openai = new OpenAI();
+        const embedding = await openai.embeddings.create({model: "text-embedding-ada-002", input: text});
+        const vector = embedding.data[0].embedding;
+
+        let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
+        let result = await graph.roQuery(query, {params: {'embedding': vector}});        
+        return result.data;
+    }
+    return null;
 }
 
 export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {    
@@ -114,27 +190,37 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     let prompt: string = `You are a Cypher expert, with access to the following graph:\n
     ${graph_schema}\n
     The graph represents a Python code base.
-    Please generate a Cypher query which will answer the following question:\n
-    ${query}\n
-    Your response should contain only the cypher query.`;
+
+    Depending on the question asked you should only respond in one of two ways:
+    1. RUN QUERY followed by the CYPHER query to run.
+    2. GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed by the CYPHER query to run.
+    Whichever option is more appropriate, option 2 should only be used when
+    a semantic search against a Function node src_code attribute is needs to be performed via a CALL db.idx.vector.queryNodes procedure invocation and a relavent vector index exists.
+    You are instructed to NOT add any additional information, simply answer with either
+    RUN QUERY followed by a CYPHER query
+    or
+    GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.
+    Question: ${query}`;
+
+    // console.log(`prompt: ${prompt}`);
     
-    const openai = new OpenAI();
+    const openai     = new OpenAI();
+    let messages     = [{ "role": "system", "content": prompt }];
     const completion = await openai.chat.completions.create({
-        messages: [{ role: "system", content: prompt }],
-        model: "gpt-3.5-turbo",
+        "model":       "gpt-3.5-turbo",
+        "messages":    messages,
     });
+    console.log(`completion: ${JSON.stringify(completion)}`);
 
-    const output_text = completion.choices[0]['message']['content'];
-    
-    query = output_text;
-    console.log(`query: ${query}\n`);
+    const instruction = completion.choices[0]['message']['content'];    
+    console.log(`instruction: ${instruction}\n`);
 
-    if(!query) {
-        return NextResponse.json({ result: "No query generated" }, { status: 500 });
-    }
-    
-    let result   = await graph.query(query);
-    let response = JSON.stringify(result.data);
+     let result = await HandleInstruction(instruction, graph);
+     if(!result) {
+         return NextResponse.json({ result: "No query generated" }, { status: 500 });
+     }
 
+    let response = JSON.stringify(result);
+    console.log(`response: ${response}`);
     return NextResponse.json({ result: response }, { status: 200 });
 }
