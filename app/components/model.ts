@@ -13,7 +13,8 @@ export interface Node {
 export interface Edge {
   source: number,
   target: number,
-  label: any,
+  relationshipType: string,
+  value: any,
 }
 
 export class Graph {
@@ -98,13 +99,10 @@ export class Graph {
       let sourceId = edgeData.sourceId.toString();
       let destinationId = edgeData.destinationId.toString()
       this.edgesSet.add({
-        source: sourceId, target: destinationId, label:
-        {
-          show: true,
-          formatter: (params: any) => {
-            return edgeData.relationshipType
-          }
-        }
+        source: sourceId, 
+        target: destinationId, 
+        relationshipType: edgeData.relationshipType,
+        value: JSON.stringify(edgeData.properties),
       })
 
       // creates a fakeS node for the source and target

@@ -126,15 +126,20 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
                 symbolSize: 10,
                 edgeSymbol: ['none', 'arrow'],
                 edgeSymbolSize: 0.8 * currentFactor,
+                edgeLabel: {
+                    show: true,
+                    fontSize: 2 * currentFactor,
+                    formatter: function (params: any) {
+                        console.log(params)
+                        return params.data.relationshipType;
+                    }
+                },
                 draggable: true,
                 nodes: graph.Nodes,
                 edges: graph.Edges,
                 categories: graph.Categories,
                 force: {
                     repulsion: 100,
-                },
-                edgeLabel: {
-                    fontSize: 2 * currentFactor
                 },
                 roam: true,
                 autoCurveness: true,
