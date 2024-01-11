@@ -8,12 +8,10 @@ import { RESPOSITORIES } from "./repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ZoomIn, ZoomOut } from "lucide-react";
 
-export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => void }) {
+export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => void }) {
 
     const [url, setURL] = useState('');
-
     const chartRef = useRef<cytoscape.Core | null>(null)
-    const factor = useRef<number>(1)
 
     // A function that handles the change event of the url input box
     async function handleRepoInputChange(event: any) {
@@ -25,7 +23,6 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
         // Get the new value of the input box
         let value: string = event.target.value;
 
-
         // Update the url state
         setURL(value);
     }
@@ -33,41 +30,10 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
     // A function that handles the click event
     async function handleSubmit(event: any) {
         event.preventDefault();
-
-
-        sendRepo();
-    }
-
-    function sendRepo() {
-        let value = url;
-        if (!value || value.length === 0) {
-            value = 'https://github.com/falkorDB/falkordb-py';
-        }
-
-        fetch('/api/repo', {
-            method: 'POST',
-            body: JSON.stringify({
-                url: value
-            })
-        }).then(async (result) => {
-            if (result.status >= 300) {
-                throw Error(await result.text())
-            }
-            return result.json()
-        }).then(data => {
-            let graph = Graph.create(data);
-            parmas.setGraph(graph);
-        }).catch((error) => {
-            toast({
-                variant: "destructive",
-                title: "Uh oh! Something went wrong.",
-                description: error.message,
-            });
-        });
+        parmas.onFetchGraph(url);
     }
 
     function handleZoomClick(changefactor: number) {
-        factor.current *= changefactor
         let chart = chartRef.current
         if (chart) {
             chart.zoom(chart.zoom() * changefactor)
@@ -76,7 +42,7 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
 
     function onRepoSelected(value: string): void {
         setURL(value)
-        sendRepo()
+        parmas.onFetchGraph(url)
     }
 
     return (
@@ -112,24 +78,7 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
 
                             cy.on('dbltap', 'node', function (evt) {
                                 var node: Node = evt.target.json().data;
-
-                                fetch(`/api/repo/${parmas.graph.Id}/${node.name}`, {
-                                    method: 'GET'
-                                }).then(async (result) => {
-                                    if (result.status >= 300) {
-                                        throw Error(await result.text())
-                                    }
-                                    return result.json()
-                                }).then(data => {
-                                    parmas.graph.extend(data)
-                                    parmas.setGraph(parmas.graph)
-                                }).catch((error) => {
-                                    toast({
-                                        variant: "destructive",
-                                        title: "Uh oh! Something went wrong.",
-                                        description: error.message,
-                                    })
-                                })
+                                parmas.onFetchNode(node);
                             });
                         }}
                         stylesheet={[
