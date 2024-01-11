@@ -2,6 +2,7 @@ import { Graph, RedisClientType, createClient } from 'falkordb';
 import { NextRequest, NextResponse } from "next/server";
 import { graphSchema } from "../graph_ops";
 import OpenAI from "openai";
+import { ChatCompletionCreateParams, ChatCompletionMessageParam } from 'openai/resources/chat/completions.mjs';
 
 
 // convert a structured graph schema into a string representation
@@ -33,19 +34,19 @@ async function GraphSchemaToPrompt(
         let attributes = schema["labels"][lbl]['attributes'];
         let attr_count = Object.keys(attributes).length;
 
-        if(attr_count == 0) {
+        if (attr_count == 0) {
             desc = desc + `the ${lbl} label has ${node_count} nodes and has no attributes\n`;
         } else {
             desc = desc + `the ${lbl} label has ${node_count} nodes and is associated with the following attribute(s):\n`;
             for (const attr in attributes) {
-                let type = attributes[attr]['type'];            
+                let type = attributes[attr]['type'];
                 desc = desc + `'${attr}' which is of type ${type}\n`;
             }
         }
     }
 
     desc = desc + "The graph contains the following relationship types:\n"
-    
+
     //-------------------------------------------------------------------------
     // Describe relationships
     //-------------------------------------------------------------------------
@@ -57,26 +58,26 @@ async function GraphSchemaToPrompt(
 
     // specify attributes associated with each relationship
     for (const relation in schema["relations"]) {
-        let connect    = schema["relations"][relation]['connect'];
+        let connect = schema["relations"][relation]['connect'];
         let edge_count = schema["relations"][relation]['edge_count'];
         let attributes = schema["relations"][relation]['attributes'];
         let attr_count = Object.keys(attributes).length;
 
-        if(attr_count == 0) {
+        if (attr_count == 0) {
             desc = desc + `the ${relation} relationship has ${edge_count} edges and has no attributes\n`;
         } else {
             desc = desc + `the ${relation} relationship has ${edge_count} edges and is associated with the following attribute(s):\n`;
             for (const attr in attributes) {
-                let type = attributes[attr]['type'];            
+                let type = attributes[attr]['type'];
                 desc = desc + `'${attr}' which is of type ${type}\n`;
             }
         }
 
-        if(connect.length > 0) {
+        if (connect.length > 0) {
             desc = desc + `the ${relation} relationship connects the following labels:\n`
-            for(let i = 0; i < connect.length; i+=2) {
+            for (let i = 0; i < connect.length; i += 2) {
                 let src = connect[i];
-                let dest = connect[i+1];
+                let dest = connect[i + 1];
                 desc = desc + `${src} is connected via ${relation} to ${dest}\n`;
             }
         }
@@ -91,21 +92,21 @@ async function GraphSchemaToPrompt(
     // vector indices
     let query = `CALL db.indexes() YIELD label, properties, types, entitytype`;
     let res = await graph.query(query);
-    
+
     // process indexes
     let indexes: any = res.data;
-    if(indexes.length > 0) {
+    if (indexes.length > 0) {
         let index_prompt = "The knowladge graph contains the following indexes:\n"
-        for(let i = 0; i < indexes.length; i++) {
+        for (let i = 0; i < indexes.length; i++) {
             const index = indexes[i];
-            const label: string      = index['label'];
+            const label: string = index['label'];
             const entityType: string = index['entitytype'];
-            const props              = index['properties'];
-            const types              = index['types'];
+            const props = index['properties'];
+            const types = index['types'];
 
-            for(const prop of props) {
+            for (const prop of props) {
                 const propTypes: string[] = types[prop];
-                for(let j = 0; j < propTypes.length; j++) {
+                for (let j = 0; j < propTypes.length; j++) {
                     const idxType: string = propTypes[j];
                     index_prompt += `${entityType} of type ${label} have a ${idxType} index indexing its ${prop} attribute\n`;
                 }
@@ -130,7 +131,7 @@ async function GraphSchemaToPrompt(
 
         desc += index_prompt;
 
-    }  
+    }
 
     return desc;
 }
@@ -140,10 +141,10 @@ async function GraphSchemaToPrompt(
 // 1. Run query.
 // 2. Generate embeddings and run a query.
 async function HandleInstruction
-(
-    instruction: string,
-    graph:Graph
-) {
+    (
+        instruction: string,
+        graph: Graph
+    ) {
     instruction = instruction.trim();
     console.log(`instruction: ${instruction}`);
 
@@ -154,15 +155,15 @@ async function HandleInstruction
     } else if (instruction.indexOf("GENERATE EMBEDDINGS") >= 0) {
         // GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.
         let start_idx = instruction.indexOf("GENERATE EMBEDDINGS") + "GENERATE EMBEDDINGS".length;
-        let end_idx   = instruction.indexOf("RUN QUERY");
-        let text      = instruction.substring(start_idx, end_idx);
+        let end_idx = instruction.indexOf("RUN QUERY");
+        let text = instruction.substring(start_idx, end_idx);
 
-        const openai    = new OpenAI();
-        const embedding = await openai.embeddings.create({model: "text-embedding-ada-002", input: text});
-        const vector    = embedding.data[0].embedding;
+        const openai = new OpenAI();
+        const embedding = await openai.embeddings.create({ model: "text-embedding-ada-002", input: text });
+        const vector = embedding.data[0].embedding;
 
-        let query  = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
-        let result = await graph.roQuery(query, {params: {'embedding': vector}});
+        let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
+        let result = await graph.roQuery(query, { params: { 'embedding': vector } });
         return result.data;
     }
 
@@ -171,7 +172,7 @@ async function HandleInstruction
 }
 
 // Chat bot handler
-export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {    
+export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {
     const graph_id = params.graph;
     let query = request.nextUrl.searchParams.get("q");
 
@@ -182,7 +183,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     // hard coded graph id
     const client = createClient({
         url: process.env.FALKORDB_URL || 'redis://localhost:6379',
-    });    
+    });
     await client.connect();
 
     const graph = new Graph(client, graph_id);
@@ -205,21 +206,22 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     RUN QUERY followed by a CYPHER query
     or
     GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.`;
-    
+
     //-------------------------------------------------------------------------
     // Send prompt to OpenAI
     //-------------------------------------------------------------------------
 
     const openai = new OpenAI();
-    let messages = [
+    let messages: ChatCompletionMessageParam[] = [
         { role: 'system', content: prompt },
-        { role: 'user', content: `Question: ${query}`, name: 'user'},
+        { role: 'user', content: `Question: ${query}`, name: 'user' },
     ];
 
-    let completion = await openai.chat.completions.create({
-        messages: messages,
+    let body: ChatCompletionCreateParams = {
+        messages,
         model: "gpt-3.5-turbo",
-    });
+    }
+    let completion = await openai.chat.completions.create(body);
 
     //-------------------------------------------------------------------------
     // Perform instruction
@@ -227,11 +229,14 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     const instruction = completion.choices[0]['message']['content'];
 
-     let result = await HandleInstruction(instruction, graph);
-     if(!result) {
-         return NextResponse.json({ result: "No query generated" }, { status: 500 });
-     }
-     let response = JSON.stringify(result);
+    if (!instruction) {
+        return NextResponse.json({ result: "No instruction generated" }, { status: 500 });
+    }
+    let result = await HandleInstruction(instruction, graph);
+    if (!result) {
+        return NextResponse.json({ result: "No query generated" }, { status: 500 });
+    }
+    let response = JSON.stringify(result);
 
     //-------------------------------------------------------------------------
     // Digest response
@@ -240,11 +245,11 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     prompt = `This is the user's question: ${query}
     And this is the data we've got from our knowladge graph: ${response}
     Please formulate an answer to the user question based on the data we've got from the knowladge graph`;
-    
-    messages   = [{ "role": "system", "content": prompt }];
+
+    messages = [{ "role": "system", "content": prompt }];
     completion = await openai.chat.completions.create({
-        "model":       "gpt-3.5-turbo",
-        "messages":    messages,
+        "model": "gpt-3.5-turbo",
+        "messages": messages,
     });
     const answer = completion.choices[0]['message']['content'];
 
