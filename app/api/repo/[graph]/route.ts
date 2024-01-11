@@ -2,7 +2,7 @@ import { Graph, RedisClientType, createClient } from 'falkordb';
 import { NextRequest, NextResponse } from "next/server";
 import { graphSchema } from "../graph_ops";
 import OpenAI from "openai";
-import { ChatCompletionCreateParams, ChatCompletionCreateParamsBase, ChatCompletionMessageParam } from 'openai/resources/chat/completions.mjs';
+import { ChatCompletionCreateParams, ChatCompletionMessageParam } from 'openai/resources/chat/completions.mjs';
 
 
 // convert a structured graph schema into a string representation
