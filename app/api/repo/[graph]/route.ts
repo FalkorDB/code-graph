@@ -135,12 +135,17 @@ async function GraphSchemaToPrompt(
     return desc;
 }
 
+// handle instruction from OpenAI
+// there are two types of accepted instructions:
+// 1. Run query.
+// 2. Generate embeddings and run a query.
 async function HandleInstruction
 (
     instruction: string,
     graph:Graph
 ) {
     instruction = instruction.trim();
+
     if (instruction.startsWith("RUN QUERY")) {
         let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
         let result = await graph.roQuery(query);
@@ -148,27 +153,29 @@ async function HandleInstruction
     } else if (instruction.indexOf("GENERATE EMBEDDINGS") >= 0) {
         // GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.
         let start_idx = instruction.indexOf("GENERATE EMBEDDINGS") + "GENERATE EMBEDDINGS".length;
-        let end_idx = "RUN QUERY";
-        let text = instruction.substring(start_idx, end_idx);
+        let end_idx   = instruction.indexOf("RUN QUERY");
+        let text      = instruction.substring(start_idx, end_idx);
 
-        const openai = new OpenAI();
+        const openai    = new OpenAI();
         const embedding = await openai.embeddings.create({model: "text-embedding-ada-002", input: text});
-        const vector = embedding.data[0].embedding;
+        const vector    = embedding.data[0].embedding;
 
-        let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
-        let result = await graph.roQuery(query, {params: {'embedding': vector}});        
+        let query  = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
+        let result = await graph.roQuery(query, {params: {'embedding': vector}});
         return result.data;
     }
+
+    // unknown instruction
     return null;
 }
 
+// Chat bot handler
 export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {    
     const graph_id = params.graph;
     let query = request.nextUrl.searchParams.get("q");
-    // const type = request.nextUrl.searchParams.get("type");
-    
+
     //-------------------------------------------------------------------------
-    // connect to graph
+    // Connect to graph
     //-------------------------------------------------------------------------
 
     // hard coded graph id
@@ -178,19 +185,16 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     await client.connect();
 
     const graph = new Graph(client, graph_id);
-    let graph_schema = await GraphSchemaToPrompt(graph, graph_id, client);
 
-    // let prompt: string = `You are a Cypher expert, with access to the following graph:\n
-    // ${graph_schema}\n
-    // The graph represents a Python code base.
-    // Please generate a Cypher query which will answer the following question:\n
-    // Which Function is being called often?
-    // Your response should contain only the cypher query.`;
+    //-------------------------------------------------------------------------
+    // Construct prompt
+    //-------------------------------------------------------------------------
+
+    let graph_schema = await GraphSchemaToPrompt(graph, graph_id, client);
 
     let prompt: string = `You are a Cypher expert, with access to the following graph:\n
     ${graph_schema}\n
     The graph represents a Python code base.
-
     Depending on the question asked you should only respond in one of two ways:
     1. RUN QUERY followed by the CYPHER query to run.
     2. GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed by the CYPHER query to run.
@@ -201,26 +205,45 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     or
     GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.
     Question: ${query}`;
-
-    // console.log(`prompt: ${prompt}`);
     
-    const openai     = new OpenAI();
-    let messages     = [{ "role": "system", "content": prompt }];
-    const completion = await openai.chat.completions.create({
+    //-------------------------------------------------------------------------
+    // Send prompt to OpenAI
+    //-------------------------------------------------------------------------
+
+    const openai   = new OpenAI();
+    let messages   = [{ "role": "system", "content": prompt }];
+    let completion = await openai.chat.completions.create({
         "model":       "gpt-3.5-turbo",
         "messages":    messages,
     });
-    console.log(`completion: ${JSON.stringify(completion)}`);
 
-    const instruction = completion.choices[0]['message']['content'];    
-    console.log(`instruction: ${instruction}\n`);
+    //-------------------------------------------------------------------------
+    // Perform instruction
+    //-------------------------------------------------------------------------    
+
+    const instruction = completion.choices[0]['message']['content'];
 
      let result = await HandleInstruction(instruction, graph);
      if(!result) {
          return NextResponse.json({ result: "No query generated" }, { status: 500 });
      }
+     let response = JSON.stringify(result);
 
-    let response = JSON.stringify(result);
-    console.log(`response: ${response}`);
-    return NextResponse.json({ result: response }, { status: 200 });
+    //-------------------------------------------------------------------------
+    // Digest response
+    //-------------------------------------------------------------------------
+
+    prompt = `This is the user's question: ${query}
+    And this is the data we've got from our knowladge graph: ${response}
+    Please formulate an answer to the user question based on the data we've got from the knowladge graph`;
+    
+    messages   = [{ "role": "system", "content": prompt }];
+    completion = await openai.chat.completions.create({
+        "model":       "gpt-3.5-turbo",
+        "messages":    messages,
+    });
+    const answer = completion.choices[0]['message']['content'];
+
+    console.log(`response: ${answer}`);
+    return NextResponse.json({ result: answer }, { status: 200 });
 }
