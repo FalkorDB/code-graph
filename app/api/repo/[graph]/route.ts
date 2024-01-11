@@ -145,6 +145,7 @@ async function HandleInstruction
     graph:Graph
 ) {
     instruction = instruction.trim();
+    console.log(`instruction: ${instruction}`);
 
     if (instruction.startsWith("RUN QUERY")) {
         let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
@@ -195,7 +196,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     let prompt: string = `You are a Cypher expert, with access to the following graph:\n
     ${graph_schema}\n
     The graph represents a Python code base.
-    Depending on the question asked you should only respond in one of two ways:
+    Depending on the user question asked you should only respond in one of two ways:
     1. RUN QUERY followed by the CYPHER query to run.
     2. GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed by the CYPHER query to run.
     Whichever option is more appropriate, option 2 should only be used when
@@ -203,18 +204,21 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     You are instructed to NOT add any additional information, simply answer with either
     RUN QUERY followed by a CYPHER query
     or
-    GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.
-    Question: ${query}`;
+    GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.`;
     
     //-------------------------------------------------------------------------
     // Send prompt to OpenAI
     //-------------------------------------------------------------------------
 
-    const openai   = new OpenAI();
-    let messages   = [{ "role": "system", "content": prompt }];
+    const openai = new OpenAI();
+    let messages = [
+        { role: 'system', content: prompt },
+        { role: 'user', content: `Question: ${query}`, name: 'user'},
+    ];
+
     let completion = await openai.chat.completions.create({
-        "model":       "gpt-3.5-turbo",
-        "messages":    messages,
+        messages: messages,
+        model: "gpt-3.5-turbo",
     });
 
     //-------------------------------------------------------------------------
