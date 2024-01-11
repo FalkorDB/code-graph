@@ -1,17 +1,18 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
-import ReactECharts, { EChartsInstance } from 'echarts-for-react';
+import CytoscapeComponent from 'react-cytoscapejs'
 import { useRef, useState } from "react";
-import { Graph } from "./model";
+import { Graph, Node } from "./model";
 import { RESPOSITORIES } from "./repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ZoomIn, ZoomOut } from "lucide-react";
 
 export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => void }) {
 
     const [url, setURL] = useState('');
 
-    const echartRef = useRef<EChartsInstance | null>(null)
+    const chartRef = useRef<cytoscape.Core | null>(null)
     const factor = useRef<number>(1)
 
     // A function that handles the change event of the url input box
@@ -51,9 +52,7 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
         }).then(async (result) => {
             if (result.status >= 300) {
                 throw Error(await result.text())
-
             }
-
             return result.json()
         }).then(data => {
             let graph = Graph.create(data);
@@ -69,88 +68,11 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
 
     function handleZoomClick(changefactor: number) {
         factor.current *= changefactor
-        let chart = echartRef.current
+        let chart = chartRef.current
         if (chart) {
-            let options = getOptions(parmas.graph)
-            chart.setOption(options)
+            chart.zoom(chart.zoom() * changefactor)
         }
     }
-
-    function getOptions(graph: Graph) {
-        const currentFactor = factor.current
-        return {
-            name: graph.Id,
-            tooltip: {
-                position: 'right',
-            },
-            legend: [
-                {
-                    data: graph.Categories.map(function (c) {
-                        return c.name;
-                    })
-                }
-            ],
-            toolbox: {
-                show: true,
-                feature: {
-                    // Shows zoom in and zoom out custom buttons
-                    myZoomIn: {
-                        show: true,
-                        title: 'Zoom In',
-                        icon: 'path://M19 11 C19 15.41 15.41 19 11 19 6.58 19 3 15.41 3 11 3 6.58 6.58 3 11 3 15.41 3 19 6.58 19 11 zM21 21 C19.55 19.55 18.09 18.09 16.64 16.64 M11 8 C11 10 11 12 11 14 M8 11 C10 11 12 11 14 11',
-                        onclick: function () {
-                            handleZoomClick(1.1)
-                        }
-                    },
-                    myZoomOut: {
-                        show: true,
-                        title: 'Zoom Out',
-                        icon: 'path://M19 11 C19 15.41 15.41 19 11 19 6.58 19 3 15.41 3 11 3 6.58 6.58 3 11 3 15.41 3 19 6.58 19 11 zM21 21 C19.55 19.55 18.09 18.09 16.64 16.64 M8 11 C10 11 12 11 14 11',
-                        onclick: function () {
-                            handleZoomClick(0.9)
-                        }
-                    },
-                    restore: {},
-                    saveAsImage: {},
-                }
-            },
-            series: [{
-                type: 'graph',
-                layout: 'force',
-                animation: false,
-                label: {
-                    show: true,
-                    position: 'inside',
-                    fontSize: 2 * currentFactor
-                },
-                symbolSize: 10,
-                edgeSymbol: ['none', 'arrow'],
-                edgeSymbolSize: 0.8 * currentFactor,
-                edgeLabel: {
-                    show: true,
-                    fontSize: 2 * currentFactor,
-                    formatter: function (params: any) {
-                        return params.data.relationshipType;
-                    }
-                },
-                draggable: true,
-                nodes: graph.Nodes,
-                edges: graph.Edges,
-                categories: graph.Categories,
-                force: {
-                    repulsion: 100,
-                },
-                roam: true,
-                autoCurveness: true,
-                lineStyle: {
-                    width: 0.3 * currentFactor,
-                    opacity: 0.7
-                },
-                zoom: currentFactor
-            }]
-        }
-    }
-
 
     function onRepoSelected(value: string): void {
         setURL(value)
@@ -177,49 +99,77 @@ export function CodeGraph(parmas: { graph: Graph, setGraph: (graph: Graph) => vo
                     <Button type="submit" >Send</Button>
                 </form>
             </header>
-            <main className="h-full">
-                <ReactECharts
-                    option={getOptions(parmas.graph)}
-                    style={{ height: '100%', width: '100%' }}
-                    onChartReady={(e) => {
-                        echartRef.current = e
-                    }}
-                    onEvents={{
-                        graphRoam: (params: any) => {
-                            if (params.zoom) {
-                                handleZoomClick(params.zoom)
-                            }
-                        },
-                        dblclick: async (params: any) => {
+            <main className="h-full w-full">
+                <div className="flex flex-row" >
+                    <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(1.1)}><ZoomIn /></Button>
+                    <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(0.9)}><ZoomOut /></Button>
+                </div>
+                {parmas.graph.Id &&
+                    <CytoscapeComponent
+                        cy={(cy) => {
+                            chartRef.current = cy
+                            cy.removeAllListeners();
 
-                            let value = params?.data?.value;
-                            if (!value) {
-                                return
-                            }
-                            let node = JSON.parse(value)
+                            cy.on('dbltap', 'node', function (evt) {
+                                var node: Node = evt.target.json().data;
 
-                            fetch(`/api/repo/${parmas.graph.Id}/${node.name}`, {
-                                method: 'GET'
-                            }).then(async (result) => {
-                                if (result.status >= 300) {
-                                    throw Error(await result.text())
-
-                                }
-
-                                return result.json()
-                            }).then(data => {
-                                parmas.graph.extend(data)
-                                parmas.setGraph(parmas.graph)
-                            }).catch((error) => {
-                                toast({
-                                    variant: "destructive",
-                                    title: "Uh oh! Something went wrong.",
-                                    description: error.message,
+                                fetch(`/api/repo/${parmas.graph.Id}/${node.name}`, {
+                                    method: 'GET'
+                                }).then(async (result) => {
+                                    if (result.status >= 300) {
+                                        throw Error(await result.text())
+                                    }
+                                    return result.json()
+                                }).then(data => {
+                                    parmas.graph.extend(data)
+                                    parmas.setGraph(parmas.graph)
+                                }).catch((error) => {
+                                    toast({
+                                        variant: "destructive",
+                                        title: "Uh oh! Something went wrong.",
+                                        description: error.message,
+                                    })
                                 })
-                            })
-                        }
-                    }}
-                />
+                            });
+                        }}
+                        stylesheet={[
+                            {
+                                selector: 'node',
+                                style: {
+                                    label: "data(label)",
+                                    "text-valign": "center",
+                                    "text-halign": "center",
+                                    shape: "ellipse",
+                                    height: 10,
+                                    width: 10,
+                                    "font-size": "3",
+                                },
+                            },
+                            {
+                                selector: "edge",
+                                style: {
+                                    width: 0.5,
+                                    'line-color': '#ccc',
+                                    "arrow-scale": 0.3,
+                                    "target-arrow-shape": "triangle",
+                                    label: "data(label)",
+                                    'curve-style': 'straight',
+                                    "text-background-color": "#ffffff",
+                                    "text-background-opacity": 1,
+                                    "font-size": "3",
+                                },
+                            },
+                        ]}
+                        elements={parmas.graph.Elements}
+                        layout={{
+                            name: "cose",
+                            fit: true,
+                            padding: 30,
+                            avoidOverlap: true,
+                        }}
+                        className="w-full h-full"
+                    />
+                }
             </main>
         </>
     )
