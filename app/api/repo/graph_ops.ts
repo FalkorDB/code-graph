@@ -219,9 +219,18 @@ export async function create_function_call
 
 export async function projectGraph
 (
-	graph: Graph
+	graph: Graph,
+    max_entities: number
 ) {
-    let result: any = await graph.query(`MATCH (n) optional match (n)-[e]->() RETURN collect(n) as nodes, collect(e) as edges`);
+    let query = `MATCH (n)                 
+                 OPTIONAL MATCH (a)-[e]->(z)
+                 WITH a, e, z
+                 LIMIT $limit
+                 WITH collect(a) as src, collect(z) as dest, collect(e) as edges
+                 RETURN src + dest as nodes, edges`
+
+    let params = { limit: max_entities };
+    let result: any = await graph.query(query, { params: params });
 
 	return result.data[0];
 }

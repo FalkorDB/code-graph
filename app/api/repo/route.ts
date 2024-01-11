@@ -318,25 +318,25 @@ export async function POST(request: NextRequest) {
 	//--------------------------------------------------------------------------
 
 	let repo_root = path.join(tmp_dir, repo);
-	console.log("repo_root: " + repo_root);
 
-	//--------------------------------------------------------------------------
-	// clone repo into temporary folder
-	//--------------------------------------------------------------------------
+	// check if repo was already cloned
+	await fs.stat(repo_root).catch(async (error) => {
+		//---------------------------------------------------------------------
+		// clone repo into temporary folder
+		//---------------------------------------------------------------------
+		await git
+			.clone({ fs, http, dir: repo_root, url, depth:1 })
+			.then(function a(response){
+				console.log("response: " + response);
+			})
+			.catch(function b(error){
+				console.log("error: " + error);
+			});
+		console.log("Cloned repo");
+	});
 
-	await git
-		.clone({ fs, http, dir: repo_root, url })
-		.then(function a(response){
-			console.log("response: " + response);
-		})
-		.catch(function b(error){
-			console.log("error: " + error);
-		});
-
-	console.log("Cloned repo");
-	
 	// latest git commit
-	let commits = await git.log({ fs, dir: repo_root, depth: 1 });
+	let commits = await git.log({ fs, gitdir: path.join(repo_root, '.git'), depth: 1, ref: 'HEAD' });
 	let commit_hash: string = commits[0].oid;
 
 	const graphId = `${organization}-${repo}-${commit_hash}`;
@@ -350,7 +350,7 @@ export async function POST(request: NextRequest) {
 		await client.expire(graphId, 86400);
 	}
 
-	let code_graph = await GraphOps.projectGraph(graph);
+	let code_graph = await GraphOps.projectGraph(graph, 100);
 
 	return NextResponse.json({ id: graphId, nodes: code_graph.nodes, edges: code_graph.edges }, { status: 201 })
 }
