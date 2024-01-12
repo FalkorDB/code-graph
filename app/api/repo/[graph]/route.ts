@@ -114,19 +114,17 @@ async function GraphSchemaToPrompt(
         }
         index_prompt += `This is the end of our indexes list
         To use a Vector index use the following procedure:
-        CALL db.idx.vector.queryNodes(<LABEL>, <PROPERTY>, <N>, vecf32(<array_of_vector_elements>)) YIELD node
+        CALL db.idx.vector.queryNodes(<LABEL>, <PROPERTY>, <N>, <VALUE>)) YIELD node
 
         The procedure returns up to N nodes that have a <PROPERTY> value which is semanticly close to
-        the query vector.
+        <VALUE>.
 
         Here are a few question / answer examples of using the vector index:
         Question: Find 3 functions which have nested loops, return a list of callers
-        Your response should be: GENERATE EMBEDDINGS "nested loops" and run the following query:
-        CALL db.idx.vector.queryNodes('Function', 'source', 3, vecf32($embedding)) YIELD node MATCH (f)-[:CALLS]->(node) RETURN node.name
+        Cypher query: CALL db.idx.vector.queryNodes('Function', 'source', 3, 'nested loops') YIELD node MATCH (f)-[:CALLS]->(node) RETURN node.name
 
         Question: List 5 Classes which contain a function that raise an exception
-        Your response should be: GENERATE EMBEDDINGS "raise exception" and run the following:
-        CALL db.idx.vector.queryNodes('Function', 'source', 5, vecf32($embedding)) YIELD node MATCH (c:Class)-[:CONTAINS]->(node) RETURN class.name, node.name
+        Cypher query: CALL db.idx.vector.queryNodes('Function', 'source', 5, "raise exception") YIELD node MATCH (c:Class)-[:CONTAINS]->(node) RETURN class.name, node.name
     `;
 
         desc += index_prompt;
@@ -140,49 +138,38 @@ async function GraphSchemaToPrompt(
 // there are two types of accepted instructions:
 // 1. Run query.
 // 2. Generate embeddings and run a query.
-async function HandleInstruction
-    (
-        instruction: string,
-        graph: Graph
-    ) {
-    instruction = instruction.trim();
-    console.log(`instruction: ${instruction}`);
-
-    if (instruction.startsWith("RUN QUERY")) {
-        let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
-        let result = await graph.roQuery(query);
-        return result.data;
-    } else if (instruction.indexOf("GENERATE EMBEDDINGS") >= 0) {
-        // GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.
-        let start_idx = instruction.indexOf("GENERATE EMBEDDINGS") + "GENERATE EMBEDDINGS".length;
-        let end_idx = instruction.indexOf("RUN QUERY");
-        let text = instruction.substring(start_idx, end_idx);
-
-        const openai = new OpenAI();
-        const embedding = await openai.embeddings.create({ model: "text-embedding-ada-002", input: text });
-        const vector = embedding.data[0].embedding;
-
-        let query = instruction.substring(instruction.indexOf("RUN QUERY") + "RUN QUERY".length);
-        let result = await graph.roQuery(query, { params: { 'embedding': vector } });
-        return result.data;
-    }
-
-    // unknown instruction
-    return null;
-}
-
-// handle instruction from OpenAI
-// there are two types of accepted instructions:
-// 1. Run query.
-// 2. Generate embeddings and run a query.
 async function run_query
 (
     graph: Graph,
     query: string
 ) {
-    console.log(`query: ${query}`);
+    console.log(`query: ${query}`)
+    let params = {};
 
-    let result = await graph.roQuery(query);
+    // handle cases where the query contains a vector index utilization
+    // CALL db.idx.vector.queryNodes('Function', 'src_embeddings', 5, 'x= x   1')
+    if(query.indexOf('CALL db.idx.vector.queryNodes(') !== -1) {
+        // query utilizes a vector index
+        // extract semantic value and produce embeddings
+        let startIdx       = query.indexOf('CALL db.idx.vector.queryNodes(');
+        let endIdx         = query.indexOf(')');
+        let proc_call      = query.substring(startIdx + 'CALL db.idx.vector.queryNodes('.length, endIdx);
+        let args           = proc_call.split(',');
+        let semantic_value = args[args.length - 1];
+
+        const openai   = new OpenAI();
+        let response   = await openai.embeddings.create({input:semantic_value, model:'text-embedding-ada-002'});
+        let embeddings = response.data[0].embedding;
+
+        args[args.length - 1] = "vecf32($embeddings)";
+
+        // rewrite query
+        params = {embeddings: embeddings};
+        let rewrite = 'CALL db.idx.vector.queryNodes(' + args.join(',') + query.substring(endIdx, query.length);
+        query = rewrite;
+    }
+
+    let result = await graph.roQuery(query, {params: params});
     return result.data;
 }
 
@@ -209,18 +196,9 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     let graph_schema = await GraphSchemaToPrompt(graph, graph_id, client);
 
-    let prompt: string = `You are a Cypher expert, with access to the following graph:\n
-    ${graph_schema}\n
-    The graph represents a Python code base.
-    Depending on the user question asked you should only respond in one of two ways:
-    1. RUN QUERY followed by the CYPHER query to run.
-    2. GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed by the CYPHER query to run.
-    Whichever option is more appropriate, option 2 should only be used when
-    a semantic search against a Function node src_code attribute is needs to be performed via a CALL db.idx.vector.queryNodes procedure invocation and a relavent vector index exists.
-    You are instructed to NOT add any additional information, simply answer with either
-    RUN QUERY followed by a CYPHER query
-    or
-    GENERATE EMBEDDINGS <text-to-create-embeddings-for> RUN QUERY followed a CYPHER query.`;
+    let prompt: string = `You're a Cypher expert, with access to the following graph:
+    ${graph_schema}
+    The graph represents a code base.`;
 
     //-------------------------------------------------------------------------
     // Send prompt to OpenAI
@@ -292,15 +270,6 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     } else {
         return NextResponse.json({ result: "Unexpected instruction" }, { status: 500 });
     }
-
-    //if (!instruction) {
-    //    return NextResponse.json({ result: "No instruction generated" }, { status: 500 });
-    //}
-    //let result = await HandleInstruction(instruction, graph);
-    //if (!result) {
-    //    return NextResponse.json({ result: "No query generated" }, { status: 500 });
-    //}
-    //let response = JSON.stringify(result);
 
     //-------------------------------------------------------------------------
     // Digest response
