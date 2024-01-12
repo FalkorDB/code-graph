@@ -7,13 +7,13 @@ export interface Node {
   id: string,
   name: string,
   value: any,
-  category: number,
+  label: string,
 }
 
 export interface Edge {
   source: number,
   target: number,
-  relationshipType: string,
+  label: string,
   value: any,
 }
 
@@ -21,20 +21,18 @@ export class Graph {
 
   private id: string;
   private categories: Category[];
-  private nodes: Node[];
-  private edges: Edge[];
+  private elements: any[];
 
   private categoriesMap: Map<String, Category>;
   private nodesMap: Map<number, Node>;
   private edgesMap: Map<number, Edge>;
 
-  private constructor(id: string, categories: Category[], nodes: Node[], edges: Edge[],
+  private constructor(id: string, categories: Category[], elements: any[],
     categoriesMap: Map<String, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Edge>
   ) {
     this.id = id;
     this.categories = categories;
-    this.nodes = nodes;
-    this.edges = edges;
+    this.elements = elements;
     this.categoriesMap = categoriesMap;
     this.nodesMap = nodesMap;
     this.edgesMap = edgesMap;
@@ -48,19 +46,15 @@ export class Graph {
     return this.categories;
   }
 
-  get Nodes(): Node[] {
-    return this.nodes;
-  }
-
-  get Edges(): Edge[] {
-    return this.edges;
+  get Elements(): any[] {
+    return this.elements;
   }
 
   public static empty(): Graph{
-    return new Graph("", [], [], [], new Map<String, Category>(), new Map<number, Node>(), new Map<number, Edge>())
+    return new Graph("", [], [], new Map<String, Category>(), new Map<number, Node>(), new Map<number, Edge>())
   }
 
-  public static create(results: any | null): Graph{
+  public static create(results: any | null): Graph {
     let graph = Graph.empty()
     graph.extend(results)
     graph.id = results.id
@@ -68,8 +62,6 @@ export class Graph {
   }
 
   public extend(results: any | null) {
-
-    console.log("Graph.extend: results = ", results)
     results.nodes.forEach((nodeData: any) => {
       let label = nodeData.labels[0]
       // check if category already exists in categories
@@ -86,7 +78,7 @@ export class Graph {
           id: nodeData.id.toString(),
           name: nodeData.properties.name,
           value: JSON.stringify(nodeData.properties),
-          category: category.index
+          label: category.name
         }
         this.nodesMap.set(nodeData.id, node)
       }
@@ -103,20 +95,20 @@ export class Graph {
       this.edgesMap.set(edgeData.id, {
         source: sourceId, 
         target: destinationId, 
-        relationshipType: edgeData.relationshipType,
+        label: edgeData.relationshipType,
         value: JSON.stringify(edgeData.properties),
       })
 
       // creates a fakeS node for the source and target
       let source = this.nodesMap.get(edgeData.sourceId)
       if (!source) {
-        source = { id: sourceId, name: sourceId, value: "", category: 0 }
+        source = { id: sourceId, name: sourceId, value: "", label: "" }
         this.nodesMap.set(edgeData.sourceId, source)
       }
 
       let destination = this.nodesMap.get(edgeData.destinationId)
       if (!destination) {
-        destination = { id: destinationId, name: destinationId, value: "", category: 0 }
+        destination = { id: destinationId, name: destinationId, value: "", label: "" }
         this.nodesMap.set(edgeData.destinationId, destination)
       }
     })
@@ -126,14 +118,12 @@ export class Graph {
       this.categories[category.index] = category
     })
 
-    this.nodes = new Array<Node>()
+    this.elements = new Array<Node>()
     this.nodesMap.forEach((node) => {
-      this.nodes.push(node)
+      this.elements.push({data:node})
     })
-
-    this.edges = new Array<Edge>()
     this.edgesMap.forEach((edge) => {
-      this.edges.push(edge)
+      this.elements.push({data:edge})
     })
   }
 }
