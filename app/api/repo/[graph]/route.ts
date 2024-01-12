@@ -2,7 +2,7 @@ import { Graph, RedisClientType, createClient } from 'falkordb';
 import { NextRequest, NextResponse } from "next/server";
 import { graphSchema } from "../graph_ops";
 import OpenAI from "openai";
-import { ChatCompletionCreateParams, ChatCompletionMessageParam } from 'openai/resources/chat/completions.mjs';
+import { ChatCompletionCreateParams, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionTool } from 'openai/resources/chat/completions.mjs';
 
 
 // convert a structured graph schema into a string representation
@@ -171,10 +171,25 @@ async function HandleInstruction
     return null;
 }
 
+// handle instruction from OpenAI
+// there are two types of accepted instructions:
+// 1. Run query.
+// 2. Generate embeddings and run a query.
+async function run_query
+(
+    graph: Graph,
+    query: string
+) {
+    console.log(`query: ${query}`);
+
+    let result = await graph.roQuery(query);
+    return result.data;
+}
+
 // Chat bot handler
 export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {
     const graph_id = params.graph;
-    let query = request.nextUrl.searchParams.get("q");
+    let question = request.nextUrl.searchParams.get("q");
 
     //-------------------------------------------------------------------------
     // Connect to graph
@@ -211,47 +226,97 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     // Send prompt to OpenAI
     //-------------------------------------------------------------------------
 
+    // Define conversation first message
     const openai = new OpenAI();
     let messages: ChatCompletionMessageParam[] = [
         { role: 'system', content: prompt },
-        { role: 'user', content: `Question: ${query}`, name: 'user' },
+        { role: 'user', content: `Question: ${question}`, name: 'user' },
     ];
 
+    // Define OpenAI tool
+    const tools:ChatCompletionTool[] = [
+    {
+        type: "function",
+        function: {
+            name: "run_query",
+            description: "Run a Cypher query",
+            parameters: {
+                type: "object",
+                properties: {
+                    query: {
+                        type: "string",
+                        description: "Cypher query to run",
+                    },
+                },
+                required: ["query"],
+            },
+        },
+    },
+    ];
+
+    // Construct conversation body
     let body: ChatCompletionCreateParams = {
-        messages,
         model: "gpt-3.5-turbo",
-    }
-    let completion = await openai.chat.completions.create(body);
+        messages: messages,
+        tools: tools,
+        tool_choice: "auto",
+    };
+
+    // Get completion for conversation
+    let response = await openai.chat.completions.create(body);
 
     //-------------------------------------------------------------------------
     // Perform instruction
     //-------------------------------------------------------------------------    
 
-    const instruction = completion.choices[0]['message']['content'];
+    //const instruction = response.choices[0]['message']['content'];
+    const responseMessage = response.choices[0].message;
 
-    if (!instruction) {
-        return NextResponse.json({ result: "No instruction generated" }, { status: 500 });
+    // Step 2: check if the model wanted to call a function
+    const toolCalls: ChatCompletionMessageToolCall[] | undefined  = responseMessage.tool_calls;
+
+    let query_result: string = '';  // response from query
+
+    if (toolCalls) {
+        for (const toolCall of toolCalls) {
+            const functionName = toolCall.function.name;
+            const functionArgs = JSON.parse(toolCall.function.arguments);
+            
+            if(functionName != 'run_query') {
+                return NextResponse.json({ result: "Unknown function to run" }, { status: 500 });
+            }
+
+            let result = await run_query(graph, functionArgs.query);
+            query_result = JSON.stringify(result);
+        }
+    } else {
+        return NextResponse.json({ result: "Unexpected instruction" }, { status: 500 });
     }
-    let result = await HandleInstruction(instruction, graph);
-    if (!result) {
-        return NextResponse.json({ result: "No query generated" }, { status: 500 });
-    }
-    let response = JSON.stringify(result);
+
+    //if (!instruction) {
+    //    return NextResponse.json({ result: "No instruction generated" }, { status: 500 });
+    //}
+    //let result = await HandleInstruction(instruction, graph);
+    //if (!result) {
+    //    return NextResponse.json({ result: "No query generated" }, { status: 500 });
+    //}
+    //let response = JSON.stringify(result);
 
     //-------------------------------------------------------------------------
     // Digest response
     //-------------------------------------------------------------------------
 
-    prompt = `This is the user's question: ${query}
-    And this is the data we've got from our knowladge graph: ${response}
+    console.log(`query_result: ${query_result}`);
+    prompt = `This is the user's question: ${question}
+    And this is the data we've got from our knowladge graph: ${query_result}
     Please formulate an answer to the user question based on the data we've got from the knowladge graph`;
 
     messages = [{ "role": "system", "content": prompt }];
-    completion = await openai.chat.completions.create({
+    response = await openai.chat.completions.create({
         "model": "gpt-3.5-turbo",
         "messages": messages,
     });
-    const answer = completion.choices[0]['message']['content'];
+    const answer = response.choices[0]['message']['content'];
 
     console.log(`response: ${answer}`);
     return NextResponse.json({ result: answer }, { status: 200 });
