@@ -85,12 +85,13 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                             {
                                 selector: 'node',
                                 style: {
-                                    label: "data(label)",
+                                    label: "data(name)",
                                     "text-valign": "center",
                                     "text-halign": "center",
                                     shape: "ellipse",
                                     height: 10,
                                     width: 10,
+                                    "background-color": "data(color)",
                                     "font-size": "3",
                                 },
                             },

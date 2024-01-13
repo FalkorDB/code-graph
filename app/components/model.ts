@@ -7,7 +7,7 @@ export interface Node {
   id: string,
   name: string,
   value: any,
-  label: string,
+  color: string,
 }
 
 export interface Edge {
@@ -16,6 +16,19 @@ export interface Edge {
   label: string,
   value: any,
 }
+
+const COLORS = [
+  "#ff0000", // red 
+  "#0000ff", // blue
+  "#00ff00", // green
+  "#ffff00", // yellow
+  "#ff00ff", // magenta
+  "#00ffff", // cyan
+  "#ffffff", // white
+  "#000000", // black
+  "#800000", // maroon
+  "#808000", // olive
+]
 
 export class Graph {
 
@@ -78,7 +91,7 @@ export class Graph {
           id: nodeData.id.toString(),
           name: nodeData.properties.name,
           value: JSON.stringify(nodeData.properties),
-          label: category.name
+          color: category.index<COLORS.length ? COLORS[category.index] : COLORS[0]
         }
         this.nodesMap.set(nodeData.id, node)
       }
@@ -102,13 +115,13 @@ export class Graph {
       // creates a fakeS node for the source and target
       let source = this.nodesMap.get(edgeData.sourceId)
       if (!source) {
-        source = { id: sourceId, name: sourceId, value: "", label: "" }
+        source = { id: sourceId, name: sourceId, value: "", color: COLORS[0] }
         this.nodesMap.set(edgeData.sourceId, source)
       }
 
       let destination = this.nodesMap.get(edgeData.destinationId)
       if (!destination) {
-        destination = { id: destinationId, name: destinationId, value: "", label: "" }
+        destination = { id: destinationId, name: destinationId, value: "", color: COLORS[0] }
         this.nodesMap.set(edgeData.destinationId, destination)
       }
     })
