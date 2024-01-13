@@ -93,6 +93,7 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                                     width: 10,
                                     "background-color": "data(color)",
                                     "font-size": "3",
+                                    "overlay-padding": "2px",
                                 },
                             },
                             {
@@ -107,6 +108,8 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                                     "text-background-color": "#ffffff",
                                     "text-background-opacity": 1,
                                     "font-size": "3",
+                                    "overlay-padding": "2px",
+
                                 },
                             },
                         ]}
