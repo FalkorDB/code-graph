@@ -298,15 +298,15 @@ export async function POST(request: NextRequest) {
 	const body = await request.json();
 	const url = body.url;
 	if (!url) {
-		return NextResponse.json({ medssage: 'URL not provided' }, { status: 400 })
+		return NextResponse.json({ message: 'URL not provided' }, { status: 400 })
 	}
 	if (LIMITED_MODE && !RESPOSITORIES.includes(url)) {
-		return NextResponse.json({ medssage: 'Repository not supported' }, { status: 401 })
+		return NextResponse.json({ message: 'Repository not supported' }, { status: 401 })
 	}
 
 	const urlParts = url.split('/');
 	if (urlParts.length < 2) {
-		return NextResponse.json({ medssage: 'Invalid URL' }, { status: 400 })
+		return NextResponse.json({ message: 'Invalid URL' }, { status: 400 })
 	}
 	const organization = urlParts[urlParts.length - 2];
 	const repo = urlParts[urlParts.length - 1];
@@ -343,7 +343,7 @@ export async function POST(request: NextRequest) {
 			console.log("Cloned repo");
 		} catch (error) {
 			console.error(error);
-			return NextResponse.json({ medssage: 'Repository not found' }, { status: 404 })
+			return NextResponse.json({ message: 'Repository not found' }, { status: 404 })
 		}
 	}
 

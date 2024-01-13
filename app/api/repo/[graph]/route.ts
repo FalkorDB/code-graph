@@ -181,11 +181,11 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     let question = request.nextUrl.searchParams.get("q");
 
     if(!question) {
-        return NextResponse.json({ medssage: 'Question not specified' }, { status: 400 })
+        return NextResponse.json({ message: 'Question not specified' }, { status: 400 })
     }
 
     if (LIMITED_MODE && !QUESTIONS.includes(question)) {
-		return NextResponse.json({ medssage: 'Question not supported' }, { status: 401 })
+		return NextResponse.json({ message: 'Question not supported' }, { status: 401 })
 	}
 
     //-------------------------------------------------------------------------
