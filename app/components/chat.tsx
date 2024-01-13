@@ -41,6 +41,7 @@ export function Chat(props: { repo: string }) {
         setQuery(value);
     }
 
+    // Send the user query to the server
     function sendQuery() {
         setMessages((messages) => [...messages, { text: query, type: MessageTypes.Query }]);
 
@@ -70,6 +71,7 @@ export function Chat(props: { repo: string }) {
         sendQuery();
     }
 
+    // On question selected from the predefined questions list
     function onQuestionSelected(value: string): void {
         setQuery(value)
         sendQuery()

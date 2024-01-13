@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, createContext } from 'react';
+import { useState } from 'react';
 import { Chat } from './components/chat';
 import { Graph, Node } from './components/model';
 import { Github, HomeIcon } from 'lucide-react';
@@ -19,6 +19,7 @@ export default function Home() {
       value = 'https://github.com/falkorDB/falkordb-py';
     }
 
+    // Send the user query to the server to fetch a repo graph
     fetch('/api/repo', {
       method: 'POST',
       body: JSON.stringify({
@@ -41,28 +42,26 @@ export default function Home() {
     });
   }
 
-
+  // Send the user query to the server to expand a node
   function onFetchNode(node: Node) {
-    // var node: Node = evt.target.json().data;
-
     fetch(`/api/repo/${graph.Id}/${node.name}`, {
-        method: 'GET'
+      method: 'GET'
     }).then(async (result) => {
-        if (result.status >= 300) {
-            throw Error(await result.text())
-        }
-        return result.json()
+      if (result.status >= 300) {
+        throw Error(await result.text())
+      }
+      return result.json()
     }).then(data => {
-        graph.extend(data)
-        setGraph(graph)
+      graph.extend(data)
+      setGraph(graph)
     }).catch((error) => {
-        toast({
-            variant: "destructive",
-            title: "Uh oh! Something went wrong.",
-            description: error.message,
-        })
+      toast({
+        variant: "destructive",
+        title: "Uh oh! Something went wrong.",
+        description: error.message,
+      })
     })
-}
+  }
 
   return (
     <main className="h-screen flex flex-col">

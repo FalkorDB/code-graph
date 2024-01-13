@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/use-toast";
 import CytoscapeComponent from 'react-cytoscapejs'
 import { useRef, useState } from "react";
 import { Graph, Node } from "./model";
@@ -8,14 +7,53 @@ import { RESPOSITORIES } from "./repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ZoomIn, ZoomOut } from "lucide-react";
 
+
+// The stylesheet for the graph
+const STYLESHEET: cytoscape.Stylesheet[] = [
+    {
+        selector: 'node',
+        style: {
+            label: "data(name)",
+            "text-valign": "center",
+            "text-halign": "center",
+            shape: "ellipse",
+            height: 10,
+            width: 10,
+            "background-color": "data(color)",
+            "font-size": "3",
+            "overlay-padding": "2px",
+        },
+    },
+    {
+        selector: "edge",
+        style: {
+            width: 0.5,
+            'line-color': '#ccc',
+            "arrow-scale": 0.3,
+            "target-arrow-shape": "triangle",
+            label: "data(label)",
+            'curve-style': 'straight',
+            "text-background-color": "#ffffff",
+            "text-background-opacity": 1,
+            "font-size": "3",
+            "overlay-padding": "2px",
+
+        },
+    },
+]
+
 export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => void }) {
 
+    // Holds the user input while typing
     const [url, setURL] = useState('');
+
+    // A reference to the chart container to allowing zooming and editing
     const chartRef = useRef<cytoscape.Core | null>(null)
 
     // A function that handles the change event of the url input box
     async function handleRepoInputChange(event: any) {
 
+        // If the user pressed enter, submit the URL
         if (event.key === "Enter") {
             await handleSubmit(event);
         }
@@ -74,45 +112,17 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                     <CytoscapeComponent
                         cy={(cy) => {
                             chartRef.current = cy
+
+                            // Make sure no previous listeners are attached
                             cy.removeAllListeners();
 
+                            // Listen to the click event on nodes for expanding the node
                             cy.on('dbltap', 'node', function (evt) {
                                 var node: Node = evt.target.json().data;
                                 parmas.onFetchNode(node);
                             });
                         }}
-                        stylesheet={[
-                            {
-                                selector: 'node',
-                                style: {
-                                    label: "data(name)",
-                                    "text-valign": "center",
-                                    "text-halign": "center",
-                                    shape: "ellipse",
-                                    height: 10,
-                                    width: 10,
-                                    "background-color": "data(color)",
-                                    "font-size": "3",
-                                    "overlay-padding": "2px",
-                                },
-                            },
-                            {
-                                selector: "edge",
-                                style: {
-                                    width: 0.5,
-                                    'line-color': '#ccc',
-                                    "arrow-scale": 0.3,
-                                    "target-arrow-shape": "triangle",
-                                    label: "data(label)",
-                                    'curve-style': 'straight',
-                                    "text-background-color": "#ffffff",
-                                    "text-background-opacity": 1,
-                                    "font-size": "3",
-                                    "overlay-padding": "2px",
-
-                                },
-                            },
-                        ]}
+                        stylesheet={STYLESHEET}
                         elements={parmas.graph.Elements}
                         layout={{
                             name: "cose",
