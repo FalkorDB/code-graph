@@ -2,9 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
 import { useEffect, useRef, useState } from "react";
-import { QUESTIONS } from "./questions";
+import { QUESTIONS } from "../api/repo/questions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
 
 enum MessageTypes {
     Query,
@@ -106,7 +107,7 @@ export function Chat(props: { repo: string }) {
             <footer className="border p-4">
                 <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
                     <Select onValueChange={onQuestionSelected}>
-                        <SelectTrigger className="w-1/3">
+                        <SelectTrigger className="min-w-1/3">
                             <SelectValue placeholder="Suggested questions" />
                         </SelectTrigger>
                         <SelectContent>
@@ -117,7 +118,9 @@ export function Chat(props: { repo: string }) {
                             }
                         </SelectContent>
                     </Select>
-                    <Input placeholder="Type a question..." onChange={handleQueryInputChange} />
+                    {
+                        !LIMITED_MODE && <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} />
+                    }
                     <Button>Send</Button>
                 </form>
             </footer>
