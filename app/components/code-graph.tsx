@@ -1,13 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
-import { useRef, useState } from "react";
-import { Graph, Node } from "./model";
+import { useContext, useRef, useState } from "react";
+import { Node } from "./model";
 import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XCircle, ZoomIn, ZoomOut } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Chat } from "./chat";
+import { GraphContext } from "./provider";
 
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
 
@@ -75,8 +76,10 @@ const LAYOUT = {
     avoidOverlap: true,
 }
 
-export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => void }) {
+export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => Promise<any[]> }) {
 
+    let graph = useContext(GraphContext)
+    
     // Holds the user input while typing
     const [url, setURL] = useState('');
 
@@ -169,7 +172,7 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                         </Tooltip>
                     </TooltipProvider>
                 </div>
-                {parmas.graph.Id &&
+                {graph.Id &&
                     <CytoscapeComponent
                         cy={(cy) => {
                             chartRef.current = cy
@@ -178,13 +181,14 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                             cy.removeAllListeners();
 
                             // Listen to the click event on nodes for expanding the node
-                            cy.on('dbltap', 'node', function (evt) {
+                            cy.on('dbltap', 'node', async function (evt) {
                                 var node: Node = evt.target.json().data;
-                                parmas.onFetchNode(node);
+                                let elements = await parmas.onFetchNode(node);
+                                cy.add(elements)
                             });
                         }}
                         stylesheet={STYLESHEET}
-                        elements={parmas.graph.Elements}
+                        elements={graph.Elements}
                         layout={LAYOUT}
                         className="w-full h-full"
                     />
