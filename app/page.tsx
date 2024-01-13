@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react';
+import { createContext, useState } from 'react';
 import { Chat } from './components/chat';
 import { Graph, Node } from './components/model';
 import { Github, HomeIcon } from 'lucide-react';
@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { CodeGraph } from './components/code-graph';
 import { toast } from '@/components/ui/use-toast';
+import { GraphContext } from './components/provider';
 
 export default function Home() {
 
@@ -43,8 +44,8 @@ export default function Home() {
   }
 
   // Send the user query to the server to expand a node
-  function onFetchNode(node: Node) {
-    fetch(`/api/repo/${graph.Id}/${node.name}`, {
+  async function onFetchNode(node: Node) {
+    return fetch(`/api/repo/${graph.Id}/${node.name}`, {
       method: 'GET'
     }).then(async (result) => {
       if (result.status >= 300) {
@@ -52,14 +53,16 @@ export default function Home() {
       }
       return result.json()
     }).then(data => {
-      graph.extend(data)
+      let newElements = graph.extend(data)
       setGraph(graph)
+      return newElements
     }).catch((error) => {
       toast({
         variant: "destructive",
         title: "Uh oh! Something went wrong.",
         description: error.message,
       })
+      return []
     })
   }
 
@@ -81,7 +84,9 @@ export default function Home() {
 
       <PanelGroup direction="horizontal" className="w-full h-full">
         <Panel defaultSize={75} className="flex flex-col border" collapsible={true} minSize={30}>
-          <CodeGraph graph={graph} onFetchGraph={onFetchGraph} onFetchNode={onFetchNode} />
+          <GraphContext.Provider value={graph}>
+            <CodeGraph onFetchGraph={onFetchGraph} onFetchNode={onFetchNode} />
+          </GraphContext.Provider>
         </Panel>
         <PanelResizeHandle className="w-1 bg-gray-500" />
         <Panel className="flex flex-col border" defaultSize={25} collapsible={true} minSize={10}>
