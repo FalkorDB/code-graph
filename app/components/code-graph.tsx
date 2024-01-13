@@ -5,13 +5,15 @@ import { useRef, useState } from "react";
 import { Graph, Node } from "./model";
 import { RESPOSITORIES } from "./repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ZoomIn, ZoomOut } from "lucide-react";
+import { XCircle, ZoomIn, ZoomOut } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Chat } from "./chat";
 
 
 // The stylesheet for the graph
 const STYLESHEET: cytoscape.Stylesheet[] = [
     {
-        selector: 'node',
+        selector: "node",
         style: {
             label: "data(name)",
             "text-valign": "center",
@@ -28,7 +30,7 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         selector: "edge",
         style: {
             width: 0.5,
-            'line-color': '#ccc',
+            "line-color": "#ccc",
             "arrow-scale": 0.3,
             "target-arrow-shape": "triangle",
             label: "data(label)",
@@ -41,6 +43,13 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         },
     },
 ]
+
+const LAYOUT = {
+    name: "cose",
+    fit: true,
+    padding: 30,
+    avoidOverlap: true,
+}
 
 export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => void }) {
 
@@ -78,6 +87,14 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
         }
     }
 
+    function handleCenterClick() {
+        let chart = chartRef.current
+        if (chart) {
+            chart.fit()
+            chart.center()
+        }
+    }
+
     function onRepoSelected(value: string): void {
         setURL(value)
         parmas.onFetchGraph(url)
@@ -105,8 +122,26 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
             </header>
             <main className="h-full w-full">
                 <div className="flex flex-row" >
-                    <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(1.1)}><ZoomIn /></Button>
-                    <Button className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300" variant="ghost" onClick={() => handleZoomClick(0.9)}><ZoomOut /></Button>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(1.1)}><ZoomIn /></TooltipTrigger>
+                            <TooltipContent>
+                                <p>Zoom In</p>
+                            </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(0.9)}><ZoomOut /></TooltipTrigger>
+                            <TooltipContent>
+                                <p>Zoom Out</p>
+                            </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><XCircle /></TooltipTrigger>
+                            <TooltipContent>
+                                <p>Center</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
                 {parmas.graph.Id &&
                     <CytoscapeComponent
@@ -124,12 +159,7 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                         }}
                         stylesheet={STYLESHEET}
                         elements={parmas.graph.Elements}
-                        layout={{
-                            name: "cose",
-                            fit: true,
-                            padding: 30,
-                            avoidOverlap: true,
-                        }}
+                        layout={LAYOUT}
                         className="w-full h-full"
                     />
                 }
