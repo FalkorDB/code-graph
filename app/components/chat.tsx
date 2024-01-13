@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QUESTIONS } from "./questions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -17,9 +17,15 @@ interface Message {
 }
 
 export function Chat(props: { repo: string }) {
+
+    // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
+
+    // Holds the user input while typing
     const [query, setQuery] = useState('');
 
+    // A reference to the chat container to allow scrolling to the bottom
+    const bottomRef: React.RefObject<HTMLDivElement> = useRef(null);
 
     // A function that handles the change event of the url input box
     async function handleQueryInputChange(event: any) {
@@ -69,9 +75,14 @@ export function Chat(props: { repo: string }) {
         sendQuery()
     }
 
+    // Scroll to the bottom of the chat on new message
+    useEffect(() => {
+        bottomRef.current?.scrollTo(0, bottomRef.current?.scrollHeight);
+    }, [messages]);
+
     return (
         <>
-            <main className="border p-4 flex-1 space-y-4 overflow-auto">
+            <main ref={bottomRef} className="border p-4 flex-1 space-y-4 overflow-auto">
                 {
                     messages.map((message, index) => {
                         if (message.type === MessageTypes.Query) {
