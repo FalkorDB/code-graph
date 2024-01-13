@@ -18,16 +18,9 @@ export interface Edge {
 }
 
 const COLORS = [
-  "#ff0000", // red 
-  "#0000ff", // blue
-  "#00ff00", // green
-  "#ffff00", // yellow
-  "#ff00ff", // magenta
-  "#00ffff", // cyan
-  "#ffffff", // white
-  "#000000", // black
-  "#800000", // maroon
-  "#808000", // olive
+  "#FF6D60", // Red
+  "#F7D060", // Yellow
+  "#98D8AA", // Green
 ]
 
 export class Graph {
