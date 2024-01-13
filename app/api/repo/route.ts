@@ -1,15 +1,17 @@
-import os     from 'os';
-import path   from 'path';
-import git    from 'isomorphic-git';
-import http   from 'isomorphic-git/http/node';
+import os from 'os';
+import path from 'path';
+import git from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
 import Parser from 'web-tree-sitter';
 
 import { promises as fs } from 'fs';
 import { Language, SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falkordb';
+import { RESPOSITORIES } from './repositories';
 
 const GraphOps = require('./graph_ops');
+const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
 
 //-----------------------------------------------------------------------------
 // Tree-Sitter queries
@@ -41,11 +43,11 @@ let identifier_query: Parser.Query;
 
 // Process Class declaration
 async function processClassDeclaration
-(
-	source_file: string,
-	graph: Graph,
-	match: Parser.QueryMatch
-) {
+	(
+		source_file: string,
+		graph: Graph,
+		match: Parser.QueryMatch
+	) {
 	let class_node = match.captures[0].node;
 	let class_name = match.captures[1].node.text;
 	let class_src_end = class_node.endPosition.row;
@@ -57,11 +59,11 @@ async function processClassDeclaration
 
 // Process function declaration
 async function processFunctionDeclaration
-(
-	source_file: string,
-	graph: Graph,
-	match: Parser.QueryMatch
-) {
+	(
+		source_file: string,
+		graph: Graph,
+		match: Parser.QueryMatch
+	) {
 	let function_node = match.captures[0].node;
 	let function_name = match.captures[1].node.text;
 	let function_args = match.captures[2].node;
@@ -76,11 +78,11 @@ async function processFunctionDeclaration
 		parent = parent.parent;
 	}
 
-	if(parent == null) {
+	if (parent == null) {
 		// function isn't part of a Class
 		// this is a Module level function
-	    const file_components = source_file.split("/");
-	    parent = file_components[file_components.length - 1];
+		const file_components = source_file.split("/");
+		parent = file_components[file_components.length - 1];
 	} else {
 		let identifier_matches = identifier_query.matches(parent)[0].captures;
 		const identifierNode = identifier_matches[0].node;
@@ -100,10 +102,10 @@ async function processFunctionDeclaration
 			args.push(child_node.text);
 		} else {
 			let identifier_matches = identifier_query.matches(child_node)
-			if(identifier_matches.length == 0) {
+			if (identifier_matches.length == 0) {
 				console.log("Investigate!");
 				continue;
-			}			
+			}
 			let captures = identifier_matches[0].captures;
 			const identifierNode = captures[0].node;
 			args.push(identifierNode.text);
@@ -121,17 +123,17 @@ async function processFunctionDeclaration
 
 // Process function call
 async function processFunctionCall
-(
-	source_file: string,
-	graph: Graph,
-	caller: string,
-	caller_src_start: number,
-	caller_src_end: number,
-	match: Parser.QueryMatch
-) {
-	let call           = match.captures[0].node;	   // caller
-	let callee         = match.captures[1].node.text;  // called function
-	let call_src_end   = call.endPosition.row;         // call begins on this line number
+	(
+		source_file: string,
+		graph: Graph,
+		caller: string,
+		caller_src_start: number,
+		caller_src_end: number,
+		match: Parser.QueryMatch
+	) {
+	let call = match.captures[0].node;	   // caller
+	let callee = match.captures[1].node.text;  // called function
+	let call_src_end = call.endPosition.row;         // call begins on this line number
 	let call_src_start = call.startPosition.row;       // call ends on this line number
 
 	// Create Function call edge
@@ -145,10 +147,10 @@ async function processFunctionCall
 // 2. Class declarations
 // 3. Function declarations
 async function processFirstPass
-(
-	source_files: string[],
-	graph: Graph
-) {
+	(
+		source_files: string[],
+		graph: Graph
+	) {
 	for (let source_file of source_files) {
 		console.log("Processing file: " + source_file);
 
@@ -169,7 +171,7 @@ async function processFirstPass
 
 		// Match all function definition within the current class
 		let function_matches = function_definition_query.matches(tree.rootNode);
-		for (let function_match of function_matches) {			
+		for (let function_match of function_matches) {
 			await processFunctionDeclaration(source_file, graph, function_match);
 		}
 	}
@@ -179,10 +181,10 @@ async function processFirstPass
 // Introduces:
 // 1. Function calls
 async function processSecondPass
-(
-	source_files: string[],
-	graph: Graph
-) {
+	(
+		source_files: string[],
+		graph: Graph
+	) {
 	// for each source file
 	for (let source_file of source_files) {
 		const src = await fs.readFile(source_file, 'utf8');
@@ -218,13 +220,13 @@ async function processSecondPass
 }
 
 async function BuildGraph
-(
-	client: any,
-	commit_hash: string,
-	graphId: string,
-	graph: Graph,
-	repo_root: string
-) {
+	(
+		client: any,
+		commit_hash: string,
+		graphId: string,
+		graph: Graph,
+		repo_root: string
+	) {
 	console.log("BuildGraph");
 
 	// Initialize Tree-Sitter
@@ -290,13 +292,28 @@ async function InitializeTreeSitter() {
 	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
 }
 
-
 export async function POST(request: NextRequest) {
+
+
+	const body = await request.json();
+	const url = body.url;
+	if (!url) {
+		return NextResponse.json({ message: 'URL not provided' }, { status: 400 })
+	}
+	if (LIMITED_MODE && !RESPOSITORIES.includes(url)) {
+		return NextResponse.json({ message: 'Repository not supported' }, { status: 401 })
+	}
+
+	const urlParts = url.split('/');
+	if (urlParts.length < 2) {
+		return NextResponse.json({ message: 'Invalid URL' }, { status: 400 })
+	}
+	const organization = urlParts[urlParts.length - 2];
+	const repo = urlParts[urlParts.length - 1];
 
 	//-------------------------------------------------------------------------
 	// Connect to FalkorDB
 	//-------------------------------------------------------------------------
-
 	const client = createClient({
 		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
 	});
@@ -307,11 +324,6 @@ export async function POST(request: NextRequest) {
 
 	const tmp_dir = os.tmpdir();
 
-	let body = await request.json();
-	let url = body.url;
-	let urlParts = url.split('/');
-	const organization = urlParts[urlParts.length - 2];
-	const repo = urlParts[urlParts.length - 1];	
 
 	//--------------------------------------------------------------------------
 	// process repo
@@ -320,20 +332,20 @@ export async function POST(request: NextRequest) {
 	let repo_root = path.join(tmp_dir, repo);
 
 	// check if repo was already cloned
-	await fs.stat(repo_root).catch(async (error) => {
+	try {
+		await fs.stat(repo_root)
+	} catch (error) {
 		//---------------------------------------------------------------------
 		// clone repo into temporary folder
 		//---------------------------------------------------------------------
-		await git
-			.clone({ fs, http, dir: repo_root, url, depth:1 })
-			.then(function a(response){
-				console.log("response: " + response);
-			})
-			.catch(function b(error){
-				console.log("error: " + error);
-			});
-		console.log("Cloned repo");
-	});
+		try {
+			await git.clone({ fs, http, dir: repo_root, url, depth: 1 })
+			console.log("Cloned repo");
+		} catch (error) {
+			console.error(error);
+			return NextResponse.json({ message: 'Repository not found' }, { status: 404 })
+		}
+	}
 
 	// latest git commit
 	let commits = await git.log({ fs, gitdir: path.join(repo_root, '.git'), depth: 1, ref: 'HEAD' });

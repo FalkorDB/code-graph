@@ -3,12 +3,13 @@ import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
 import { useRef, useState } from "react";
 import { Graph, Node } from "./model";
-import { RESPOSITORIES } from "./repositories";
+import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XCircle, ZoomIn, ZoomOut } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Chat } from "./chat";
 
+const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
 
 // The stylesheet for the graph
 const STYLESHEET: cytoscape.Stylesheet[] = [
@@ -128,7 +129,7 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
             <header className="border p-4">
                 <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
                     <Select onValueChange={onRepoSelected}>
-                        <SelectTrigger className="w-1/3">
+                        <SelectTrigger className={LIMITED_MODE?"border":"border w-2/3"}>
                             <SelectValue placeholder="Suggested repositories" />
                         </SelectTrigger>
                         <SelectContent>
@@ -139,8 +140,10 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                             }
                         </SelectContent>
                     </Select>
-                    <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} />
-                    <Button type="submit" >Send</Button>
+                    {
+                        !LIMITED_MODE && <Input placeholder="Github repo URL" className="border" type="url" onChange={handleRepoInputChange} />
+                    }
+                    <Button type="submit">Send</Button>
                 </form>
             </header>
             <main className="h-full w-full">
