@@ -105,19 +105,19 @@ export function Chat(props: { repo: string }) {
                 {
                     messages.map((message, index) => {
                         if (message.type === MessageTypes.Query) {
-                            return (<div key={index} className="flex items-end gap-2">
-                                <div className="rounded-lg bg-zinc-200 dark:bg-zinc-700 p-2">
-                                    <p className="text-sm">{message.text}</p>
-                                </div>
-                            </div>)
-                        } else if (message.type === MessageTypes.Response) {
                             return (<div key={index} className="flex items-end gap-2 justify-end">
                                 <div className="rounded-lg bg-blue-500 text-white p-2">
                                     <p className="text-sm">{message.text}</p>
                                 </div>
                             </div>)
+                        } else if (message.type === MessageTypes.Response) {
+                            return (<div key={index} className="flex items-end gap-2">
+                                <div className="rounded-lg bg-zinc-200 p-2">
+                                    <p className="text-sm">{message.text}</p>
+                                </div>
+                            </div>)
                         } else {
-                            return (<div key={index} className="flex items-end gap-2 justify-end">
+                            return (<div key={index} className="flex items-end gap-2">
                                 <div>
                                     <Image src="/dots.gif" width={100} height={10} alt="Waiting for response"/>
                                 </div>
