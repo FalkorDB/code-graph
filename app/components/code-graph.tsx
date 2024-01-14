@@ -184,7 +184,7 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                             cy.on('dbltap', 'node', async function (evt) {
                                 var node: Node = evt.target.json().data;
                                 let elements = await parmas.onFetchNode(node);
-                                cy.add(elements)
+                                cy.add(elements).layout(LAYOUT).run()
                             });
                         }}
                         stylesheet={STYLESHEET}

@@ -62,7 +62,7 @@ export default function Home() {
         title: "Uh oh! Something went wrong.",
         description: error.message,
       })
-      return []
+      return [] as any[]
     })
   }
 
