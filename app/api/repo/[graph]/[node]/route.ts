@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     // Get node's neighbors
     let res: any = await graph.query(`MATCH ({name:'${node}'})-[e]-(n)
-                                 RETURN collect(distinct n) as nodes, collect(e) as edges`);
+                                      RETURN collect(distinct n) as nodes, collect(e) as edges`);
     let nodes = res.data[0]['nodes'];
     let edges = res.data[0]['edges'];
 

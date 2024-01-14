@@ -1,17 +1,35 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
-import { useRef, useState } from "react";
-import { Graph, Node } from "./model";
-import { RESPOSITORIES } from "./repositories";
+import { useContext, useRef, useState } from "react";
+import { Node } from "./model";
+import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { XCircle, ZoomIn, ZoomOut } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Chat } from "./chat";
+import { GraphContext } from "./provider";
 
+const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
 
 // The stylesheet for the graph
 const STYLESHEET: cytoscape.Stylesheet[] = [
+    {
+        selector: "core",
+        style: {
+            'active-bg-size':0,  // hide gray circle when panning
+            // All of the following styles are meaningless and are specified
+            // to satisfy the linter...
+            'active-bg-color': 'blue',
+            'active-bg-opacity': 0.3,
+            "selection-box-border-color": 'blue',
+            "selection-box-border-width": 0,
+            "selection-box-opacity": 1,
+            "selection-box-color": 'blue',
+            "outside-texture-bg-color": 'blue',
+            "outside-texture-bg-opacity":1,
+        },
+    },
     {
         selector: "node",
         style: {
@@ -21,9 +39,17 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
             shape: "ellipse",
             height: 10,
             width: 10,
+            "border-width": 0.15,
+            "border-opacity": 0.5,
             "background-color": "data(color)",
             "font-size": "3",
-            "overlay-padding": "2px",
+            "overlay-padding": "1px",
+        },
+    },
+    {
+        selector: "node:active",
+        style: {
+            "overlay-opacity": 0,  // hide gray box around active node
         },
     },
     {
@@ -39,7 +65,6 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
             "text-background-opacity": 1,
             "font-size": "3",
             "overlay-padding": "2px",
-
         },
     },
 ]
@@ -51,8 +76,10 @@ const LAYOUT = {
     avoidOverlap: true,
 }
 
-export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => void }) {
+export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => Promise<any[]> }) {
 
+    let graph = useContext(GraphContext)
+    
     // Holds the user input while typing
     const [url, setURL] = useState('');
 
@@ -105,7 +132,7 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
             <header className="border p-4">
                 <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
                     <Select onValueChange={onRepoSelected}>
-                        <SelectTrigger className="w-1/3">
+                        <SelectTrigger className={LIMITED_MODE?"border":"border w-2/3"}>
                             <SelectValue placeholder="Suggested repositories" />
                         </SelectTrigger>
                         <SelectContent>
@@ -116,8 +143,10 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                             }
                         </SelectContent>
                     </Select>
-                    <Input placeholder="Github repo URL" className='border' type="url" onChange={handleRepoInputChange} />
-                    <Button type="submit" >Send</Button>
+                    {
+                        !LIMITED_MODE && <Input placeholder="Github repo URL" className="border" type="url" onChange={handleRepoInputChange} />
+                    }
+                    <Button type="submit">Send</Button>
                 </form>
             </header>
             <main className="h-full w-full">
@@ -143,7 +172,7 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                         </Tooltip>
                     </TooltipProvider>
                 </div>
-                {parmas.graph.Id &&
+                {graph.Id &&
                     <CytoscapeComponent
                         cy={(cy) => {
                             chartRef.current = cy
@@ -152,13 +181,14 @@ export function CodeGraph(parmas: { graph: Graph, onFetchGraph: (url: string) =>
                             cy.removeAllListeners();
 
                             // Listen to the click event on nodes for expanding the node
-                            cy.on('dbltap', 'node', function (evt) {
+                            cy.on('dbltap', 'node', async function (evt) {
                                 var node: Node = evt.target.json().data;
-                                parmas.onFetchNode(node);
+                                let elements = await parmas.onFetchNode(node);
+                                cy.add(elements)
                             });
                         }}
                         stylesheet={STYLESHEET}
-                        elements={parmas.graph.Elements}
+                        elements={graph.Elements}
                         layout={LAYOUT}
                         className="w-full h-full"
                     />
