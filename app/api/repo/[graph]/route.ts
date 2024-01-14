@@ -208,7 +208,9 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     let prompt: string = `You're a Cypher expert, with access to the following graph:
     ${graph_schema}
-    The graph represents a code base.`;
+    The graph represents a code base.
+    Please note the graph you're querying does NOT supports regular expression matching via the =~ symbol
+    Do not generate queries using the '=~' symbol.`;
 
     //-------------------------------------------------------------------------
     // Send prompt to OpenAI

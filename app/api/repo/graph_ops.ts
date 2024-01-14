@@ -223,10 +223,12 @@ export async function projectGraph
     max_entities: number
 ) {
     let query = `MATCH (n)                 
-                 OPTIONAL MATCH (a)-[e]->(z)
-                 WITH a, e, z
+                 OPTIONAL MATCH (n)-[e]->(z)
+                 WITH n, e, z
                  LIMIT $limit
-                 WITH collect(a) as src, collect(z) as dest, collect(e) as edges
+                 WITH collect(n) as src,
+                      collect(z) as dest,
+                      collect(e) as edges
                  RETURN src + dest as nodes, edges`
 
     let params = { limit: max_entities };
