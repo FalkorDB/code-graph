@@ -48,7 +48,7 @@ export function Chat(props: { repo: string }) {
     async function sendQuery(q: string) {
         setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
 
-        return fetch(`/api/repo/${props.repo}?q=${q}&type=text`, {
+        return fetch(`/api/repo/${props.repo}?q=${encodeURIComponent(q)}&type=text`, {
             method: 'GET'
         }).then(async (result) => {
             if (result.status >= 300) {
@@ -61,17 +61,16 @@ export function Chat(props: { repo: string }) {
             // Create an array of messages from the current messages remove the last pending message and add the new response
             setMessages(function(messages) {
                 if(messages[messages.length - 1].type === MessageTypes.Pending){
-                    messages[messages.length - 1] = { text: data.result, type: MessageTypes.Response };
-                } else {
-                    messages.push({ text: data.result, type: MessageTypes.Response });
-                }
-                return [...messages]
+                    // Remove the last pending message if exists
+                    messages = messages.slice(0, -1); 
+                } 
+                return [...messages, { text: data.result, type: MessageTypes.Response }];
             });
         }).catch((error) => {
             setMessages(function(messages) {
                 if(messages[messages.length - 1].type === MessageTypes.Pending){
-                    messages.pop();
-                    return [...messages]
+                    // Remove the last pending message if exists
+                    return messages.slice(0, -1);
                 }
                 return messages
             });
