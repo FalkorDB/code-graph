@@ -4,12 +4,14 @@ import { toast } from "@/components/ui/use-toast";
 import { useEffect, useRef, useState } from "react";
 import { QUESTIONS } from "../api/repo/questions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Image from "next/image";
 
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
 
 enum MessageTypes {
     Query,
     Response,
+    Pending,
 }
 
 interface Message {
@@ -43,10 +45,10 @@ export function Chat(props: { repo: string }) {
     }
 
     // Send the user query to the server
-    function sendQuery(q: string) {
-        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }]);
+    async function sendQuery(q: string) {
+        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
 
-        fetch(`/api/repo/${props.repo}?q=${q}&type=text`, {
+        return fetch(`/api/repo/${props.repo}?q=${encodeURIComponent(q)}&type=text`, {
             method: 'GET'
         }).then(async (result) => {
             if (result.status >= 300) {
@@ -56,8 +58,22 @@ export function Chat(props: { repo: string }) {
 
             return result.json()
         }).then(data => {
-            setMessages((messages) => [...messages, { text: data.result, type: MessageTypes.Response }]);
+            // Create an array of messages from the current messages remove the last pending message and add the new response
+            setMessages(function(messages) {
+                if(messages[messages.length - 1].type === MessageTypes.Pending){
+                    // Remove the last pending message if exists
+                    messages = messages.slice(0, -1); 
+                } 
+                return [...messages, { text: data.result, type: MessageTypes.Response }];
+            });
         }).catch((error) => {
+            setMessages(function(messages) {
+                if(messages[messages.length - 1].type === MessageTypes.Pending){
+                    // Remove the last pending message if exists
+                    return messages.slice(0, -1);
+                }
+                return messages
+            });
             toast({
                 variant: "destructive",
                 title: "Uh oh! Something went wrong.",
@@ -69,13 +85,13 @@ export function Chat(props: { repo: string }) {
     // A function that handles the click event
     async function handleQueryClick(event: any) {
         event.preventDefault();
-        sendQuery(query);
+        return sendQuery(query);
     }
 
     // On question selected from the predefined questions list
-    function onQuestionSelected(value: string): void {
-        setQuery(value);
-        sendQuery(value);
+    async function onQuestionSelected(value: string) {
+        setQuery(value)
+        return sendQuery(value)
     }
 
     // Scroll to the bottom of the chat on new message
@@ -94,10 +110,16 @@ export function Chat(props: { repo: string }) {
                                     <p className="text-sm">{message.text}</p>
                                 </div>
                             </div>)
-                        } else {
+                        } else if (message.type === MessageTypes.Response) {
                             return (<div key={index} className="flex items-end gap-2 justify-end">
                                 <div className="rounded-lg bg-blue-500 text-white p-2">
                                     <p className="text-sm">{message.text}</p>
+                                </div>
+                            </div>)
+                        } else {
+                            return (<div key={index} className="flex items-end gap-2 justify-end">
+                                <div>
+                                    <Image src="/dots.gif" width={100} height={10} alt="Waiting for response"/>
                                 </div>
                             </div>)
                         }
