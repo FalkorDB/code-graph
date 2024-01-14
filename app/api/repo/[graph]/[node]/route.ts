@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     let nodes = res.data[0]['nodes'];
     let edges = res.data[0]['edges'];
 
-    nodes.forEach((node: any) => { delete node.embedding});
+    nodes.forEach((node: any) => { delete node.src_embeddings});
 
     return NextResponse.json({ id: graphId, nodes: nodes, edges: edges }, { status: 200 })
 }

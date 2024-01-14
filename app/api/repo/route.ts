@@ -364,7 +364,7 @@ export async function POST(request: NextRequest) {
 
 	let code_graph = await GraphOps.projectGraph(graph, 600);
 
-	code_graph.nodes.forEach((node: any) => { delete node.embedding});
+	code_graph.nodes.forEach((node: any) => { delete node.src_embeddings});
 
 	return NextResponse.json({ id: graphId, nodes: code_graph.nodes, edges: code_graph.edges }, { status: 201 })
 }
