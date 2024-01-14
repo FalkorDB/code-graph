@@ -5,7 +5,7 @@ import { useContext, useRef, useState } from "react";
 import { Node } from "./model";
 import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { XCircle, ZoomIn, ZoomOut } from "lucide-react";
+import { CircleDot, XCircle, ZoomIn, ZoomOut } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Chat } from "./chat";
 import { GraphContext } from "./provider";
@@ -165,7 +165,7 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                             </TooltipContent>
                         </Tooltip>
                         <Tooltip>
-                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><XCircle /></TooltipTrigger>
+                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><CircleDot /></TooltipTrigger>
                             <TooltipContent>
                                 <p>Center</p>
                             </TooltipContent>
