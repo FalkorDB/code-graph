@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
-import { useContext, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Node } from "./model";
 import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,14 +13,14 @@ import { GraphContext } from "./provider";
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 
-const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
+const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
 
 // The stylesheet for the graph
 const STYLESHEET: cytoscape.Stylesheet[] = [
     {
         selector: "core",
         style: {
-            'active-bg-size':0,  // hide gray circle when panning
+            'active-bg-size': 0,  // hide gray circle when panning
             // All of the following styles are meaningless and are specified
             // to satisfy the linter...
             'active-bg-color': 'blue',
@@ -30,7 +30,7 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
             "selection-box-opacity": 1,
             "selection-box-color": 'blue',
             "outside-texture-bg-color": 'blue',
-            "outside-texture-bg-opacity":1,
+            "outside-texture-bg-opacity": 1,
         },
     },
     {
@@ -73,7 +73,7 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
 ]
 
 
-cytoscape.use( fcose );
+cytoscape.use(fcose);
 
 const LAYOUT = {
     name: "fcose",
@@ -85,7 +85,7 @@ const LAYOUT = {
 export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => Promise<any[]> }) {
 
     let graph = useContext(GraphContext)
-    
+
     // Holds the user input while typing
     const [url, setURL] = useState('');
 
@@ -130,15 +130,21 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
 
     function onRepoSelected(value: string): void {
         setURL(value)
-        parmas.onFetchGraph(url)
+        parmas.onFetchGraph(value)
     }
+
+    const defaultRepo = RESPOSITORIES[0];
+    // Fetch the default graph on first render
+    useEffect(() => {
+        onRepoSelected(defaultRepo)
+    }, []);
 
     return (
         <>
             <header className="border p-4">
                 <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
-                    <Select onValueChange={onRepoSelected}>
-                        <SelectTrigger className={LIMITED_MODE?"border":"border w-2/3"}>
+                    <Select onValueChange={onRepoSelected} defaultValue={defaultRepo}>
+                        <SelectTrigger className={LIMITED_MODE ? "border" : "border w-2/3"}>
                             <SelectValue placeholder="Suggested repositories" />
                         </SelectTrigger>
                         <SelectContent>
@@ -193,7 +199,7 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                                 //cy.add(elements).layout(LAYOUT).run()
 
                                 // adjust entire graph.
-                                if(elements.length > 0) {
+                                if (elements.length > 0) {
                                     cy.add(elements);
                                     cy.elements().layout(LAYOUT).run();
                                 }
