@@ -45,10 +45,10 @@ export function Chat(props: { repo: string }) {
     }
 
     // Send the user query to the server
-    async function sendQuery() {
-        setMessages((messages) => [...messages, { text: query, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
+    async function sendQuery(q: string) {
+        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
 
-        return fetch(`/api/repo/${props.repo}?q=${query}&type=text`, {
+        return fetch(`/api/repo/${props.repo}?q=${q}&type=text`, {
             method: 'GET'
         }).then(async (result) => {
             if (result.status >= 300) {
@@ -86,13 +86,13 @@ export function Chat(props: { repo: string }) {
     // A function that handles the click event
     async function handleQueryClick(event: any) {
         event.preventDefault();
-        return sendQuery();
+        return sendQuery(query);
     }
 
     // On question selected from the predefined questions list
     async function onQuestionSelected(value: string) {
         setQuery(value)
-        return sendQuery()
+        return sendQuery(value)
     }
 
     // Scroll to the bottom of the chat on new message
@@ -128,6 +128,7 @@ export function Chat(props: { repo: string }) {
                 }
             </main>
             <footer className="border p-4">
+            {props.repo &&
                 <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
                     <Select onValueChange={onQuestionSelected}>
                         <SelectTrigger className="min-w-1/3">
@@ -146,6 +147,7 @@ export function Chat(props: { repo: string }) {
                     }
                     <Button>Send</Button>
                 </form>
+            }
             </footer>
         </>
     );

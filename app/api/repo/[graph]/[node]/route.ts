@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, { params }: { params: { graph: string, node: string } }) {
     
-    const node    = params.node;
+    const nodeId  = parseInt(params.node);
     const graphId = params.graph;
 
     const client = createClient({
@@ -13,9 +13,15 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     const graph = new Graph(client, graphId);
 
-    // Get node's neighbors
-    let res: any = await graph.query(`MATCH ({name:'${node}'})-[e]-(n)
-                                 RETURN collect(distinct n) as nodes, collect(e) as edges`);
+    // Get node's neighbors    
+    const q_params = {nodeId: nodeId};
+    const query    = `MATCH (src)-[e]-(n)
+                      WHERE ID(src) = $nodeId
+                      RETURN collect(distinct n) as nodes, collect(e) as edges`;
+
+    console.log(`q_params.nodeId: ${q_params.nodeId}`);
+
+    let res: any = await graph.query(query, { params: q_params });
     let nodes = res.data[0]['nodes'];
     let edges = res.data[0]['edges'];
 
