@@ -20,6 +20,8 @@ export default function Home() {
       value = 'https://github.com/falkorDB/falkordb-py';
     }
 
+    setGraph(Graph.empty())
+
     // Send the user query to the server to fetch a repo graph
     fetch('/api/repo', {
       method: 'POST',
