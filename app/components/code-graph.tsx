@@ -143,8 +143,8 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                         </SelectTrigger>
                         <SelectContent>
                             {
-                                RESPOSITORIES.map((question, index) => {
-                                    return <SelectItem key={index} value={question}>{question}</SelectItem>
+                                RESPOSITORIES.map((repo, index) => {
+                                    return <SelectItem key={index} value={repo}>{repo}</SelectItem>
                                 })
                             }
                         </SelectContent>

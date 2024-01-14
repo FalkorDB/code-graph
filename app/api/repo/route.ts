@@ -362,7 +362,7 @@ export async function POST(request: NextRequest) {
 		await client.expire(graphId, 86400);
 	}
 
-	let code_graph = await GraphOps.projectGraph(graph, 100);
+	let code_graph = await GraphOps.projectGraph(graph, 600);
 
 	return NextResponse.json({ id: graphId, nodes: code_graph.nodes, edges: code_graph.edges }, { status: 201 })
 }
