@@ -92,7 +92,6 @@ export class Graph {
         color: category.index<COLORS.length ? COLORS[category.index] : COLORS[0]
       }
       this.nodesMap.set(nodeData.id, node)
-      this.elements.push({data:node})
       newElements.push({data:node})
     })
 
@@ -112,9 +111,11 @@ export class Graph {
         value: JSON.stringify(edgeData.properties),
       }
       this.edgesMap.set(edgeData.id, edge)
-      this.elements.push({data:edge})
       newElements.push({data:edge})
     })
+
+    this.elements.push(newElements)
+
     return newElements
   }
 }
