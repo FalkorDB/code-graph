@@ -45,7 +45,7 @@ export default function Home() {
 
   // Send the user query to the server to expand a node
   async function onFetchNode(node: Node) {
-    return fetch(`/api/repo/${graph.Id}/${node.name}`, {
+    return fetch(`/api/repo/${graph.Id}/${node.id}`, {
       method: 'GET'
     }).then(async (result) => {
       if (result.status >= 300) {

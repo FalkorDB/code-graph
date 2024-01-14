@@ -43,10 +43,10 @@ export function Chat(props: { repo: string }) {
     }
 
     // Send the user query to the server
-    function sendQuery() {
-        setMessages((messages) => [...messages, { text: query, type: MessageTypes.Query }]);
+    function sendQuery(q: string) {
+        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }]);
 
-        fetch(`/api/repo/${props.repo}?q=${query}&type=text`, {
+        fetch(`/api/repo/${props.repo}?q=${q}&type=text`, {
             method: 'GET'
         }).then(async (result) => {
             if (result.status >= 300) {
@@ -69,13 +69,13 @@ export function Chat(props: { repo: string }) {
     // A function that handles the click event
     async function handleQueryClick(event: any) {
         event.preventDefault();
-        sendQuery();
+        sendQuery(query);
     }
 
     // On question selected from the predefined questions list
     function onQuestionSelected(value: string): void {
-        setQuery(value)
-        sendQuery()
+        setQuery(value);
+        sendQuery(value);
     }
 
     // Scroll to the bottom of the chat on new message
@@ -105,6 +105,7 @@ export function Chat(props: { repo: string }) {
                 }
             </main>
             <footer className="border p-4">
+            {props.repo &&
                 <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
                     <Select onValueChange={onQuestionSelected}>
                         <SelectTrigger className="min-w-1/3">
@@ -123,6 +124,7 @@ export function Chat(props: { repo: string }) {
                     }
                     <Button>Send</Button>
                 </form>
+            }
             </footer>
         </>
     );

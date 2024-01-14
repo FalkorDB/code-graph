@@ -16,6 +16,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cytoscape": "^3.28.1",
+    "cytoscape-fcose": "^2.2.0",
     "falkordb": "^5.0.1",
     "isomorphic-git": "^1.25.2",
     "lucide-react": "^0.309.0",
@@ -30,6 +31,7 @@
     "web-tree-sitter": "^0.20.8"
   },
   "devDependencies": {
+    "@types/cytoscape-fcose": "^2.2.4",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-cytoscapejs": "^1.2.5",

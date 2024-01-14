@@ -5,10 +5,13 @@ import { useContext, useRef, useState } from "react";
 import { Node } from "./model";
 import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { XCircle, ZoomIn, ZoomOut } from "lucide-react";
+import { CircleDot, ZoomIn, ZoomOut } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Chat } from "./chat";
 import { GraphContext } from "./provider";
+
+import cytoscape from 'cytoscape';
+import fcose from 'cytoscape-fcose';
 
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
 
@@ -69,8 +72,11 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
     },
 ]
 
+
+cytoscape.use( fcose );
+
 const LAYOUT = {
-    name: "cose",
+    name: "fcose",
     fit: true,
     padding: 30,
     avoidOverlap: true,
@@ -165,7 +171,7 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                             </TooltipContent>
                         </Tooltip>
                         <Tooltip>
-                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><XCircle /></TooltipTrigger>
+                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><CircleDot /></TooltipTrigger>
                             <TooltipContent>
                                 <p>Center</p>
                             </TooltipContent>
@@ -184,7 +190,13 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                             cy.on('dbltap', 'node', async function (evt) {
                                 var node: Node = evt.target.json().data;
                                 let elements = await parmas.onFetchNode(node);
-                                cy.add(elements).layout(LAYOUT).run()
+                                //cy.add(elements).layout(LAYOUT).run()
+
+                                // adjust entire graph.
+                                if(elements.length > 0) {
+                                    cy.add(elements);
+                                    cy.elements().layout(LAYOUT).run();
+                                }
                             });
                         }}
                         stylesheet={STYLESHEET}
