@@ -116,7 +116,7 @@ async function GraphSchemaToPrompt(
         To use a Vector index use the following procedure:
         CALL db.idx.vector.queryNodes(<LABEL>, <PROPERTY>, <N>, <VALUE>)) YIELD node
 
-        The procedure returns up to N nodes that have a <PROPERTY> value which is semanticly close to
+        The procedure returns up to N nodes that have a <PROPERTY> value which is semantically close to
         <VALUE>.
 
         Here are a few question / answer examples of using the vector index:
