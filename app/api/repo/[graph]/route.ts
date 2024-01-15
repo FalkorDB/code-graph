@@ -1,11 +1,9 @@
-import { Graph, RedisClientType, createClient } from 'falkordb';
+import { Graph, createClient } from 'falkordb';
 import { NextRequest, NextResponse } from "next/server";
 import { graphSchema } from "../graph_ops";
 import OpenAI from "openai";
 import { ChatCompletionCreateParams, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionTool } from 'openai/resources/chat/completions.mjs';
 import { QUESTIONS } from '../questions';
-
-const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
 
 // convert a structured graph schema into a string representation
 // used in a model prompt
@@ -183,10 +181,6 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     if(!question) {
         return NextResponse.json({ message: 'Question not specified' }, { status: 400 })
     }
-
-    if (LIMITED_MODE && !QUESTIONS.includes(question)) {
-		return NextResponse.json({ message: 'Question not supported' }, { status: 401 })
-	}
 
     //-------------------------------------------------------------------------
     // Connect to graph

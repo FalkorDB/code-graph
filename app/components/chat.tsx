@@ -6,8 +6,6 @@ import { QUESTIONS } from "../api/repo/questions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from "next/image";
 
-const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase()==='limited';
-
 enum MessageTypes {
     Query,
     Response,
@@ -130,7 +128,7 @@ export function Chat(props: { repo: string }) {
             {props.repo &&
                 <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
                     <Select onValueChange={onQuestionSelected}>
-                        <SelectTrigger className="min-w-1/3">
+                        <SelectTrigger className="w-1/3">
                             <SelectValue placeholder="Suggested questions" />
                         </SelectTrigger>
                         <SelectContent>
@@ -141,9 +139,7 @@ export function Chat(props: { repo: string }) {
                             }
                         </SelectContent>
                     </Select>
-                    {
-                        !LIMITED_MODE && <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} />
-                    }
+                    <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} />
                     <Button>Send</Button>
                 </form>
             }
