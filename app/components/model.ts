@@ -6,7 +6,6 @@ export interface Category {
 export interface Node {
   id: string,
   name: string,
-  value: any,
   color: string,
 }
 
@@ -14,7 +13,6 @@ export interface Edge {
   source: number,
   target: number,
   label: string,
-  value: any,
 }
 
 const COLORS = [
@@ -67,10 +65,9 @@ export class Graph {
   }
 
   public extend(results: any): any[] {
-
     let newElements: any[] = []
     results.nodes.forEach((nodeData: any) => {
-      let label = nodeData.labels[0]
+      let label = nodeData.label;
       // check if category already exists in categories
       let category = this.categoriesMap.get(label)
       if (!category) {
@@ -84,11 +81,10 @@ export class Graph {
       if (node) {
         return 
       }
-      
+
       node = {
         id: nodeData.id.toString(),
-        name: nodeData.properties.name,
-        value: JSON.stringify(nodeData.properties),
+        name: nodeData.name,
         color: category.index<COLORS.length ? COLORS[category.index] : COLORS[0]
       }
       this.nodesMap.set(nodeData.id, node)
@@ -102,14 +98,13 @@ export class Graph {
         return
       }
 
-      let sourceId = edgeData.sourceId.toString();
-      let destinationId = edgeData.destinationId.toString()
+      let sourceId = edgeData.src.toString();
+      let destinationId = edgeData.dest.toString()
 
       edge = {
         source: sourceId, 
         target: destinationId, 
-        label: edgeData.relationshipType,
-        value: JSON.stringify(edgeData.properties),
+        label: edgeData.type,
       }
       this.edgesMap.set(edgeData.id, edge)
       this.elements.push({data:edge})
@@ -119,5 +114,3 @@ export class Graph {
     return newElements
   }
 }
-
-
