@@ -157,9 +157,12 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                         </SelectContent>
                     </Select>
                     {
-                        !LIMITED_MODE && <Input placeholder="Github repo URL" className="border" type="url" onChange={handleRepoInputChange} />
+                        !LIMITED_MODE &&
+                        <>
+                            <Input placeholder="Github repo URL" className="border" type="url" onChange={handleRepoInputChange} />
+                            <Button type="submit">Send</Button>
+                        </>
                     }
-                    <Button type="submit">Send</Button>
                 </form>
             </header>
             <main className="h-full w-full">
@@ -228,7 +231,6 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                                     <Skeleton className="h-4 w-[200px] bg-gray-600" />
                                 </div>
                             </div>
-
                         </div>
                     )
                 }
