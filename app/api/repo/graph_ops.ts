@@ -133,7 +133,6 @@ export async function create_function
     //-------------------------------------------------------------------------
 
     const openai    = new OpenAI();
-    console.log(`Creating embeddings for: ${src}`)
     const embedding = await openai.embeddings.create({model: "text-embedding-ada-002", input: src});
     const vector    = embedding.data[0].embedding;
 

@@ -222,7 +222,6 @@ async function processSecondPass
 async function BuildGraph
 	(
 		client: any,
-		commit_hash: string,
 		graphId: string,
 		graph: Graph,
 		repo_root: string
@@ -261,11 +260,10 @@ async function BuildGraph
 	// second pass calls.
 	await processSecondPass(source_files, graph);
 
-	// set graph expiry, expire in 24 hours
-	await client.expire(graphId, 86400);
-
 	// create schema graph
 	await GraphOps.graphCreateSchema(graph, graphId, client);
+
+	console.log("Done BuildGraph");
 }
 
 async function InitializeTreeSitter() {
@@ -293,8 +291,6 @@ async function InitializeTreeSitter() {
 }
 
 export async function POST(request: NextRequest) {
-
-
 	const body = await request.json();
 	const url = body.url;
 	if (!url) {
@@ -322,44 +318,37 @@ export async function POST(request: NextRequest) {
 	// Download Github Repo into a temporary folder
 	// Create temporary folder
 
-	const tmp_dir = os.tmpdir();
-
-
-	//--------------------------------------------------------------------------
-	// process repo
-	//--------------------------------------------------------------------------
-
-	let repo_root = path.join(tmp_dir, repo);
-
-	// check if repo was already cloned
-	try {
-		await fs.stat(repo_root)
-	} catch (error) {
-		//---------------------------------------------------------------------
-		// clone repo into temporary folder
-		//---------------------------------------------------------------------
-		try {
-			await git.clone({ fs, http, dir: repo_root, url, depth: 1 })
-			console.log("Cloned repo");
-		} catch (error) {
-			console.error(error);
-			return NextResponse.json({ message: 'Repository not found' }, { status: 404 })
-		}
-	}
-
-	// latest git commit
-	let commits = await git.log({ fs, gitdir: path.join(repo_root, '.git'), depth: 1, ref: 'HEAD' });
-	let commit_hash: string = commits[0].oid;
-
-	const graphId = `${organization}-${repo}-${commit_hash}`;
+	const graphId = `${organization}-${repo}`;
 	const graph = new Graph(client, graphId);
 
 	let graph_exists = await client.exists(graphId);
 	if (!graph_exists) {
-		await BuildGraph(client, commit_hash, graphId, graph, repo_root);
-	} else {
-		// reset graph expiry
-		await client.expire(graphId, 86400);
+		const tmp_dir = os.tmpdir();
+
+		//---------------------------------------------------------------------
+		// process repo
+		//---------------------------------------------------------------------
+
+		let repo_root = path.join(tmp_dir, repo);
+
+		// check if repo was already cloned
+		try {
+			await fs.stat(repo_root)
+			console.log("Found folder");
+		} catch (error) {
+			//---------------------------------------------------------------------
+			// clone repo into temporary folder
+			//---------------------------------------------------------------------
+			try {
+				await git.clone({ fs, http, dir: repo_root, url, depth: 1 })
+				console.log("Cloned repo");
+			} catch (error) {
+				console.error(error);
+				return NextResponse.json({ message: 'Repository not found' }, { status: 404 })
+			}
+		}
+
+		await BuildGraph(client, graphId, graph, repo_root);
 	}
 
 	let code_graph = await GraphOps.projectGraph(graph, 600);
