@@ -12,6 +12,7 @@ import { GraphContext } from "./provider";
 
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
+import { Skeleton } from "@/components/ui/skeleton";
 
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
 
@@ -162,54 +163,74 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                 </form>
             </header>
             <main className="h-full w-full">
-                <div className="flex flex-row" >
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(1.1)}><ZoomIn /></TooltipTrigger>
-                            <TooltipContent>
-                                <p>Zoom In</p>
-                            </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(0.9)}><ZoomOut /></TooltipTrigger>
-                            <TooltipContent>
-                                <p>Zoom Out</p>
-                            </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                            <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><CircleDot /></TooltipTrigger>
-                            <TooltipContent>
-                                <p>Center</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-                {graph.Id &&
-                    <CytoscapeComponent
-                        cy={(cy) => {
-                            chartRef.current = cy
+                {graph.Id ?
+                    (
+                        <>
+                            <div className="flex flex-row" >
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(1.1)}><ZoomIn /></TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Zoom In</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(0.9)}><ZoomOut /></TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Zoom Out</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><CircleDot /></TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Center</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
 
-                            // Make sure no previous listeners are attached
-                            cy.removeAllListeners();
+                            <CytoscapeComponent
+                                cy={(cy) => {
+                                    chartRef.current = cy
 
-                            // Listen to the click event on nodes for expanding the node
-                            cy.on('dbltap', 'node', async function (evt) {
-                                var node: Node = evt.target.json().data;
-                                let elements = await parmas.onFetchNode(node);
-                                //cy.add(elements).layout(LAYOUT).run()
+                                    // Make sure no previous listeners are attached
+                                    cy.removeAllListeners();
 
-                                // adjust entire graph.
-                                if (elements.length > 0) {
-                                    cy.add(elements);
-                                    cy.elements().layout(LAYOUT).run();
-                                }
-                            });
-                        }}
-                        stylesheet={STYLESHEET}
-                        elements={graph.Elements}
-                        layout={LAYOUT}
-                        className="w-full h-full"
-                    />
+                                    // Listen to the click event on nodes for expanding the node
+                                    cy.on('dbltap', 'node', async function (evt) {
+                                        var node: Node = evt.target.json().data;
+                                        let elements = await parmas.onFetchNode(node);
+                                        //cy.add(elements).layout(LAYOUT).run()
+
+                                        // adjust entire graph.
+                                        if (elements.length > 0) {
+                                            cy.add(elements);
+                                            cy.elements().layout(LAYOUT).run();
+                                        }
+                                    });
+                                }}
+                                stylesheet={STYLESHEET}
+                                elements={graph.Elements}
+                                layout={LAYOUT}
+                                className="w-full h-full"
+                            />
+                        </>
+                    ) :
+                    (
+                        <div className="flex flex-col items-center justify-center h-full space-y-4">
+                            <div className="text-gray-600 text-4xl ">
+                                Loading Repository Graph...
+                            </div>
+                            <div className="flex items-center justify-center space-x-4">
+                                <Skeleton className="h-12 w-12 rounded-full bg-gray-600" />
+                                <div className="space-y-2">
+                                    <Skeleton className="h-4 w-[250px] bg-gray-600" />
+                                    <Skeleton className="h-4 w-[200px] bg-gray-600" />
+                                </div>
+                            </div>
+
+                        </div>
+                    )
                 }
             </main>
         </>
