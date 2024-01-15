@@ -17,18 +17,12 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     const q_params = {nodeId: nodeId};
     const query    = `MATCH (src)-[e]-(n)
                       WHERE ID(src) = $nodeId
-                      RETURN collect(distinct n) as nodes, collect(e) as edges`;
-
-    console.log(`q_params.nodeId: ${q_params.nodeId}`);
+                      RETURN collect(distinct { label:labels(n)[0], id:ID(n), name: n.name } ) as nodes,
+                      collect( { src: ID(startNode(e)), id: ID(e), dest: ID(endNode(e)), type: type(e) } ) as edges`;
 
     let res: any = await graph.query(query, { params: q_params });
     let nodes = res.data[0]['nodes'];
     let edges = res.data[0]['edges'];
-
-    nodes.forEach((node: any) => {
-      delete node.properties?.src_code;
-      delete node.properties?.src_embeddings;
-    });
 
     return NextResponse.json({ id: graphId, nodes: nodes, edges: edges }, { status: 200 })
 }

@@ -222,14 +222,16 @@ export async function projectGraph
 	graph: Graph,
     max_entities: number
 ) {
-    let query = `MATCH (n)                 
+    let query = `MATCH (n)
                  OPTIONAL MATCH (n)-[e]->(z)
                  WITH n, e, z
                  LIMIT $limit
-                 WITH collect(n) as src,
-                      collect(z) as dest,
-                      collect(e) as edges
-                 RETURN src + dest as nodes, edges`
+                 WITH collect( { label:labels(n)[0], id:ID(n), name: n.name } ) as src,
+                      collect( { label:labels(z)[0], id:ID(z), name: z.name } ) as dest,
+                      collect( { src: ID(startNode(e)), id: ID(e), dest: ID(endNode(e)), type: type(e) } ) as edges
+                 WITH src + dest as nodes, edges
+                 RETURN [ node in nodes WHERE node.id is not null] AS nodes, [ edge in edges WHERE edge.id is not null] as edges
+                 `
 
     let params = { limit: max_entities };
     let result: any = await graph.query(query, { params: params });
