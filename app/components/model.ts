@@ -94,6 +94,7 @@ export class Graph {
         color: getCategoryColors(category.index),
         name: nodeData.name,
       }
+      
       this.nodesMap.set(nodeData.id, node)
       this.elements.push({data:node})
       newElements.push({data:node})

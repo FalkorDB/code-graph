@@ -7,11 +7,21 @@ module.exports = {
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
   ],
+<<<<<<< HEAD
   safelist: [
     {
       pattern: /^bg-/,
     },
   ],
+=======
+  purge: {
+    safelist: [
+      {
+        pattern: /^bg-/,
+      },
+    ]
+  },
+>>>>>>> eed1027 (rebase)
   prefix: "",
   theme: {
     container: {

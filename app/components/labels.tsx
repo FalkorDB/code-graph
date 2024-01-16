@@ -16,7 +16,11 @@ export function Labels(params: { categories: Category[], className?: string, onC
                     return (
                         <Tooltip key={category.index}>
                             <TooltipTrigger
+<<<<<<< HEAD
                                 className={cn(`bg-${getCategoryColors(category.index)}-${category.show ? 500 : 200}`, "rounded-lg border border-gray-300 p-2")}
+=======
+                                className={`bg-${getCategoryColors(category.index)}-${category.show ? 500 : 200} rounded-lg border border-gray-300 p-2`}
+>>>>>>> eed1027 (rebase)
                                 onClick={() => {
                                     params.onClick(category)
                                     setReload(!reload)
