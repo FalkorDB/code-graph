@@ -7,6 +7,11 @@ module.exports = {
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
   ],
+  safelist: [
+    {
+      pattern: /^bg-/,
+    },
+  ],
   prefix: "",
   theme: {
     container: {
