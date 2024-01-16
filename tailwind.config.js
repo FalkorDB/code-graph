@@ -7,6 +7,13 @@ module.exports = {
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
   ],
+  purge: {
+    safelist: [
+      {
+        pattern: /^bg-/,
+      },
+    ]
+  },
   prefix: "",
   theme: {
     container: {

@@ -1,6 +1,7 @@
 export interface Category {
   name: string,
   index: number
+  show: boolean,
 }
 
 export interface Node {
@@ -11,17 +12,23 @@ export interface Node {
 }
 
 export interface Edge {
-  source: number,
-  target: number,
+  source: string,
+  target: string,
   label: string,
   value: any,
 }
 
 const COLORS = [
-  "#FF6D60", // Red
-  "#F7D060", // Yellow
-  "#98D8AA", // Green
+  "red",
+  "yellow",
+  "green",
+  "blue",
+  "purple",
 ]
+
+export function getCategoryColors(index: number): string {
+  return index < COLORS.length ? COLORS[index] : COLORS[0]
+}
 
 export class Graph {
 
@@ -74,7 +81,7 @@ export class Graph {
       // check if category already exists in categories
       let category = this.categoriesMap.get(label)
       if (!category) {
-        category = { name: label, index: this.categoriesMap.size }
+        category = { name: label, index: this.categoriesMap.size, show: true }
         this.categoriesMap.set(label, category)
         this.categories.push(category)
       }
@@ -89,7 +96,7 @@ export class Graph {
         id: nodeData.id.toString(),
         name: nodeData.properties.name,
         value: JSON.stringify(nodeData.properties),
-        color: category.index<COLORS.length ? COLORS[category.index] : COLORS[0]
+        color: getCategoryColors(category.index)
       }
       this.nodesMap.set(nodeData.id, node)
       this.elements.push({data:node})

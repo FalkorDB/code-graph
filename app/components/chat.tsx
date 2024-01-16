@@ -140,7 +140,7 @@ export function Chat(props: { repo: string }) {
                         </SelectContent>
                     </Select>
                     <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} />
-                    <Button>Send</Button>
+                    <Button type="submit">Send</Button>
                 </form>
             }
             </footer>

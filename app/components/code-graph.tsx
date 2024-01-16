@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
 import { useContext, useEffect, useRef, useState } from "react";
-import { Node } from "./model";
+import { Category, Node, getCategoryColors } from "./model";
 import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CircleDot, ZoomIn, ZoomOut } from "lucide-react";
@@ -13,6 +13,8 @@ import { GraphContext } from "./provider";
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import { Skeleton } from "@/components/ui/skeleton";
+import { Labels } from "./labels";
+import { Toolbar } from "./toolbar";
 
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
 
@@ -140,6 +142,23 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
         onRepoSelected(defaultRepo)
     }, []);
 
+    function onCategoryClick(category: Category) {
+        let chart = chartRef.current
+        if (chart) {
+            let color = getCategoryColors(category.index)
+            let elements = chart.elements(`[color = "${color}"]`)
+
+            category.show = !category.show
+
+            if (category.show) {
+                elements.style({ display: 'element' })
+            } else {
+                elements.style({ display: 'none' })
+            }
+            chart.elements().layout(LAYOUT).run();
+        }
+    }
+
     return (
         <>
             <header className="border p-4">
@@ -169,29 +188,10 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                 {graph.Id ?
                     (
                         <>
-                            <div className="flex flex-row" >
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(1.1)}><ZoomIn /></TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Zoom In</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(0.9)}><ZoomOut /></TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Zoom Out</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}><CircleDot /></TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Center</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                            <div className="grid grid-cols-6 gap-4">
+                                <Toolbar className="col-start-1" chartRef={chartRef} />
+                                <Labels className="col-start-3 col-end-4" categories={graph.Categories} onClick={onCategoryClick}/>
                             </div>
-
                             <CytoscapeComponent
                                 cy={(cy) => {
                                     chartRef.current = cy
