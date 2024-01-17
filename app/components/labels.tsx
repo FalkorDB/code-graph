@@ -1,6 +1,6 @@
 import { Category, getCategoryColorName} from "./model";
 import { cn } from "@/lib/utils";
-import { MinusCircle, PlusCircle } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -21,7 +21,7 @@ export function Labels(params: { categories: Category[], className?: string, onC
                                 setReload(!reload)
                             }}
                         >
-                            {category.show ? <MinusCircle /> : <PlusCircle />}
+                            {category.show ? <Minus /> : <Plus />}
                         </Button>
                         <p>{category.name}</p>
                     </div>
