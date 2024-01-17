@@ -2,12 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
 import { useContext, useEffect, useRef, useState } from "react";
-import { Category, Node, getCategoryColors } from "./model";
+import { Category, Node } from "./model";
 import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CircleDot, ZoomIn, ZoomOut } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Chat } from "./chat";
 import { GraphContext } from "./provider";
 
 import cytoscape from 'cytoscape';
