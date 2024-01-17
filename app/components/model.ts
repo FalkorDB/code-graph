@@ -1,3 +1,5 @@
+import twcolors from 'tailwindcss/colors'
+
 export interface Category {
   name: string,
   index: number,
@@ -7,6 +9,7 @@ export interface Category {
 export interface Node {
   id: string,
   name: string,
+  category: string,
   color: string,
 }
 
@@ -16,16 +19,33 @@ export interface Edge {
   label: string,
 }
 
-const COLORS = [
-  "red",
+const COLORS_ORDER = [
+  "rose",
   "yellow",
-  "green",
+  "teal",
+  "fuchsia",
   "blue",
-  "purple",
+  "violet",
+  "slate",
+  "cyan",
+  "orange",
+  "red",
+  "green",
+  "pink",
 ]
 
-export function getCategoryColors(index: number): string {
-  return index < COLORS.length ? COLORS[index] : COLORS[0]
+export function getCategoryColorName(index: number): string {
+  index = index<COLORS_ORDER.length ? index : 0
+  return COLORS_ORDER[index]
+}
+
+function getCategoryColorValue(index: number): string {
+  index = index<COLORS_ORDER.length ? index : 0
+  let colorName = COLORS_ORDER[index]
+
+  let colors = twcolors as any
+  let color = colors[colorName]
+  return color["500"]
 }
 
 export class Graph {
@@ -60,7 +80,7 @@ export class Graph {
     return this.elements;
   }
 
-  public static empty(): Graph{
+  public static empty(): Graph {
     return new Graph("", [], [], new Map<String, Category>(), new Map<number, Node>(), new Map<number, Edge>())
   }
 
@@ -86,22 +106,23 @@ export class Graph {
       // check if node already exists in nodes
       let node = this.nodesMap.get(nodeData.id)
       if (node) {
-        return 
+        return
       }
 
       node = {
         id: nodeData.id.toString(),
         name: nodeData.name,
-        color: getCategoryColors(category.index)
+        color: getCategoryColorValue(category.index),
+        category: category.name,
       }
       this.nodesMap.set(nodeData.id, node)
-      this.elements.push({data:node})
-      newElements.push({data:node})
+      this.elements.push({ data: node })
+      newElements.push({ data: node })
     })
 
     results.edges.forEach((edgeData: any) => {
       let edge = this.edgesMap.get(edgeData.id)
-      if(edge){
+      if (edge) {
         return
       }
 
@@ -109,13 +130,13 @@ export class Graph {
       let destinationId = edgeData.dest.toString()
 
       edge = {
-        source: sourceId, 
-        target: destinationId, 
+        source: sourceId,
+        target: destinationId,
         label: edgeData.type,
       }
       this.edgesMap.set(edgeData.id, edge)
-      this.elements.push({data:edge})
-      newElements.push({data:edge})
+      this.elements.push({ data: edge })
+      newElements.push({ data: edge })
     })
 
     return newElements

@@ -145,9 +145,7 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
     function onCategoryClick(category: Category) {
         let chart = chartRef.current
         if (chart) {
-            let color = getCategoryColors(category.index)
-            let elements = chart.elements(`[color = "${color}"]`)
-
+            let elements = chart.elements(`node[category = "${category.name}"]`)
             category.show = !category.show
 
             if (category.show) {
@@ -188,7 +186,7 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                 {graph.Id ?
                     (
                         <>
-                            <div className="grid grid-cols-6 gap-4">
+                            <div className="grid grid-cols-6 gap-4 p-2">
                                 <Toolbar className="col-start-1" chartRef={chartRef} />
                                 <Labels className="col-start-3 col-end-4" categories={graph.Categories} onClick={onCategoryClick}/>
                             </div>

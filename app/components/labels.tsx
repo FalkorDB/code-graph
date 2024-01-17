@@ -1,8 +1,8 @@
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Category, getCategoryColors } from "./model";
+import { Category, getCategoryColorName} from "./model";
 import { cn } from "@/lib/utils";
-import { MinusCircle, Palette, PlusCircle } from "lucide-react";
+import { MinusCircle, PlusCircle } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export function Labels(params: { categories: Category[], className?: string, onClick: (category: Category) => void }) {
 
@@ -10,27 +10,23 @@ export function Labels(params: { categories: Category[], className?: string, onC
     const [reload, setReload] = useState(false)
 
     return (
-        <div className={cn("flex flex-row", params.className)} >
-            <TooltipProvider>
-                {params.categories.map((category) => {
-                    return (
-                        <Tooltip key={category.index}>
-                            <TooltipTrigger
-                                className={cn(`bg-${getCategoryColors(category.index)}-${category.show ? 500 : 200}`, "rounded-lg border border-gray-300 p-2")}
-                                onClick={() => {
-                                    params.onClick(category)
-                                    setReload(!reload)
-                                }}
-                            >
-                                { category.show ? <MinusCircle /> : <PlusCircle /> }
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{category.name}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    )
-                })}
-            </TooltipProvider>
+        <div className={cn("flex flex-row gap-x-2", params.className)} >
+            {params.categories.map((category) => {
+                return (
+                    <div className="flex flex-row gap-x-2 items-center" key={category.index}>
+                        <Button
+                            className={cn(`bg-${getCategoryColorName(category.index)}-500 ${category.show ? "" : "opacity-50"}`, "rounded-lg border border-gray-300 p-2 opac")}
+                            onClick={() => {
+                                params.onClick(category)
+                                setReload(!reload)
+                            }}
+                        >
+                            {category.show ? <MinusCircle /> : <PlusCircle />}
+                        </Button>
+                        <p>{category.name}</p>
+                    </div>
+                )
+            })}
         </div>
     )
 }

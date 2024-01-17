@@ -22,7 +22,7 @@ export function Toolbar(params: {
     }
 
     return (
-        <div className={cn("flex flex-row", params.className)}>
+        <div className={cn("flex flex-row gap-x-2", params.className)}>
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger className="text-gray-600 rounded-lg border border-gray-300 p-2" onClick={() => handleZoomClick(1.1)}>
