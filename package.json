@@ -21,7 +21,7 @@
     "isomorphic-git": "^1.25.2",
     "lucide-react": "^0.309.0",
     "next": "14.0.4",
-    "openai": "^4.24.1",
+    "openai": "^4.25.0",
     "react": "^18",
     "react-cytoscapejs": "^2.0.0",
     "react-dom": "^18",
