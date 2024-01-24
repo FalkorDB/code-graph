@@ -113,21 +113,6 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
         parmas.onFetchGraph(url);
     }
 
-    function handleZoomClick(changefactor: number) {
-        let chart = chartRef.current
-        if (chart) {
-            chart.zoom(chart.zoom() * changefactor)
-        }
-    }
-
-    function handleCenterClick() {
-        let chart = chartRef.current
-        if (chart) {
-            chart.fit()
-            chart.center()
-        }
-    }
-
     function onRepoSelected(value: string): void {
         setURL(value)
         parmas.onFetchGraph(value)

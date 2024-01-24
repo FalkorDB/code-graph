@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { XCircle, ZoomIn, ZoomOut } from "lucide-react";
+import { CircleDot, XCircle, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils"
 
 export function Toolbar(params: {
@@ -42,7 +42,7 @@ export function Toolbar(params: {
                 </Tooltip>
                 <Tooltip>
                     <TooltipTrigger className="text-gray-600 dark:text-gray-400 rounded-lg border border-gray-300 p-2" onClick={handleCenterClick}>
-                        <XCircle />
+                        <CircleDot />
                     </TooltipTrigger>
                     <TooltipContent>
                         <p>Center</p>
