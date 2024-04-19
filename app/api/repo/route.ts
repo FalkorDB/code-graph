@@ -7,7 +7,7 @@ import Parser from 'web-tree-sitter';
 import { promises as fs } from 'fs';
 import { Language, SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
-import { FalkorDB } from 'falkordb';
+import { FalkorDB, Graph } from 'falkordb';
 import { RESPOSITORIES } from './repositories';
 
 const GraphOps = require('./graph_ops');
