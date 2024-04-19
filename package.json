@@ -28,7 +28,7 @@
     "react-resizable-panels": "^2.0.9",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
-    "web-tree-sitter": "^0.20.8"
+    "web-tree-sitter": "^0.22.5"
   },
   "devDependencies": {
     "@types/cytoscape-fcose": "^2.2.4",
