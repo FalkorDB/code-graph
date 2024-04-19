@@ -1,19 +1,19 @@
-import { Graph, createClient } from 'falkordb';
-import { NextRequest, NextResponse } from "next/server";
-import { graphSchema } from "../graph_ops";
 import OpenAI from "openai";
-import { ChatCompletionCreateParams, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionTool } from 'openai/resources/chat/completions.mjs';
 import { QUESTIONS } from '../questions';
+import { graphSchema } from "../graph_ops";
+import { FalkorDB, Graph } from 'falkordb';
+import { NextRequest, NextResponse } from "next/server";
+import { ChatCompletionCreateParams, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionTool } from 'openai/resources/chat/completions.mjs';
 
 // convert a structured graph schema into a string representation
 // used in a model prompt
 async function GraphSchemaToPrompt(
     graph: Graph,
     graphId: string,
-    client: any
+    db: FalkorDB
 ) {
     // Retrieve graph schema
-    let schema: any = await graphSchema(graphId, client);
+    let schema: any = await graphSchema(graphId, db);
 
     // Build a string description of graph schema
     let desc: string = "The knowladge graph schema is as follows:\n";
@@ -187,18 +187,16 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     //-------------------------------------------------------------------------
 
     // hard coded graph id
-    const client = createClient({
-        url: process.env.FALKORDB_URL || 'redis://localhost:6379',
+    const db = await FalkorDB.connect({
+        url: process.env.FALKORDB_URL || 'falkor://localhost:6379',
     });
-    await client.connect();
-
-    const graph = new Graph(client, graph_id);
+    const graph = db.selectGraph(graph_id);
 
     //-------------------------------------------------------------------------
     // Construct prompt
     //-------------------------------------------------------------------------
 
-    let graph_schema = await GraphSchemaToPrompt(graph, graph_id, client);
+    let graph_schema = await GraphSchemaToPrompt(graph, graph_id, db);
 
     let prompt: string = `You're a Cypher expert, with access to the following graph:
     ${graph_schema}

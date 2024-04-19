@@ -7,7 +7,7 @@ import Parser from 'web-tree-sitter';
 import { promises as fs } from 'fs';
 import { Language, SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
-import { Graph, RedisClientType, RedisDefaultModules, createClient } from 'falkordb';
+import { FalkorDB } from 'falkordb';
 import { RESPOSITORIES } from './repositories';
 
 const GraphOps = require('./graph_ops');
@@ -221,7 +221,7 @@ async function processSecondPass
 
 async function BuildGraph
 	(
-		client: any,
+		db: FalkorDB,
 		graphId: string,
 		graph: Graph,
 		repo_root: string
@@ -261,7 +261,7 @@ async function BuildGraph
 	await processSecondPass(source_files, graph);
 
 	// create schema graph
-	await GraphOps.graphCreateSchema(graph, graphId, client);
+	await GraphOps.graphCreateSchema(graph, graphId, db);
 
 	console.log("Done BuildGraph");
 }
@@ -310,18 +310,21 @@ export async function POST(request: NextRequest) {
 	//-------------------------------------------------------------------------
 	// Connect to FalkorDB
 	//-------------------------------------------------------------------------
-	const client = createClient({
-		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
-	});
-	await client.connect();
+
+	const db = await FalkorDB.connect(
+		{
+			url: process.env.FALKORDB_URL || "falkor://localhost:6379"
+		}
+	);
 
 	// Download Github Repo into a temporary folder
 	// Create temporary folder
 
 	const graphId = `${organization}-${repo}`;
-	const graph = new Graph(client, graphId);
+	const graph = db.selectGraph(graphId);
 
-	let graph_exists = await client.exists(graphId);
+	const graphs = await db.list();
+	let graph_exists = graphs.includes(graphId);
 	if (!graph_exists) {
 		const tmp_dir = os.tmpdir();
 
@@ -348,7 +351,7 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
-		await BuildGraph(client, graphId, graph, repo_root);
+		await BuildGraph(db, graphId, graph, repo_root);
 	}
 
 	let code_graph = await GraphOps.projectGraph(graph, 600);

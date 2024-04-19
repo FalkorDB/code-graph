@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { Graph } from 'falkordb';
+import { FalkorDB, Graph } from 'falkordb';
 
 //-----------------------------------------------------------------------------
 // Graph operations
@@ -243,7 +243,7 @@ export async function graphCreateSchema
 (
     graph: Graph,
     graphId: string,
-    client: any
+    db: FalkorDB
 ) {
     // graph schema is an additional graph key sharing the same
     // key name as the graph it describes with the addition of '-schema'
@@ -251,12 +251,13 @@ export async function graphCreateSchema
     const schema_graph_id = graphId + '-schema';
 
     // return if schema already exists
-    if(await client.exists(schema_graph_id)) {
+    const graphs = await db.list();
+    if(graphs.includes(schema_graph_id)) {
         console.log(`${schema_graph_id} already exists`);
         return;
     }
 
-    const schema_graph = new Graph(client, schema_graph_id);
+    const schema_graph = db.selectGraph(schema_graph_id);
 
     //-------------------------------------------------------------------------
     // collect labels and the attributes associated with them
@@ -471,16 +472,16 @@ export async function graphCreateSchema
 export async function graphSchema
 (
     graphId: string,
-    client: any
+    db: FalkorDB
 ) {
     const schemaGraphId = graphId + '-schema';
-
-    if(!await client.exists(schemaGraphId)) {
+    const graphs = await db.list();
+    if(!graphs.includes(schemaGraphId)) {
         console.log(`${schemaGraphId} is missing!`);
         return null;
     }
 
-    const schemaGraph = new Graph(client, schemaGraphId);
+    const schemaGraph = db.selectGraph(schemaGraphId);
 
     // graph schema
     let schema: {

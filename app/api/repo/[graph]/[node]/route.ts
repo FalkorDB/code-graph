@@ -1,4 +1,4 @@
-import { Graph, createClient } from "falkordb";
+import { FalkorDB, Graph } from "falkordb";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, { params }: { params: { graph: string, node: string } }) {
@@ -6,12 +6,8 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     const nodeId  = parseInt(params.node);
     const graphId = params.graph;
 
-    const client = createClient({
-		url: process.env.FALKORDB_URL || 'redis://localhost:6379',
-	});
-	await client.connect();
-
-    const graph = new Graph(client, graphId);
+    const db = await FalkorDB.connect({url: process.env.FALKORDB_URL || 'falkor://localhost:6379',});
+    const graph = db.selectGraph(graphId);
 
     // Get node's neighbors    
     const q_params = {nodeId: nodeId};

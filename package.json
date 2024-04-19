@@ -17,7 +17,7 @@
     "clsx": "^2.1.0",
     "cytoscape": "^3.28.1",
     "cytoscape-fcose": "^2.2.0",
-    "falkordb": "^5.0.1",
+    "falkordb": "^6.0.2",
     "isomorphic-git": "^1.25.2",
     "lucide-react": "^0.331.0",
     "next": "14.1.0",
