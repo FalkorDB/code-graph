@@ -19,6 +19,7 @@ npm install
 ```
 
 Set your OpenAI key
+
 ```
 export OPENAI_API_KEY=YOUR_OPENAI_API_KEY
 ```
