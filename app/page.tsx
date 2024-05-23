@@ -91,7 +91,7 @@ export default function Home() {
           </GraphContext.Provider>
         </Panel>
         <PanelResizeHandle className="w-1 bg-gray-500" />
-        <Panel className="flex flex-col border" defaultSize={25} collapsible={true} minSize={10}>
+        <Panel className="flex flex-col border" defaultSize={35} collapsible={true} minSize={10}>
           <Chat repo={graph.Id} />
         </Panel>
       </PanelGroup>
