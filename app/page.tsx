@@ -69,7 +69,7 @@ export default function Home() {
   }
 
   return (
-    <main className="h-screen flex flex-col">
+    <main className="h-screen w-screen flex flex-col">
       <header className="flex items-center justify-between p-4 border">
         <Link href="https://www.falkordb.com" target='_blank'>
           <HomeIcon className="h-6 w-6" />
@@ -84,14 +84,14 @@ export default function Home() {
         </nav>
       </header>
 
-      <PanelGroup direction="horizontal" className="w-full h-full">
-        <Panel defaultSize={75} className="flex flex-col border" collapsible={true} minSize={30}>
+      <PanelGroup direction="horizontal" className="grow">
+        <Panel defaultSize={75} className="border" minSize={30}>
           <GraphContext.Provider value={graph}>
             <CodeGraph onFetchGraph={onFetchGraph} onFetchNode={onFetchNode} />
           </GraphContext.Provider>
         </Panel>
         <PanelResizeHandle className="w-1 bg-gray-500" />
-        <Panel className="flex flex-col border" defaultSize={35} collapsible={true} minSize={10}>
+        <Panel className="border" defaultSize={35} collapsible minSize={20}>
           <Chat repo={graph.Id} />
         </Panel>
       </PanelGroup>

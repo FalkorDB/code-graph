@@ -19,19 +19,20 @@ interface Message {
 
 export function Chat(props: { repo: string }) {
 
-    // Holds the messages in the chat
+    // Holds the messages in the graph chat
     const [graphMessages, setGraphMessages] = useState<Message[]>([]);
 
-    // Holds the messages in the chat
-    const [vendorMessages, setVendorMessages] = useState<Message[]>([]);
+    // Holds the messages in the vendor chat
+    const [vectorMessages, setVendorMessages] = useState<Message[]>([]);
 
     // Holds the user input while typing
     const [query, setQuery] = useState('');
 
-    // A reference to the chat container to allow scrolling to the bottom
+    // A reference to the graph chat container to allow scrolling to the bottom
     const graphBottomRef: React.RefObject<HTMLDivElement> = useRef(null);
-    
-    const vendorBottomRef: React.RefObject<HTMLDivElement> = useRef(null);
+
+    // A reference to the vendor chat container to allow scrolling to the bottom
+    const vectorBottomRef: React.RefObject<HTMLDivElement> = useRef(null);
 
     // A function that handles the change event of the url input box
     async function handleQueryInputChange(event: any) {
@@ -134,65 +135,83 @@ export function Chat(props: { repo: string }) {
     // Scroll to the bottom of the chat on new message
     useEffect(() => {
         graphBottomRef.current?.scrollTo(0, graphBottomRef.current?.scrollHeight);
-        vendorBottomRef.current?.scrollTo(0, vendorBottomRef.current?.scrollHeight);
-    }, [graphMessages, vendorBottomRef]);
+        vectorBottomRef.current?.scrollTo(0, vectorBottomRef.current?.scrollHeight);
+    }, [graphMessages, vectorMessages]);
 
     return (
-        <>
-            <main className="h-full flex flex-row">
-                <div ref={graphBottomRef} className="h-fit flex-1 p-4 space-y-4 overflow-auto">
-                    {
-                        graphMessages.map((message, index) => {
-                            if (message.type === MessageTypes.Query) {
-                                return (<div key={index} className="flex items-end gap-2 justify-end">
-                                    <div className="rounded-lg bg-blue-500 text-white p-2">
-                                        <p className="text-sm">{message.text}</p>
-                                    </div>
-                                </div>)
-                            } else if (message.type === MessageTypes.Response) {
-                                return (<div key={index} className="flex items-end gap-2">
-                                    <div className="rounded-lg bg-zinc-200 p-2">
-                                        <p className="text-sm">{message.text}</p>
-                                    </div>
-                                </div>)
-                            } else {
-                                return (<div key={index} className="flex items-end gap-2">
-                                    <div>
-                                        <Image src="/dots.gif" width={100} height={10} alt="Waiting for response" />
-                                    </div>
-                                </div>)
-                            }
-                        })
-                    }
+        <div className="h-full flex flex-col">
+            <main className="flex-1 flex flex-row overflow-auto">
+                <div className="flex-1 flex flex-col">
+                    <span className="text-center p-4 border-b border-gray-200">FalkorDB</span>
+                    <div ref={graphBottomRef} className="flex-1 flex flex-col p-4 gap-4 overflow-auto">
+                        {
+                            graphMessages.map((message, index) => {
+                                if (message.type === MessageTypes.Query) {
+                                    return (
+                                        <div key={index} className="flex items-end gap-2 justify-end">
+                                            <div className="rounded-lg bg-blue-500 text-white p-2">
+                                                <p className="text-sm">{message.text}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                } else if (message.type === MessageTypes.Response) {
+                                    return (
+                                        <div key={index} className="flex items-end gap-2">
+                                            <div className="rounded-lg bg-zinc-200 p-2">
+                                                <p className="text-sm">{message.text}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                } else {
+                                    return (
+                                        <div key={index} className="flex items-end gap-2">
+                                            <div>
+                                                <Image src="/dots.gif" width={100} height={10} alt="Waiting for response" />
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                            })
+                        }
+                    </div>
                 </div>
                 <div className="w-0.5 bg-gray-200" />
-                <div ref={vendorBottomRef} className="h-fit flex-1 p-4 space-y-4 overflow-auto">
-                    {
-                        vendorMessages.map((message, index) => {
-                            if (message.type === MessageTypes.Query) {
-                                return (<div key={index} className="flex items-end gap-2 justify-end">
-                                    <div className="rounded-lg bg-blue-500 text-white p-2">
-                                        <p className="text-sm">{message.text}</p>
-                                    </div>
-                                </div>)
-                            } else if (message.type === MessageTypes.Response) {
-                                return (<div key={index} className="flex items-end gap-2">
-                                    <div className="rounded-lg bg-zinc-200 p-2">
-                                        <p className="text-sm">{message.text}</p>
-                                    </div>
-                                </div>)
-                            } else {
-                                return (<div key={index} className="flex items-end gap-2">
-                                    <div>
-                                        <Image src="/dots.gif" width={100} height={10} alt="Waiting for response" />
-                                    </div>
-                                </div>)
-                            }
-                        })
-                    }
+                <div className="flex-1 flex flex-col">
+                    <span className="text-center p-4 border-b border-gray-200">Vector</span>
+                    <div ref={vectorBottomRef} className="flex-1 flex flex-col p-4 gap-4 overflow-auto">
+                        {
+                            vectorMessages.map((message, index) => {
+                                if (message.type === MessageTypes.Query) {
+                                    return (
+                                        <div key={index} className="flex items-end gap-2 justify-end">
+                                            <div className="rounded-lg bg-blue-500 text-white p-2">
+                                                <p className="text-sm">{message.text}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                } else if (message.type === MessageTypes.Response) {
+                                    return (
+                                        <div key={index} className="flex items-end gap-2">
+                                            <div className="rounded-lg bg-zinc-200 p-2">
+                                                <p className="text-sm">{message.text}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                } else {
+                                    return (
+                                        <div key={index} className="flex items-end gap-2">
+                                            <div>
+                                                <Image src="/dots.gif" width={100} height={10} alt="Waiting for response" />
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                            })
+                        }
+                    </div>
                 </div>
             </main>
-            <footer className="border p-4">
+            <footer className="h-[7%] border p-4">
                 {props.repo &&
                     <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
                         <Select onValueChange={onQuestionSelected}>
@@ -212,6 +231,6 @@ export function Chat(props: { repo: string }) {
                     </form>
                 }
             </footer>
-        </>
+        </div>
     );
 }
