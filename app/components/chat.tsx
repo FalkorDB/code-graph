@@ -25,6 +25,9 @@ export function Chat(props: { repo: string }) {
     // Holds the user input while typing
     const [query, setQuery] = useState('');
 
+    // Holds whether the input is empty 'ARI
+    const [isInputEmpty, setIsInputEmpty] = useState(true);
+
     // A reference to the chat container to allow scrolling to the bottom
     const bottomRef: React.RefObject<HTMLDivElement> = useRef(null);
 
@@ -38,12 +41,21 @@ export function Chat(props: { repo: string }) {
         // Get the new value of the input box
         const value = event.target.value;
 
+        // Update the input empty state 
+        setIsInputEmpty(value.trim() === '');
+        
         // Update the url state
         setQuery(value);
     }
 
     // Send the user query to the server
     async function sendQuery(q: string) {
+
+        if (!q.trim()) {
+            toast({ variant: "destructive", title: "Empty Query", description: "Please enter a query." });
+            return;
+        }
+        
         setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
 
         return fetch(`/api/repo/${props.repo}?q=${encodeURIComponent(q)}&type=text`, {
@@ -89,6 +101,7 @@ export function Chat(props: { repo: string }) {
     // On question selected from the predefined questions list
     async function onQuestionSelected(value: string) {
         setQuery(value)
+        setIsInputEmpty(false); // input is not empty if a question is selected 
         return sendQuery(value)
     }
 
@@ -140,7 +153,7 @@ export function Chat(props: { repo: string }) {
                         </SelectContent>
                     </Select>
                     <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} />
-                    <Button>Send</Button>
+                    <Button disabled={isInputEmpty}>Send</Button>
                 </form>
             }
             </footer>
