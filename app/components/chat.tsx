@@ -44,6 +44,16 @@ export function Chat(props: { repo: string }) {
 
     // Send the user query to the server
     async function sendQuery(q: string) {
+        if (!q) {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: "Please enter a question.",
+            })
+            setQuery("")
+            return
+        }
+
         setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
 
         return fetch(`/api/repo/${props.repo}?q=${encodeURIComponent(q)}&type=text`, {
@@ -57,16 +67,16 @@ export function Chat(props: { repo: string }) {
             return result.json()
         }).then(data => {
             // Create an array of messages from the current messages remove the last pending message and add the new response
-            setMessages(function(messages) {
-                if(messages[messages.length - 1].type === MessageTypes.Pending){
+            setMessages(function (messages) {
+                if (messages[messages.length - 1].type === MessageTypes.Pending) {
                     // Remove the last pending message if exists
-                    messages = messages.slice(0, -1); 
-                } 
+                    messages = messages.slice(0, -1);
+                }
                 return [...messages, { text: data.result, type: MessageTypes.Response }];
             });
         }).catch((error) => {
-            setMessages(function(messages) {
-                if(messages[messages.length - 1].type === MessageTypes.Pending){
+            setMessages(function (messages) {
+                if (messages[messages.length - 1].type === MessageTypes.Pending) {
                     // Remove the last pending message if exists
                     return messages.slice(0, -1);
                 }
@@ -83,7 +93,7 @@ export function Chat(props: { repo: string }) {
     // A function that handles the click event
     async function handleQueryClick(event: any) {
         event.preventDefault();
-        return sendQuery(query);
+        return sendQuery(query.trim());
     }
 
     // On question selected from the predefined questions list
@@ -117,7 +127,7 @@ export function Chat(props: { repo: string }) {
                         } else {
                             return (<div key={index} className="flex items-end gap-2">
                                 <div>
-                                    <Image src="/dots.gif" width={100} height={10} alt="Waiting for response"/>
+                                    <Image src="/dots.gif" width={100} height={10} alt="Waiting for response" />
                                 </div>
                             </div>)
                         }
@@ -125,24 +135,24 @@ export function Chat(props: { repo: string }) {
                 }
             </main>
             <footer className="border p-4">
-            {props.repo &&
-                <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
-                    <Select onValueChange={onQuestionSelected}>
-                        <SelectTrigger className="w-1/3">
-                            <SelectValue placeholder="Suggested questions" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {
-                                QUESTIONS.map((question, index) => {
-                                    return <SelectItem key={index} value={question}>{question}</SelectItem>
-                                })
-                            }
-                        </SelectContent>
-                    </Select>
-                    <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} />
-                    <Button>Send</Button>
-                </form>
-            }
+                {props.repo &&
+                    <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
+                        <Select onValueChange={onQuestionSelected}>
+                            <SelectTrigger className="w-1/3">
+                                <SelectValue placeholder="Suggested questions" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {
+                                    QUESTIONS.map((question, index) => {
+                                        return <SelectItem key={index} value={question}>{question}</SelectItem>
+                                    })
+                                }
+                            </SelectContent>
+                        </Select>
+                        <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} value={query}/>
+                        <Button>Send</Button>
+                    </form>
+                }
             </footer>
         </>
     );
