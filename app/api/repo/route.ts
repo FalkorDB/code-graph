@@ -9,6 +9,7 @@ import { Language, SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { FalkorDB, Graph } from 'falkordb';
 import { RESPOSITORIES } from './repositories';
+import { Python } from '@/lib/languages/python';
 
 const GraphOps = require('./graph_ops');
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
@@ -16,30 +17,8 @@ const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
 //-----------------------------------------------------------------------------
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
-
 let parser: Parser;
-let Python: Language;
-
-// class definition tree-sitter query
-// responsible for matching class definition, in addition to extracting the class name
-let class_definition_query: Parser.Query;
-
-// function definition tree-sitter query
-// responsible for matching function definition, in addition to extracting the function name
-let function_definition_query: Parser.Query;
-
-// function call tree-sitter query
-// responsible for matching function calls, in addition to extracting the callee function name
-let function_call_query: Parser.Query;
-
-// function call tree-sitter query
-// responsible for matching function calls of type self.f()
-// in addition to extracting the callee function name
-let function_attr_call_query: Parser.Query;
-
-// identifier tree-sitter query
-// responsible for matching Identifier nodes
-let identifier_query: Parser.Query;
+let language: Python = new Python();
 
 // Process Class declaration
 async function processClassDeclaration
@@ -84,7 +63,7 @@ async function processFunctionDeclaration
 		const file_components = source_file.split("/");
 		parent = file_components[file_components.length - 1];
 	} else {
-		let identifier_matches = identifier_query.matches(parent)[0].captures;
+		let identifier_matches = language.identifier_query.matches(parent)[0].captures;
 		const identifierNode = identifier_matches[0].node;
 		parent = identifierNode.text;
 	}
@@ -101,7 +80,7 @@ async function processFunctionDeclaration
 		if (child_node.type == 'identifier') {
 			args.push(child_node.text);
 		} else {
-			let identifier_matches = identifier_query.matches(child_node)
+			let identifier_matches = language.identifier_query.matches(child_node)
 			if (identifier_matches.length == 0) {
 				console.log("Investigate!");
 				continue;
@@ -162,7 +141,7 @@ async function processFirstPass
 		const tree = parser.parse(src);
 
 		// Match all Class definitions
-		let class_matches = class_definition_query.matches(tree.rootNode);
+		let class_matches = language.class_definition_query.matches(tree.rootNode);
 
 		// Iterate over each matched Class
 		for (let class_match of class_matches) {
@@ -170,7 +149,7 @@ async function processFirstPass
 		}
 
 		// Match all function definition within the current class
-		let function_matches = function_definition_query.matches(tree.rootNode);
+		let function_matches = language.function_definition_query.matches(tree.rootNode);
 		for (let function_match of function_matches) {
 			await processFunctionDeclaration(source_file, graph, function_match);
 		}
@@ -193,7 +172,7 @@ async function processSecondPass
 		const tree = parser.parse(src);
 
 		// Match all Function definitions
-		let function_matches = function_definition_query.matches(tree.rootNode);
+		let function_matches = language.function_definition_query.matches(tree.rootNode);
 
 		// Iterate over each matched Function
 		for (let function_match of function_matches) {
@@ -203,14 +182,14 @@ async function processSecondPass
 			let function_src_end = function_node.endPosition.row;
 
 			// Match all function calls: `f()` within the current function
-			let function_call_matches = function_call_query.matches(function_node);
+			let function_call_matches = language.function_call_query.matches(function_node);
 			for (let function_call_match of function_call_matches) {
 				await processFunctionCall(source_file, graph, function_name,
 					function_src_start, function_src_end, function_call_match);
 			}
 
 			// Match all function calls: `Obj.foo()` within the current function
-			function_call_matches = function_attr_call_query.matches(function_node);
+			function_call_matches = language.function_attr_call_query.matches(function_node);
 			for (let function_call_match of function_call_matches) {
 				await processFunctionCall(source_file, graph, function_name,
 					function_src_start, function_src_end, function_call_match);
@@ -275,19 +254,7 @@ async function InitializeTreeSitter() {
 	});
 
 	parser = new Parser();
-	Python = await Parser.Language.load(path.join(process.cwd(), 'app/parsers/tree-sitter-python.wasm'));
-
-	parser.setLanguage(Python);
-
-	//-------------------------------------------------------------------------
-	// Tree-Sitter AST queries
-	//-------------------------------------------------------------------------
-
-	identifier_query = Python.query(`((identifier) @identifier)`);
-	function_call_query = Python.query(`((call function: (identifier) @function-name) @function-call)`);
-	function_attr_call_query = Python.query(`((call function: (attribute object: (identifier) attribute: (identifier) @function-name )) @function-call)`);
-	class_definition_query = Python.query(`(class_definition name: (identifier) @class-name) @class-definition`);
-	function_definition_query = Python.query(`((function_definition name: (identifier) @function-name parameters: (parameters) @parameters) @function-definition)`);
+	parser.setLanguage(language.language);
 }
 
 export async function POST(request: NextRequest) {
