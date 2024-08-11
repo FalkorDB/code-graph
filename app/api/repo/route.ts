@@ -5,11 +5,11 @@ import http from 'isomorphic-git/http/node';
 import Parser from 'web-tree-sitter';
 
 import { promises as fs } from 'fs';
-import { Language, SyntaxNode } from 'web-tree-sitter';
+import { SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { FalkorDB, Graph } from 'falkordb';
 import { RESPOSITORIES } from './repositories';
-import { Python } from '@/lib/languages/python';
+import { Language } from '@/lib/languages/language';
 
 const GraphOps = require('./graph_ops');
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
@@ -18,7 +18,7 @@ const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
 let parser: Parser;
-let language: Python = new Python();
+let language: Language;
 
 // Process Class declaration
 async function processClassDeclaration
@@ -254,6 +254,10 @@ async function InitializeTreeSitter() {
 	});
 
 	parser = new Parser();
+
+	const {Python} = await import('@/lib/languages/python');
+
+	language = new Python();
 	parser.setLanguage(language.language);
 }
 
