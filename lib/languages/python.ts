@@ -1,13 +1,13 @@
 import path from 'path';
 import Parser from 'web-tree-sitter';
-import { Language } from './language';
+import Language from './language';
 
 const PYTHON_LANG = await Parser.Language.load(path.join(process.cwd(), 'app/parsers/tree-sitter-python.wasm'));
 
 //-----------------------------------------------------------------------------
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
-export class Python extends Language {
+export default class Python extends Language {
 
     constructor() {
         super(

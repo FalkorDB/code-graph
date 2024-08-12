@@ -9,7 +9,8 @@ import { SyntaxNode } from 'web-tree-sitter';
 import { NextRequest, NextResponse } from "next/server";
 import { FalkorDB, Graph } from 'falkordb';
 import { RESPOSITORIES } from './repositories';
-import { Language } from '@/lib/languages/language';
+import Language from '@/lib/languages/language';
+import Python from '@/lib/languages/python'
 
 const GraphOps = require('./graph_ops');
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
@@ -246,17 +247,7 @@ async function BuildGraph
 }
 
 async function InitializeTreeSitter() {
-	// Initialize Tree-Sitter parser
-	await Parser.init({
-		locateFile(scriptName: string, scriptDirectory: string) {
-			return path.join(process.cwd(), 'app/parsers', scriptName);
-		},
-	});
-
 	parser = new Parser();
-
-	const {Python} = await import('@/lib/languages/python');
-
 	language = new Python();
 	parser.setLanguage(language.language);
 }

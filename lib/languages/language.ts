@@ -1,12 +1,17 @@
 import path from 'path';
 import Parser from 'web-tree-sitter';
 
-const PYTHON_LANG = await Parser.Language.load(path.join(process.cwd(), 'app/parsers/tree-sitter-python.wasm'));
+// Initialize Tree-Sitter parser
+await Parser.init({
+    locateFile(scriptName: string, scriptDirectory: string) {
+        return path.join(process.cwd(), 'app/parsers', scriptName);
+    },
+});
 
 //-----------------------------------------------------------------------------
 // Tree-Sitter queries
 //-----------------------------------------------------------------------------
-export class Language {
+export default class Language {
 
     public language: Parser.Language;
 
