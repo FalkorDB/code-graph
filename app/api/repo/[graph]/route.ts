@@ -238,7 +238,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     // Construct conversation body
     let body: ChatCompletionCreateParams = {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini",
         messages: messages,
         tools: tools,
         tool_choice: "auto",
@@ -286,7 +286,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
     messages = [{ "role": "system", "content": prompt }];
     response = await openai.chat.completions.create({
-        "model": "gpt-3.5-turbo",
+        "model": "gpt-4o-mini",
         "messages": messages,
     });
     const answer = response.choices[0]['message']['content'];
