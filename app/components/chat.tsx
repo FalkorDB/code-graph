@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { QUESTIONS } from "../api/repo/questions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from "next/image";
+import { SendHorizonal } from "lucide-react";
 
 enum MessageTypes {
     Query,
@@ -74,6 +75,7 @@ export function Chat(props: { repo: string }) {
                 }
                 return [...messages, { text: data.result, type: MessageTypes.Response }];
             });
+            setQuery("")
         }).catch((error) => {
             setMessages(function (messages) {
                 if (messages[messages.length - 1].type === MessageTypes.Pending) {
@@ -82,6 +84,7 @@ export function Chat(props: { repo: string }) {
                 }
                 return messages
             });
+            setQuery("")
             toast({
                 variant: "destructive",
                 title: "Uh oh! Something went wrong.",
@@ -109,23 +112,29 @@ export function Chat(props: { repo: string }) {
 
     return (
         <>
-            <main ref={bottomRef} className="border p-4 flex-1 space-y-4 overflow-auto">
+            <header className="bg-black flex gap-4 items-center p-6 text-white">
+                <Image src="falkordb-circle.svg" alt="" height={30} width={30} />
+                <h1>Set your query</h1>
+            </header>
+            <main ref={bottomRef} className="p-4 flex-1 space-y-4 overflow-auto">
                 {
                     messages.map((message, index) => {
                         if (message.type === MessageTypes.Query) {
-                            return (<div key={index} className="flex items-end gap-2 justify-end">
-                                <div className="rounded-lg bg-blue-500 text-white p-2">
-                                    <p className="text-sm">{message.text}</p>
+                            return (<div key={index} className="flex gap-2 items-center">
+                                <div className="h-6 w-6 rounded-full overflow-hidden">
+                                    <Image src="falkordb-circle.svg" alt="" height={24} width={24} />
                                 </div>
+                                <p className="text-sm">{message.text}</p>
                             </div>)
                         } else if (message.type === MessageTypes.Response) {
-                            return (<div key={index} className="flex items-end gap-2">
-                                <div className="rounded-lg bg-zinc-200 p-2">
-                                    <p className="text-sm">{message.text}</p>
+                            return (<div key={index} className="flex gap-2 items-center">
+                                <div className="h-6 w-6 rounded-full overflow-hidden">
+                                    <Image src="falkordb-circle.svg" alt="" height={24} width={24} />
                                 </div>
+                                <p className="text-sm">{message.text}</p>
                             </div>)
                         } else {
-                            return (<div key={index} className="flex items-end gap-2">
+                            return (<div key={index} className="flex gap-2">
                                 <div>
                                     <Image src="/dots.gif" width={100} height={10} alt="Waiting for response" />
                                 </div>
@@ -134,10 +143,10 @@ export function Chat(props: { repo: string }) {
                     })
                 }
             </main>
-            <footer className="border p-4">
+            <footer className="p-8">
                 {props.repo &&
-                    <form className="flex flex-row gap-2" onSubmit={handleQueryClick}>
-                        <Select onValueChange={onQuestionSelected}>
+                    <form className="relative" onSubmit={handleQueryClick}>
+                        {/* <Select onValueChange={onQuestionSelected}>
                             <SelectTrigger className="w-1/3">
                                 <SelectValue placeholder="Suggested questions" />
                             </SelectTrigger>
@@ -148,9 +157,11 @@ export function Chat(props: { repo: string }) {
                                     })
                                 }
                             </SelectContent>
-                        </Select>
-                        <Input className="w-2/3" placeholder="Type a question..." onChange={handleQueryInputChange} value={query}/>
-                        <Button>Send</Button>
+                        </Select> */}
+                        <Input className="p-6 rounded-2xl bg-gray-100 focus-visible:ring-0 focus-visible:ring-offset-0" placeholder="Enter a prompt here" onChange={handleQueryInputChange} value={query} />
+                        <button className="absolute top-4 right-2">
+                            <SendHorizonal />
+                        </button>
                     </form>
                 }
             </footer>

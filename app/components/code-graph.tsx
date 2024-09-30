@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
 import { useContext, useEffect, useRef, useState } from "react";
@@ -6,12 +5,11 @@ import { Category, Node } from "./model";
 import { RESPOSITORIES } from "../api/repo/repositories";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GraphContext } from "./provider";
-
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
-import { Skeleton } from "@/components/ui/skeleton";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
+import { GitFork, Search } from "lucide-react";
 
 const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
 
@@ -118,11 +116,11 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
         parmas.onFetchGraph(value)
     }
 
-    const defaultRepo = RESPOSITORIES[0];
-    // Fetch the default graph on first render
-    useEffect(() => {
-        onRepoSelected(defaultRepo)
-    }, []);
+    // const defaultRepo = RESPOSITORIES[0];
+    // // Fetch the default graph on first render
+    // useEffect(() => {
+    //     onRepoSelected(defaultRepo)
+    // }, []);
 
     function onCategoryClick(category: Category) {
         let chart = chartRef.current
@@ -140,37 +138,40 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
     }
 
     return (
-        <>
-            <header className="border p-4">
-                <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
-                    <Select onValueChange={onRepoSelected} defaultValue={defaultRepo}>
-                        <SelectTrigger className={LIMITED_MODE ? "border" : "border w-2/3"}>
-                            <SelectValue placeholder="Suggested repositories" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {
-                                RESPOSITORIES.map((repo, index) => {
-                                    return <SelectItem key={index} value={repo}>{repo}</SelectItem>
-                                })
-                            }
-                        </SelectContent>
-                    </Select>
-                    {
-                        !LIMITED_MODE &&
-                        <>
-                            <Input placeholder="Github repo URL" className="border" type="url" onChange={handleRepoInputChange} />
-                            <Button type="submit">Send</Button>
-                        </>
-                    }
-                </form>
+        <div className="h-full w-full flex flex-col gap-4">
+            <header className="flex flex-col gap-4">
+                <h1 className="text-2xl font-medium">Knowledge Graph</h1>
+                <Select onValueChange={onRepoSelected}>
+                    <SelectTrigger className="border focus:ring-0 focus:ring-offset-0">
+                        <SelectValue placeholder="Select a repo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {
+                            RESPOSITORIES.map((repo, index) => {
+                                return <SelectItem key={index} value={repo}>{repo}</SelectItem>
+                            })
+                        }
+                    </SelectContent>
+                </Select>
             </header>
-            <main className="h-full w-full">
+            <main className="grow">
                 {graph.Id ?
                     (
                         <>
-                            <div className="grid grid-cols-6 gap-4 p-2">
+                            <div className="flex justify-between p-2">
                                 <Toolbar className="col-start-1" chartRef={chartRef} />
-                                <Labels className="col-start-3 col-end-4" categories={graph.Categories} onClick={onCategoryClick}/>
+                                <Labels className="col-start-3 col-end-4" categories={graph.Categories} onClick={onCategoryClick} />
+                                <form onSubmit={handleSubmit}>
+                                    {
+                                        !LIMITED_MODE &&
+                                        <div className="relative">
+                                            <Input className="border border-black" type="url" onChange={handleRepoInputChange} />
+                                            <button className="absolute left-3 top-2" type="submit">
+                                                <Search />
+                                            </button>
+                                        </div>
+                                    }
+                                </form>
                             </div>
 
                             <CytoscapeComponent
@@ -201,21 +202,13 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
                         </>
                     ) :
                     (
-                        <div className="flex flex-col items-center justify-center h-full space-y-4">
-                            <div className="text-gray-600 text-4xl ">
-                                Loading Repository Graph...
-                            </div>
-                            <div className="flex items-center justify-center space-x-4">
-                                <Skeleton className="h-12 w-12 rounded-full bg-gray-600" />
-                                <div className="space-y-2">
-                                    <Skeleton className="h-4 w-[250px] bg-gray-600" />
-                                    <Skeleton className="h-4 w-[200px] bg-gray-600" />
-                                </div>
-                            </div>
+                        <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                            <GitFork size={100} color="gray" />
+                            <h1 className="text-4xl">Select a repo to show its graph here</h1>
                         </div>
                     )
                 }
             </main>
-        </>
+        </div>
     )
 }
