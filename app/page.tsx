@@ -71,7 +71,7 @@ export default function Home() {
 
   return (
     <main className="h-screen flex flex-col">
-      <header className="flex items-center justify-between p-6 px-12 border bg-black text-white">
+      <header className="flex items-center justify-between p-6 px-12 bg-black text-white">
         <Link href="https://www.falkordb.com" target='_blank'>
           <Image src="/falkordb-white.svg" alt="FalkorDB" height={10} width={100} />
         </Link>
