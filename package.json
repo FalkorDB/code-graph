@@ -20,7 +20,7 @@
     "falkordb": "^6.0.2",
     "isomorphic-git": "^1.25.7",
     "lucide-react": "^0.441.0",
-    "next": "14.2.8",
+    "next": "15.0.1",
     "openai": "^4.60.0",
     "react": "^18",
     "react-cytoscapejs": "^2.0.0",
