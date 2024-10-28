@@ -1,32 +1,28 @@
-import { Category, getCategoryColorName} from "./model";
+import { Category, getCategoryColorName } from "./model";
 import { cn } from "@/lib/utils";
-import { Minus, Plus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 
-export function Labels(params: { categories: Category[], className?: string, onClick: (category: Category) => void }) {
+export function Labels(params: { categories: Category[], className?: string, onClick: (name: string, show: boolean) => void }) {
 
-    // fake stae to force reload
     const [reload, setReload] = useState(false)
 
     return (
-        <div className={cn("flex flex-row gap-x-2", params.className)} >
-            {params.categories.map((category) => {
-                return (
-                    <div className="flex flex-row gap-x-2 items-center" key={category.index}>
-                        <Button
-                            className={cn(`bg-${getCategoryColorName(category.index)}-500 ${category.show ? "" : "opacity-50"}`, "rounded-lg border border-gray-300 p-2 opac")}
-                            onClick={() => {
-                                params.onClick(category)
-                                setReload(!reload)
-                            }}
-                        >
-                            {category.show ? <Minus /> : <Plus />}
-                        </Button>
-                        <p>{category.name}</p>
-                    </div>
-                )
-            })}
-        </div>
+        <div className={cn("flex gap-4", params.className)} >
+            {params.categories.map((category) =>
+                <div className="bg-white flex gap-2 items-center p-2 border rounded-md" key={category.index}>
+                    <Checkbox
+                        className={`data-[state=checked]:bg-${getCategoryColorName(category.index)}-500 bg-${getCategoryColorName(category.index)}-500 border-none rounded-sm`}
+                        onCheckedChange={(checked) => {
+                            params.onClick(category.name, checked as boolean)
+                            setReload(!reload)
+                        }}
+                        checked={category.show}
+                    />
+                    <p>{category.name}</p>
+                </div>
+            )
+            }
+        </div >
     )
 }

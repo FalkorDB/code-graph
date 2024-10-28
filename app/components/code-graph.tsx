@@ -1,17 +1,31 @@
-import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
-import { useContext, useEffect, useRef, useState } from "react";
-import { Category, Node } from "./model";
-import { RESPOSITORIES } from "../api/repo/repositories";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dispatch, MutableRefObject, SetStateAction, useContext, useEffect, useRef, useState } from "react";
+import { Node } from "./model";
 import { GraphContext } from "./provider";
-import cytoscape from 'cytoscape';
+import cytoscape, { ElementDefinition, EventObject, Position } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { GitFork, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, GitFork, Search } from "lucide-react";
+import ElementMenu from "./elementMenu";
+import ElementTooltip from "./elementTooltip";
+import Combobox from "./combobox";
+import { toast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
+import { Path } from '../page';
+import Input from './Input';
 
-const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
+interface Props {
+    onFetchGraph: (graphName: string) => void,
+    onFetchNode: (node: Node) => Promise<any[]>,
+    options: string[]
+    isShowPath: boolean
+    setPath: Dispatch<SetStateAction<Path | undefined>>
+    chartRef: MutableRefObject<cytoscape.Core | null>
+    selectedValue: string
+    setSelectedPathId: (selectedPathId: string) => void
+    isPathResponse: boolean
+}
 
 // The stylesheet for the graph
 const STYLESHEET: cytoscape.Stylesheet[] = [
@@ -35,16 +49,19 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         selector: "node",
         style: {
             label: "data(name)",
+            "color": "black",
             "text-valign": "center",
-            "text-halign": "center",
+            "text-wrap": "ellipsis",
+            "text-max-width": "10rem",
             shape: "ellipse",
-            height: 10,
-            width: 10,
-            "border-width": 0.15,
+            height: "15rem",
+            width: "15rem",
+            "border-width": 0.3,
+            "border-color": "black",
             "border-opacity": 0.5,
             "background-color": "data(color)",
-            "font-size": "3",
-            "overlay-padding": "1px",
+            "font-size": "3rem",
+            "overlay-padding": "1rem",
         },
     },
     {
@@ -54,12 +71,37 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         },
     },
     {
+        selector: "node:selected",
+        style: {
+            'border-width': 0.5,
+            'border-color': 'black',
+            'border-opacity': 1,
+        },
+    },
+    {
+        selector: "node[?isPath]",
+        style: {
+            'border-width': 0.5,
+            'border-color': 'pink',
+            'border-opacity': 1,
+        },
+    },
+    {
+        selector: "node[?isPathStartEnd]",
+        style: {
+            'border-width': 1,
+            'border-color': 'pink',
+            'border-opacity': 1,
+        },
+    },
+    {
         selector: "edge",
         style: {
             width: 0.5,
             "line-color": "#ccc",
             "arrow-scale": 0.3,
             "target-arrow-shape": "triangle",
+            "target-arrow-color": "#ccc",
             label: "data(label)",
             'curve-style': 'straight',
             "text-background-color": "#ffffff",
@@ -68,67 +110,132 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
             "overlay-padding": "2px",
         },
     },
+    {
+        selector: "edge:active",
+        style: {
+            "overlay-opacity": 0,  // hide gray box around active node
+        },
+    },
+    {
+        selector: "edge[?isPath]",
+        style: {
+            "line-style": "dashed",
+            "line-color": "pink",
+            "target-arrow-color": "pink",
+        },
+    }
 ]
-
 
 cytoscape.use(fcose);
 
-const LAYOUT = {
+export const LAYOUT = {
     name: "fcose",
     fit: true,
-    padding: 30,
+    padding: 80,
     avoidOverlap: true,
 }
 
-export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => Promise<any[]> }) {
+const COMMIT_LIMIT = 7
+
+export function CodeGraph({
+    onFetchGraph,
+    onFetchNode,
+    options,
+    isShowPath,
+    setPath,
+    chartRef,
+    selectedValue,
+    setSelectedPathId,
+    isPathResponse
+}: Props) {
 
     let graph = useContext(GraphContext)
 
-    // Holds the user input while typing
-    const [url, setURL] = useState('');
+    const [url, setURL] = useState("");
+    const [selectedObj, setSelectedObj] = useState<Node>();
+    const [tooltipLabel, setTooltipLabel] = useState<string>();
+    const [position, setPosition] = useState<Position>();
+    const [tooltipPosition, setTooltipPosition] = useState<Position>();
+    const [graphName, setGraphName] = useState<string>("");
+    const [searchNodeName, setSearchNodeName] = useState<string>("");
+    const [commits, setCommits] = useState<any[]>([]);
+    const [nodesCount, setNodesCount] = useState<number>(0);
+    const [edgesCount, setEdgesCount] = useState<number>(0);
+    const [commitIndex, setCommitIndex] = useState<number>(0);
+    const [currentCommit, setCurrentCommit] = useState(0);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    // A reference to the chart container to allowing zooming and editing
-    const chartRef = useRef<cytoscape.Core | null>(null)
+    async function fetchCount() {
+        const result = await fetch(`/api/repo/${graphName}`, {
+            method: 'POST'
+        })
 
-    // A function that handles the change event of the url input box
-    async function handleRepoInputChange(event: any) {
-
-        // If the user pressed enter, submit the URL
-        if (event.key === "Enter") {
-            await handleSubmit(event);
+        if (!result.ok) {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: await result.text(),
+            })
+            return
         }
 
-        // Get the new value of the input box
-        let value: string = event.target.value;
+        const json = await result.json()
 
-        // Update the url state
-        setURL(value);
+        setNodesCount(json.result.info.node_count)
+        setEdgesCount(json.result.info.edge_count)
+        setURL(json.result.info.repo_url)
     }
 
-    // A function that handles the click event
-    async function handleSubmit(event: any) {
-        event.preventDefault();
-        parmas.onFetchGraph(url);
+    useEffect(() => {
+        if (!selectedValue) return
+        handelSelectedValue(selectedValue)
+    }, [selectedValue])
+
+    useEffect(() => {
+        if (!graphName) return
+
+        const run = async () => {
+            fetchCount()
+            const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
+                method: 'POST'
+            })
+
+            if (!result.ok) {
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description: await result.text(),
+                })
+                return
+            }
+
+            const json = await result.json()
+            const commitsArr = json.result.commits
+            setCommits(commitsArr)
+            setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+            setCommitIndex(commitsArr.length)
+        }
+
+        run()
+    }, [graphName])
+
+    function handelSelectedValue(value: string) {
+        setGraphName(value)
+        onFetchGraph(value)
     }
 
-    function onRepoSelected(value: string): void {
-        setURL(value)
-        parmas.onFetchGraph(value)
-    }
-
-    // const defaultRepo = RESPOSITORIES[0];
-    // // Fetch the default graph on first render
-    // useEffect(() => {
-    //     onRepoSelected(defaultRepo)
-    // }, []);
-
-    function onCategoryClick(category: Category) {
+    function onCategoryClick(name: string, show: boolean) {
         let chart = chartRef.current
         if (chart) {
-            let elements = chart.elements(`node[category = "${category.name}"]`)
-            category.show = !category.show
+            let elements = chart.elements(`node[category = "${name}"]`)
 
-            if (category.show) {
+            graph.Categories.forEach((category) => {
+                if (category.name === name) {
+                    category.show = show
+                }
+            })
+
+            if (show) {
                 elements.style({ display: 'element' })
             } else {
                 elements.style({ display: 'none' })
@@ -137,78 +244,292 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
         }
     }
 
-    return (
-        <div className="h-full w-full flex flex-col gap-4">
-            <header className="flex flex-col gap-4">
-                <h1 className="text-2xl font-medium">Knowledge Graph</h1>
-                <Select onValueChange={onRepoSelected}>
-                    <SelectTrigger className="border focus:ring-0 focus:ring-offset-0">
-                        <SelectValue placeholder="Select a repo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {
-                            RESPOSITORIES.map((repo, index) => {
-                                return <SelectItem key={index} value={repo}>{repo}</SelectItem>
-                            })
-                        }
-                    </SelectContent>
-                </Select>
-            </header>
-            <main className="grow">
-                {graph.Id ?
-                    (
-                        <>
-                            <div className="flex justify-between p-2">
-                                <Toolbar className="col-start-1" chartRef={chartRef} />
-                                <Labels className="col-start-3 col-end-4" categories={graph.Categories} onClick={onCategoryClick} />
-                                <form onSubmit={handleSubmit}>
-                                    {
-                                        !LIMITED_MODE &&
-                                        <div className="relative">
-                                            <Input className="border border-black" type="url" onChange={handleRepoInputChange} />
-                                            <button className="absolute left-3 top-2" type="submit">
-                                                <Search />
-                                            </button>
-                                        </div>
-                                    }
-                                </form>
-                            </div>
+    const deleteNeighbors = (node: Node, chart: cytoscape.Core) => {
+        const neighbors = chart.elements(`#${node.id}`).outgoers()
+        neighbors.forEach((n) => {
+            const id = n.id()
+            const index = graph.Elements.findIndex(e => e.data.id === id);
+            const element = graph.Elements[index]
 
-                            <CytoscapeComponent
-                                cy={(cy) => {
-                                    chartRef.current = cy
+            if (index === -1 || !element.data.collapsed) return
 
-                                    // Make sure no previous listeners are attached
-                                    cy.removeAllListeners();
+            const type = "category" in element.data
 
-                                    // Listen to the click event on nodes for expanding the node
-                                    cy.on('dbltap', 'node', async function (evt) {
-                                        var node: Node = evt.target.json().data;
-                                        let elements = await parmas.onFetchNode(node);
-                                        //cy.add(elements).layout(LAYOUT).run()
+            if (element.data.expand) {
+                deleteNeighbors(element.data, chart)
+            }
 
-                                        // adjust entire graph.
-                                        if (elements.length > 0) {
-                                            cy.add(elements);
-                                            cy.elements().layout(LAYOUT).run();
-                                        }
-                                    });
-                                }}
-                                stylesheet={STYLESHEET}
-                                elements={graph.Elements}
-                                layout={LAYOUT}
-                                className="w-full h-full"
-                            />
-                        </>
-                    ) :
-                    (
-                        <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                            <GitFork size={100} color="gray" />
-                            <h1 className="text-4xl">Select a repo to show its graph here</h1>
-                        </div>
-                    )
+            graph.Elements.splice(index, 1);
+
+            if (type) {
+                graph.NodesMap.delete(Number(id))
+            } else {
+                graph.EdgesMap.delete(Number(id.split('')[1]))
+            }
+
+            chart.remove(`#${id}`)
+        })
+
+    }
+
+    const handleDoubleTap = async (evt?: EventObject) => {
+
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        let node: Node
+        let elements: ElementDefinition[]
+
+        if (evt) {
+            const { target } = evt
+            target.unselect()
+            node = target.json().data;
+        } else {
+            node = selectedObj!
+        }
+
+        const graphNode = graph.Elements.find(e => e.data.id === node.id);
+
+        if (!graphNode) return
+
+        if (!graphNode.data.expand) {
+            elements = await onFetchNode(node)
+
+            if (elements.length === 0) {
+                toast({
+                    title: "No neighbors found",
+                })
+                return
+            }
+
+            chart.add(elements);
+            chart.elements().layout(LAYOUT).run();
+        } else {
+            deleteNeighbors(node, chart)
+        }
+
+        graphNode.data.expand = !graphNode.data.expand;
+
+        setSelectedObj(undefined)
+    }
+
+    const handelTap = (evt: EventObject) => {
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        const { target } = evt
+        setTooltipLabel(undefined)
+
+        if (isShowPath) {
+            setPath(prev => {
+                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
+                    return ({ start: { id: Number(target.id()), name: target.data().name as string } })
+                } else {
+                    return ({ end: { id: Number(target.id()), name: target.data().name as string }, start: prev.start })
                 }
-            </main>
+            })
+            return
+        }
+
+        const position = target.renderedPosition()
+        setPosition(() => position ? { x: position.x, y: position.y + chart.zoom() * 8 } : { x: 0, y: 0 });
+        setSelectedObj(target.json().data)
+    }
+
+    const handelSearchSubmit = (node: any) => {
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        let chartNode = chart.elements(`node[name = "${node.properties.name}"]`)
+
+        if (chartNode.length === 0) {
+            const [newNode] = graph.extend({ nodes: [node], edges: [] })
+            chartNode = chart.add(newNode)
+        }
+
+        chartNode.select()
+        const layout = { ...LAYOUT, padding: 250 }
+        chartNode.layout(layout).run()
+    }
+
+    return (
+        <div ref={containerRef} className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
+            <header className="flex flex-col gap-4">
+                <Combobox
+                    options={options}
+                    selectedValue={graphName}
+                    onSelectedValue={handelSelectedValue}
+                />
+            </header>
+            <div className='h-1 grow flex flex-col'>
+
+                <main className="bg-white h-1 grow">
+                    {
+                        graph.Id ?
+                            <div className="h-full relative border">
+                                <div className="w-full absolute top-0 left-0 flex gap-4 p-4 z-10 pointer-events-none">
+                                    <Input
+                                        graph={graph}
+                                        value={searchNodeName}
+                                        onValueChange={(node) => setSearchNodeName(node.name!)}
+                                        icon={<Search />}
+                                        handelSubmit={handelSearchSubmit}
+                                    />
+                                    <Labels className="pointer-events-auto" categories={graph.Categories} onClick={onCategoryClick} />
+                                </div>
+                                <div className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
+                                    <div className="flex gap-4">
+                                        <p>{nodesCount} Nodes</p>
+                                        <p>{edgesCount} Edges</p>
+                                    </div>
+                                    <Toolbar className="pointer-events-auto" chartRef={chartRef} />
+                                </div>
+                                <ElementTooltip
+                                    label={tooltipLabel}
+                                    position={tooltipPosition}
+                                    parentWidth={containerRef.current?.clientWidth || 0}
+                                />
+                                <ElementMenu
+                                    obj={selectedObj}
+                                    position={position}
+                                    url={url}
+                                    handelMaximize={handleDoubleTap}
+                                    parentWidth={containerRef.current?.clientWidth || 0}
+                                />
+                                <CytoscapeComponent
+                                    cy={(cy) => {
+                                        chartRef.current = cy
+
+                                        // Make sure no previous listeners are attached
+                                        cy.removeAllListeners();
+
+                                        // Listen to the click event on nodes for expanding the node
+                                        cy.on('dbltap', 'node', handleDoubleTap);
+
+                                        cy.on('mousedown', (evt) => {
+                                            setTooltipLabel(undefined)
+                                            const { target } = evt
+
+                                            if (target !== cy && !target.isEdge()) return;
+
+                                            setSelectedObj(undefined)
+                                        })
+
+                                        cy.on('mouseout', (evt) => {
+                                            const { target } = evt
+
+                                            if (target === cy || target.isEdge()) {
+                                                setTooltipLabel(undefined)
+                                                return
+                                            }
+
+                                            setTooltipLabel(undefined)
+
+                                            if (selectedObj) return
+
+                                            target.unselect()
+                                        })
+
+                                        cy.on('scrollzoom', () => {
+                                            setSelectedObj(undefined)
+                                            setTooltipLabel(undefined)
+                                        });
+
+                                        cy.on('mouseover', 'node', (evt) => {
+                                            const { target } = evt
+                                            target.select()
+
+                                            if (selectedObj) return
+
+                                            const position = target.renderedPosition()
+
+                                            setTooltipPosition(() => ({ x: position.x, y: position.y + cy.zoom() * 8 }));
+                                            setTooltipLabel(() => target.json().data.name);
+                                        })
+
+                                        cy.on('tap', 'node', handelTap);
+
+                                        cy.on('drag', 'node', () => {
+                                            setTooltipLabel(undefined)
+                                            setSelectedObj(undefined)
+                                        });
+
+                                        cy.on('tap', 'edge', (evt) => {
+                                            const { target } = evt
+
+                                            if (!isPathResponse) return
+
+                                            setSelectedPathId(target.id())
+                                        });
+                                    }}
+                                    stylesheet={STYLESHEET}
+                                    elements={graph.Elements}
+                                    layout={LAYOUT}
+                                    className="h-full w-full"
+                                />
+                            </div>
+                            : <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                                <GitFork size={100} color="gray" />
+                                <h1 className="text-4xl">Select a repo to show its graph here</h1>
+                            </div>
+                    }
+                </main>
+                {
+                    graph.Id &&
+                    <div className='bg-gray-200 flex border rounded-b-md'>
+                        <button
+                            className='p-4 border border-gray-300 rounded-bl-md'
+                            onClick={() => {
+                                setCommitIndex(prev => prev + 1)
+                            }}
+                            disabled={commitIndex === commits.length}
+                        >
+                            {
+                                commitIndex !== commits.length ?
+                                    <ChevronLeft />
+                                    : <div className='h-6 w-6' />
+                            }
+                        </button>
+                        <ul className='grow flex p-3 justify-between'>
+                            {
+                                commits.slice(commitIndex - COMMIT_LIMIT, commitIndex).map((commit: any) => {
+                                    const date = new Date(commit.date * 1000)
+                                    const month = `${date.getDate()} ${date.toLocaleString('default', { month: 'long' })}`
+                                    const hour = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`
+                                    return (
+                                        <li
+                                            className={cn(currentCommit === commit.hash && "bg-white", "p-1 rounded-md")}
+                                            key={commit.hash}
+                                        >
+                                            <button
+                                                onClick={() => setCurrentCommit(commit.hash)}
+                                            >
+                                                <p>{month} <span className='text-gray-400'>{hour}</span></p>
+                                            </button>
+                                        </li>
+                                    )
+                                })
+                            }
+                        </ul>
+                        <button
+                            className='p-4 border border-gray-300 rounded-br-md'
+                            onClick={() => {
+                                setCommitIndex(prev => prev - 1)
+                            }}
+                            disabled={commitIndex - COMMIT_LIMIT === 0}
+                        >
+                            {
+                                commitIndex - COMMIT_LIMIT !== 0 ?
+                                    <ChevronRight className='' />
+                                    : <div className='h-6 w-6' />
+                            }
+                        </button>
+                    </div>
+                }
+            </div>
         </div>
     )
 }

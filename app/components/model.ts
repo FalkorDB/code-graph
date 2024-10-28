@@ -1,4 +1,5 @@
 import twcolors from 'tailwindcss/colors'
+import { Path } from '../page'
 
 export interface Category {
   name: string,
@@ -11,12 +12,14 @@ export interface Node {
   name: string,
   category: string,
   color: string,
+  [key: string]: any,
 }
 
 export interface Edge {
   source: number,
   target: number,
   label: string,
+  [key: string]: any,
 }
 
 const COLORS_ORDER = [
@@ -34,17 +37,23 @@ const COLORS_ORDER = [
   "pink",
 ]
 
-export function getCategoryColorName(index: number): string {
-  index = index<COLORS_ORDER.length ? index : 0
+export function getCategoryColorName(index = -1): string {
+  if (index === -1) return "gray"
+
+  index = index < COLORS_ORDER.length ? index : 0
+
   return COLORS_ORDER[index]
 }
 
-function getCategoryColorValue(index: number): string {
-  index = index<COLORS_ORDER.length ? index : 0
-  let colorName = COLORS_ORDER[index]
-
+function getCategoryColorValue(index = -1): string {
   let colors = twcolors as any
+
+  if (index === -1) return colors["gray"]
+
+  index = index < COLORS_ORDER.length ? index : 0
+  let colorName = COLORS_ORDER[index]
   let color = colors[colorName]
+
   return color["500"]
 }
 
@@ -54,12 +63,12 @@ export class Graph {
   private categories: Category[];
   private elements: any[];
 
-  private categoriesMap: Map<String, Category>;
+  private categoriesMap: Map<string, Category>;
   private nodesMap: Map<number, Node>;
   private edgesMap: Map<number, Edge>;
 
   private constructor(id: string, categories: Category[], elements: any[],
-    categoriesMap: Map<String, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Edge>) {
+    categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Edge>) {
     this.id = id;
     this.categories = categories;
     this.elements = elements;
@@ -76,25 +85,38 @@ export class Graph {
     return this.categories;
   }
 
+  get CategoriesMap(): Map<string, Category> {
+    return this.categoriesMap;
+  }
+
   get Elements(): any[] {
     return this.elements;
   }
 
-  public static empty(): Graph {
-    return new Graph("", [], [], new Map<String, Category>(), new Map<number, Node>(), new Map<number, Edge>())
+  get EdgesMap(): Map<number, Edge> {
+    return this.edgesMap;
   }
 
-  public static create(results: any): Graph {
+  get NodesMap(): Map<number, Node> {
+    return this.nodesMap;
+  }
+
+  public static empty(): Graph {
+    return new Graph("", [], [], new Map<string, Category>(), new Map<number, Node>(), new Map<number, Edge>())
+  }
+
+  public static create(results: any, graphName: string): Graph {
     let graph = Graph.empty()
     graph.extend(results)
-    graph.id = results.id
+    graph.id = graphName
     return graph
   }
 
-  public extend(results: any): any[] {
+  public extend(results: any, collapsed = false, path?: Path): any[] {
     let newElements: any[] = []
+
     results.nodes.forEach((nodeData: any) => {
-      let label = nodeData.label;
+      let label = nodeData.labels[0];
       // check if category already exists in categories
       let category = this.categoriesMap.get(label)
       if (!category) {
@@ -106,6 +128,11 @@ export class Graph {
       // check if node already exists in nodes
       let node = this.nodesMap.get(nodeData.id)
       if (node) {
+        node.isPath = !!path
+        if (path?.start?.id == nodeData.id || path?.end?.id == nodeData.id) {
+          node.isPathStartEnd = true
+        }
+        node.isPath = !!path
         return
       }
 
@@ -114,7 +141,16 @@ export class Graph {
         name: nodeData.name,
         color: getCategoryColorValue(category.index),
         category: category.name,
+        expand: false,
+        collapsed,
+        isPath: !!path,
       }
+      if (path?.start?.id == nodeData.id || path?.end?.id == nodeData.id) {
+        node.isPathStartEnd = true
+      }
+      Object.entries(nodeData.properties).forEach(([key, value]) => {
+        node[key] = value
+      })
       this.nodesMap.set(nodeData.id, node)
       this.elements.push({ data: node })
       newElements.push({ data: node })
@@ -123,16 +159,21 @@ export class Graph {
     results.edges.forEach((edgeData: any) => {
       let edge = this.edgesMap.get(edgeData.id)
       if (edge) {
+        edge.isPath = !!path
         return
       }
 
-      let sourceId = edgeData.src.toString();
-      let destinationId = edgeData.dest.toString()
+      let sourceId = edgeData.src_node.toString();
+      let destinationId = edgeData.dest_node.toString()
 
       edge = {
+        id: `_${edgeData.id}`,
         source: sourceId,
         target: destinationId,
-        label: edgeData.type,
+        label: edgeData.relation,
+        expand: false,
+        collapsed,
+        isPath: !!path,
       }
       this.edgesMap.set(edgeData.id, edge)
       this.elements.push({ data: edge })
