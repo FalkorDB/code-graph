@@ -14,6 +14,7 @@ import { toast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { Path } from '../page';
 import Input from './Input';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 
 interface Props {
     onFetchGraph: (graphName: string) => void,
@@ -79,22 +80,6 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         },
     },
     {
-        selector: "node[?isPath]",
-        style: {
-            'border-width': 0.5,
-            'border-color': 'pink',
-            'border-opacity': 1,
-        },
-    },
-    {
-        selector: "node[?isPathStartEnd]",
-        style: {
-            'border-width': 1,
-            'border-color': 'pink',
-            'border-opacity': 1,
-        },
-    },
-    {
         selector: "edge",
         style: {
             width: 0.5,
@@ -114,14 +99,6 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         selector: "edge:active",
         style: {
             "overlay-opacity": 0,  // hide gray box around active node
-        },
-    },
-    {
-        selector: "edge[?isPath]",
-        style: {
-            "line-style": "dashed",
-            "line-color": "pink",
-            "target-arrow-color": "pink",
         },
     }
 ]
@@ -264,7 +241,7 @@ export function CodeGraph({
             if (type) {
                 graph.NodesMap.delete(Number(id))
             } else {
-                graph.EdgesMap.delete(Number(id.split('')[1]))
+                graph.EdgesMap.delete(Number(id.split('_')[1]))
             }
 
             chart.remove(`#${id}`)
@@ -295,7 +272,7 @@ export function CodeGraph({
 
         if (!graphNode.data.expand) {
             elements = await onFetchNode(node)
-
+            console.log(elements);
             if (elements.length === 0) {
                 toast({
                     title: "No neighbors found",
@@ -304,14 +281,13 @@ export function CodeGraph({
             }
 
             chart.add(elements);
-            chart.elements().layout(LAYOUT).run();
         } else {
             deleteNeighbors(node, chart)
         }
 
         graphNode.data.expand = !graphNode.data.expand;
-
         setSelectedObj(undefined)
+        chart.elements().layout(LAYOUT).run();
     }
 
     const handelTap = (evt: EventObject) => {
@@ -481,40 +457,6 @@ export function CodeGraph({
                     graph.Id &&
                     <div className='bg-gray-200 flex border rounded-b-md'>
                         <button
-                            className='p-4 border border-gray-300 rounded-bl-md'
-                            onClick={() => {
-                                setCommitIndex(prev => prev + 1)
-                            }}
-                            disabled={commitIndex === commits.length}
-                        >
-                            {
-                                commitIndex !== commits.length ?
-                                    <ChevronLeft />
-                                    : <div className='h-6 w-6' />
-                            }
-                        </button>
-                        <ul className='grow flex p-3 justify-between'>
-                            {
-                                commits.slice(commitIndex - COMMIT_LIMIT, commitIndex).map((commit: any) => {
-                                    const date = new Date(commit.date * 1000)
-                                    const month = `${date.getDate()} ${date.toLocaleString('default', { month: 'long' })}`
-                                    const hour = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`
-                                    return (
-                                        <li
-                                            className={cn(currentCommit === commit.hash && "bg-white", "p-1 rounded-md")}
-                                            key={commit.hash}
-                                        >
-                                            <button
-                                                onClick={() => setCurrentCommit(commit.hash)}
-                                            >
-                                                <p>{month} <span className='text-gray-400'>{hour}</span></p>
-                                            </button>
-                                        </li>
-                                    )
-                                })
-                            }
-                        </ul>
-                        <button
                             className='p-4 border border-gray-300 rounded-br-md'
                             onClick={() => {
                                 setCommitIndex(prev => prev - 1)
@@ -523,7 +465,55 @@ export function CodeGraph({
                         >
                             {
                                 commitIndex - COMMIT_LIMIT !== 0 ?
-                                    <ChevronRight className='' />
+                                    <ChevronLeft />
+                                    : <div className='h-6 w-6' />
+                            }
+                        </button>
+                        <ul className='w-1 grow flex p-3 justify-between'>
+                            {
+                                commits.slice(commitIndex - COMMIT_LIMIT, commitIndex).map((commit: any) => {
+                                    const date = new Date(commit.date * 1000)
+                                    const month = `${date.getDate()} ${date.toLocaleString('default', { month: 'long' })}`
+                                    const hour = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`
+                                    return (
+                                        <HoverCard
+                                            key={commit.hash}
+                                        >
+                                            <HoverCardTrigger asChild>
+                                                <li
+                                                    className={cn(currentCommit === commit.hash && "bg-white", "grow p-1 rounded-md overflow-hidden")}
+                                                >
+                                                    <button
+                                                        className='w-full flex items-center justify-center gap-1'
+                                                        onClick={() => setCurrentCommit(commit.hash)}
+                                                    >
+                                                        <p className='truncate' title={month}>{month}</p>
+                                                        <p className='text-gray-400' title='hour'>{hour}</p>
+                                                    </button>
+                                                </li>
+                                            </HoverCardTrigger>
+                                            <HoverCardContent>
+                                                <div className='p-4'>
+                                                    <h1 className='text-bold'>{commit.author}:</h1>
+                                                    <p>{commit.message}</p>
+                                                    <p className='truncate' title={commit.hash}>{commit.hash}</p>
+                                                </div>
+                                            </HoverCardContent>
+                                        </HoverCard>
+                                    )
+                                })
+                            }
+                        </ul>
+                        <button
+                            className='p-4 border border-gray-300 rounded-bl-md'
+                            onClick={() => {
+                                setCommitIndex(prev => prev + 1)
+                            }}
+                            disabled={commitIndex === commits.length}
+                        >
+                            {
+                                commitIndex !== commits.length ?
+                                    <ChevronRight />
                                     : <div className='h-6 w-6' />
                             }
                         </button>

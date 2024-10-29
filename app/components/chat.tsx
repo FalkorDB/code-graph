@@ -123,50 +123,35 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, set
                 title: "Uh oh! Something went wrong.",
                 description: "Please enter a question.",
             })
-            setQuery("")
             return
         }
 
+        setQuery("")
+
         setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
 
-        return fetch(`/api/repo/${repo}?q=${encodeURIComponent(q)}&type=text`, {
-            method: 'GET'
-        }).then(async (result) => {
-            if (result.status >= 300) {
-                throw Error(await result.text())
+        const result = await fetch(`/api/chat/${repo}?msg=${encodeURIComponent(q)}`, {
+            method: 'POST'
+        })
 
-            }
+        if (!result.ok) {
+            setMessages((prev) => {
+                prev = [...prev.slice(0, -1)];
+                return [...prev, { type: MessageTypes.Response, text: "Sorry but I couldn't answer your question, please try rephrasing." }];
+            });
+            return
+        }
 
-            return result.json()
-        }).then(data => {
-            // Create an array of messages from the current messages remove the last pending message and add the new response
-            setMessages(function (messages) {
-                if (messages[messages.length - 1].type === MessageTypes.Pending) {
-                    // Remove the last pending message if exists
-                    messages = messages.slice(0, -1);
-                }
-                return [...messages, { text: data.result, type: MessageTypes.Response }];
-            });
-            setQuery("")
-        }).catch((error) => {
-            setMessages(function (messages) {
-                if (messages[messages.length - 1].type === MessageTypes.Pending) {
-                    // Remove the last pending message if exists
-                    return messages.slice(0, -1);
-                }
-                return messages
-            });
-            setQuery("")
-            toast({
-                variant: "destructive",
-                title: "Uh oh! Something went wrong.",
-                description: error.message,
-            });
+        const json = await result.json()
+
+        setMessages((prev) => {
+            prev = prev.slice(0, -1);
+            return [...prev, { text: json.result.response, type: MessageTypes.Response }];
         });
     }
 
     // A function that handles the click event
-    async function handleQueryClick(event: any) {
+    const handleQueryClick = async (event: any) => {
         event.preventDefault();
         return sendQuery(query.trim());
     }
@@ -200,12 +185,36 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, set
         const addedElements: ElementDefinition[] = []
         formattedPaths.forEach((p: any) => addedElements.push(...graph.extend(p, false, path)))
         formattedPaths.forEach(p => p.edges.forEach(e => e.id = `_${e.id}`))
-        console.log(formattedPaths);
+        console.log(formattedPaths.flatMap(p => p.edges.map(e => e.id)));
+        chart.add(addedElements)
         graph.Elements.forEach((element: any) => {
             const { id } = element.data
-            if (!formattedPaths.some((p: any) => [...p.nodes, ...p.edges].some((el: any) => el.id == id))) {
-                const e = chart.elements().filter(el => el.id() == id)
+            const e = chart.elements().filter(el => el.id() == id)
+            console.log(id);
+            if (id == path.start?.id || id == path.end?.id) {
+                e.style({
+                    'border-width': 1,
+                    'border-color': 'pink',
+                    'border-opacity': 1,
+                });
+            } else if (formattedPaths.some((p: any) => [...p.nodes, ...p.edges].some((el: any) => el.id == id))) {
+                if (e.isNode()) {
+                    e.style({
+                        'border-width': 0.5,
+                        'border-color': 'pink',
+                        'border-opacity': 1,
+                    });
+                }
 
+                if (e.isEdge()) {
+                    e.style({
+                        "line-style": "dashed",
+                        "line-color": "pink",
+                        "target-arrow-color": "pink",
+                        "opacity": 1
+                    });
+                }
+            } else {
                 if (e.isNode()) {
                     e.style({
                         "color": "gray",
@@ -223,10 +232,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, set
                 }
             }
         })
-        chart.add(addedElements)
-        console.log(formattedPaths.flatMap(p => [...p.nodes, ...p.edges].map(e => e.id)));
         const elements = chart.elements().filter((element) => {
-            console.log(element.id());
             return formattedPaths.some(p => [...p.nodes, ...p.edges].some((node) => node.id == element.id()))
         });
         elements.layout(LAYOUT).run()
@@ -263,6 +269,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, set
                 return (
                     <div className="flex flex-col gap-4" key={index}>
                         <Input
+                            parentClassName="w-full"
                             graph={graph}
                             onValueChange={({ name, id }) => setPath(prev => ({ start: { name, id }, end: prev?.end }))}
                             value={path?.start?.name}
@@ -272,6 +279,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, set
                             node={path?.start}
                         />
                         <Input
+                            parentClassName="w-full"
                             graph={graph}
                             value={path?.end?.name}
                             onValueChange={({ name, id }) => setPath(prev => ({ end: { name, id }, start: prev?.start }))}

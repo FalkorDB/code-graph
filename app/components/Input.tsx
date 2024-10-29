@@ -11,9 +11,10 @@ interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
     handelSubmit?: (node: any) => void
     icon?: React.ReactNode
     node?: PathNode
+    parentClassName?: string
 }
 
-export default function Input({ value, onValueChange, handelSubmit, graph, icon, node, ...props }: Props) {
+export default function Input({ value, onValueChange, handelSubmit, graph, icon, node, className, parentClassName, ...props }: Props) {
 
     const [open, setOpen] = useState(false)
     const [options, setOptions] = useState<any[]>([])
@@ -60,8 +61,9 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             case "Enter": {
                 e.preventDefault()
                 const option = options.find((o, i) => i === selectedOption)
-                onValueChange(option)
+                onValueChange({ name: option.properties.name, id: option.id })
                 handelSubmit && handelSubmit(option)
+                setOpen(false)
                 return
             }
             case "ArrowUp": {
@@ -78,7 +80,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             case "Space": {
                 if (e.ctrlKey) {
                     e.preventDefault()
-                    setOpen(prev => true)
+                    setOpen(true)
                 }
                 return
             }
@@ -91,12 +93,12 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
 
     return (
         <div
-            className="w-[30%] relative pointer-events-none rounded-md gap-4"
+            className={cn("w-[30%] relative pointer-events-none rounded-md gap-4", parentClassName)}
         >
             <input
                 ref={inputRef}
                 onKeyDown={handelKeyDown}
-                className="w-full border p-2 rounded-md pointer-events-auto"
+                className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
                 value={value || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
@@ -107,7 +109,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             {
                 open &&
                 <div
-                    className="w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-auto p-2 gap-2"
+                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-auto p-2 gap-2"
                     style={{
                         top: (inputRef.current?.clientHeight || 0) + 16
                     }}
@@ -125,8 +127,9 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
-                                        onValueChange(option)
+                                        onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
+                                        setOpen(false)
                                     }}
                                     key={option.id}
                                 >
