@@ -78,7 +78,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     useEffect(() => {
         if (isPath) return
-        setIsPathResponse(false)        
+        setIsPathResponse(false)
         setSelectedPath(undefined)
         setPaths([])
     }, [isPath])
@@ -411,16 +411,16 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             case MessageTypes.Tip: return (
                 <div className="flex flex-col gap-6" key={index}>
                     <button
-                        className="flex gap-2 p-4 border bg-gray-100 hover:bg-gray-200 rounded-md"
+                        className="Tip"
                     >
                         <Lightbulb />
-                        <div className="flex flex-col gap-2 text-start">
-                            <h1 className="font-bold">Show unreachable code</h1>
-                            <p>Remove it if unnecessary or fix logic issues.</p>
+                        <div>
+                            <h1 className="label">Show unreachable code</h1>
+                            <p className="text">Remove it if unnecessary or fix logic issues.</p>
                         </div>
                     </button>
                     <button
-                        className="flex gap-2 p-4 border bg-gray-100 hover:bg-gray-200 rounded-md"
+                        className="Tip"
                         onClick={() => {
                             setPath({})
                             setMessages(prev => [
@@ -439,16 +439,16 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         }}
                     >
                         <Lightbulb />
-                        <div className="flex flex-col gap-2 text-start">
-                            <h1 className="font-bold">Show the path</h1>
-                            <p>Fetch, update, batch, and navigate data efficiently</p>
+                        <div>
+                            <h1 className="label">Show the path</h1>
+                            <p className="text">Fetch, update, batch, and navigate data efficiently</p>
                         </div>
                     </button>
-                    <button className="flex gap-2 p-4 border bg-gray-100 hover:bg-gray-200 rounded-md">
+                    <button className="Tip">
                         <Lightbulb />
-                        <div className="flex flex-col gap-2 text-start">
-                            <h1 className="font-bold">Show me cluster</h1>
-                            <p>Scale and distribute workloads across multiple servers</p>
+                        <div>
+                            <h1 className="label">Show me cluster</h1>
+                            <p className="text">Scale and distribute workloads across multiple servers</p>
                         </div>
                     </button>
                 </div>
@@ -464,8 +464,8 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     return (
         <div className="h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
             <main ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
-                <h1 className="text-xl font-extrabold">WELCOME TO OUR ASSISTANCE SERVICE</h1>
-                <span className="text-gray-500 text-lg">
+                <h1 className="font-oswald text-[20px] font-semibold leading-[32px] text-left text-[#13343B]">WELCOME TO OUR ASSISTANCE SERVICE</h1>
+                <span className="text-base font-normal leading-5 text-left text-[#7D7D7D]">
                     We can help you access and update only the needed
                     data via paths, optimizing network requests with
                     batching and catching for better performance.

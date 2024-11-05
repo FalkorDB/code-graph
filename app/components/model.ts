@@ -22,39 +22,24 @@ export interface Edge {
   [key: string]: any,
 }
 
-const COLORS_ORDER = [
-  "rose",
-  "yellow",
-  "teal",
-  "fuchsia",
-  "blue",
-  "violet",
-  "slate",
-  "cyan",
-  "orange",
-  "red",
-  "green",
+const COLORS_ORDER_NAME = [
   "pink",
+  "yellow",
+  "blue",
 ]
 
-export function getCategoryColorName(index = -1): string {
-  if (index === -1) return "gray"
+const COLORS_ORDER = [
+  "#F43F5F",
+  "#E9B306",
+  "#15B8A6",
+]
 
-  index = index < COLORS_ORDER.length ? index : 0
-
-  return COLORS_ORDER[index]
+export function getCategoryColorValue(index: number): string {
+  return COLORS_ORDER[index % COLORS_ORDER.length]
 }
 
-export function getCategoryColorValue(index = -1): string {
-  let colors = twcolors as any
-
-  if (index === -1) return colors["gray"]
-
-  index = index < COLORS_ORDER.length ? index : 0
-  let colorName = COLORS_ORDER[index]
-  let color = colors[colorName]
-
-  return color["500"]
+export function getCategoryColorName(index: number): string {
+  return COLORS_ORDER_NAME[index % COLORS_ORDER.length]
 }
 
 export class Graph {

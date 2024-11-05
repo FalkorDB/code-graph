@@ -12,7 +12,7 @@ export function Labels(params: { categories: Category[], className?: string, onC
             {params.categories.map((category) =>
                 <div className="bg-white flex gap-2 items-center p-2 border rounded-md" key={category.index}>
                     <Checkbox
-                        className={`data-[state=checked]:bg-${getCategoryColorName(category.index)}-500 bg-${getCategoryColorName(category.index)}-500 border-none rounded-sm`}
+                        className={`data-[state=checked]:bg-${getCategoryColorName(category.index)} bg-${getCategoryColorName(category.index)} border-none rounded-sm`}
                         onCheckedChange={(checked) => {
                             params.onClick(category.name, checked as boolean)
                             setReload(!reload)

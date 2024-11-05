@@ -141,9 +141,9 @@ export default function Home() {
         <div className="flex items-center justify-between py-4 px-8">
           <div className="flex gap-4 items-center">
             <Link href="https://www.falkordb.com" target='_blank'>
-              <Image src="/logo_02.svg" alt="FalkorDB" width={27.3} height={30} />
+              <Image src="/logo_02.svg" alt="FalkorDB" width={27.73} height={23.95} />
             </Link>
-            <h1 className='font-roberto title'>
+            <h1 className='italic font-bold text-[22px]'>
               CODE GRAPH
             </h1>
           </div>
