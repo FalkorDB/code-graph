@@ -45,7 +45,7 @@ export function getCategoryColorName(index = -1): string {
   return COLORS_ORDER[index]
 }
 
-function getCategoryColorValue(index = -1): string {
+export function getCategoryColorValue(index = -1): string {
   let colors = twcolors as any
 
   if (index === -1) return colors["gray"]

@@ -1,8 +1,11 @@
 import { toast } from "@/components/ui/use-toast"
-import { getCategoryColorName, Graph } from "./model"
+import { getCategoryColorName, getCategoryColorValue, Graph } from "./model"
 import { useEffect, useRef, useState } from "react"
 import { PathNode } from "../page"
 import { cn } from "@/lib/utils"
+import twcolors from 'tailwindcss/colors'
+
+let colors = twcolors as any
 
 interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
     value?: string
@@ -12,9 +15,10 @@ interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
     icon?: React.ReactNode
     node?: PathNode
     parentClassName?: string
+    scrollToBottom?: () => void
 }
 
-export default function Input({ value, onValueChange, handelSubmit, graph, icon, node, className, parentClassName, ...props }: Props) {
+export default function Input({ value, onValueChange, handelSubmit, graph, icon, node, className, parentClassName, scrollToBottom, ...props }: Props) {
 
     const [open, setOpen] = useState(false)
     const [options, setOptions] = useState<any[]>([])
@@ -23,6 +27,10 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
 
     useEffect(() => {
         setSelectedOption(0)
+        
+        if (open) {
+            scrollToBottom && scrollToBottom()
+        }
     }, [open])
 
     useEffect(() => {
@@ -48,9 +56,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             const { completions } = json.result
             setOptions(completions)
             setOpen(true)
-            setTimeout(() => {
-                inputRef?.current?.focus();
-            }, 0);
         }, 500)
 
         return () => clearTimeout(timeout)
@@ -60,7 +65,9 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
         switch (e.code) {
             case "Enter": {
                 e.preventDefault()
+                if (!open) return
                 const option = options.find((o, i) => i === selectedOption)
+                if (!option) return
                 onValueChange({ name: option.properties.name, id: option.id })
                 handelSubmit && handelSubmit(option)
                 setOpen(false)
@@ -93,7 +100,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
 
     return (
         <div
-            className={cn("w-[30%] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
         >
             <input
                 ref={inputRef}
@@ -104,12 +111,13 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                     const newVal = e.target.value
                     onValueChange({ name: newVal })
                 }}
+                onBlur={() => setOpen(false)}
                 {...props}
             />
             {
                 open &&
                 <div
-                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-auto p-2 gap-2"
+                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
                     style={{
                         top: (inputRef.current?.clientHeight || 0) + 16
                     }}
@@ -117,11 +125,13 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                     {
                         options.map((option, index) => {
                             const label = option.labels[0]
-                            const color = getCategoryColorName(graph.CategoriesMap.get(label)?.index)
+                            const name = option.properties.name
+                            const path = option.properties.path
+                            const colorName = getCategoryColorName(graph.CategoriesMap.get(label)?.index)
                             return (
                                 <button
                                     className={cn(
-                                        "w-full flex gap-4 p-1 items-center rounded-md",
+                                        "w-full flex gap-3 p-1 items-center rounded-md",
                                         selectedOption === index && "bg-gray-100"
                                     )}
                                     onMouseEnter={() => setSelectedOption(index)}
@@ -133,12 +143,15 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     }}
                                     key={option.id}
                                 >
-                                    <div className={`w-[20%] bg-${color}-500 text-xs text-${color}-500 bg-opacity-20 p-1 rounded-md`}>
-                                        <p>{label}</p>
+                                    <p className={`truncate w-[30%] bg-${colorName}-500 bg-opacity-20 p-1 rounded-md`} style={{ color: colors[colorName]["500"] }} title={label}>{label}</p>
+                                    <div className="w-1 grow text-start">
+                                        <p className="truncate" title={name}>
+                                            {name}
+                                        </p>
+                                        <p className="truncate p-1 text-xs font-medium text-gray-400" title={path}>
+                                            {path}
+                                        </p>
                                     </div>
-                                    <p>
-                                        {option.properties.name}
-                                    </p>
                                 </button>
                             )
                         })

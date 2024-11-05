@@ -18,16 +18,16 @@ interface Props {
 export default function ElementMenu({ obj, position, url, handelMaximize, parentWidth }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
-    
+
     useEffect(() => {
         setCurrentObj(undefined)
     }, [obj])
-    
+
     if (!obj || !position) return null
-    
+
     const objURL = obj.category === "File"
-    ? `${url}/tree/master/${obj.path}/${obj.name}`
-    : `${url}/tree/master/${obj.path}#L${obj.src_start}-L${obj.src_end + 1}`
+        ? `${url}/tree/master/${obj.path}/${obj.name}`
+        : `${url}/tree/master/${obj.path}#L${obj.src_start}-L${obj.src_end + 1}`
 
     return (
         <>
@@ -36,21 +36,21 @@ export default function ElementMenu({ obj, position, url, handelMaximize, parent
                     if (!ref) return
                     setContainerWidth(ref.clientWidth)
                 }}
-                className="absolute z-10 bg-black rounded-lg shadow-lg flex"
+                className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
                 style={{
                     left: position.x - containerWidth / 2,
                     top: position.y + 5
                 }}
             >
                 <button
-                    className="border p-4"
-                    title="Copy to clipboard"
-                    onClick={() => navigator.clipboard.writeText(JSON.stringify(obj))}
+                    className="p-2"
+                    title="Copy src to clipboard"
+                    onClick={() => navigator.clipboard.writeText(obj.src)}
                 >
                     <Copy color="white" />
                 </button>
                 <a
-                    className="border p-4"
+                    className="p-2"
                     href={objURL}
                     target="_blank"
                     title="Go to repo"
@@ -69,14 +69,14 @@ export default function ElementMenu({ obj, position, url, handelMaximize, parent
                     <Globe color="white" />
                 </a>
                 <button
-                    className="flex border p-4"
+                    className="flex p-2"
                     title="View Node"
                     onClick={() => setCurrentObj(obj)}
                 >
                     <ChevronsLeftRight color="white" />
                 </button>
                 <button
-                    className="flex border p-4"
+                    className="p-2"
                     onClick={() => handelMaximize()}
                 >
                     <Maximize2 color="white" />

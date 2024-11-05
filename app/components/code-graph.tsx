@@ -6,15 +6,15 @@ import cytoscape, { ElementDefinition, EventObject, Position } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { ChevronLeft, ChevronRight, GitFork, Search } from "lucide-react";
+import { GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import ElementTooltip from "./elementTooltip";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { cn } from '@/lib/utils';
 import { Path } from '../page';
 import Input from './Input';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import CommitList from './commitList';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Props {
     onFetchGraph: (graphName: string) => void,
@@ -26,6 +26,7 @@ interface Props {
     selectedValue: string
     setSelectedPathId: (selectedPathId: string) => void
     isPathResponse: boolean
+    setIsPathResponse: Dispatch<SetStateAction<boolean>>
 }
 
 // The stylesheet for the graph
@@ -112,8 +113,6 @@ export const LAYOUT = {
     avoidOverlap: true,
 }
 
-const COMMIT_LIMIT = 7
-
 export function CodeGraph({
     onFetchGraph,
     onFetchNode,
@@ -123,7 +122,8 @@ export function CodeGraph({
     chartRef,
     selectedValue,
     setSelectedPathId,
-    isPathResponse
+    isPathResponse,
+    setIsPathResponse
 }: Props) {
 
     let graph = useContext(GraphContext)
@@ -329,6 +329,7 @@ export function CodeGraph({
         chartNode.select()
         const layout = { ...LAYOUT, padding: 250 }
         chartNode.layout(layout).run()
+        setSearchNodeName("")
     }
 
     return (
@@ -346,22 +347,55 @@ export function CodeGraph({
                     {
                         graph.Id ?
                             <div className="h-full relative border">
-                                <div className="w-full absolute top-0 left-0 flex gap-4 p-4 z-10 pointer-events-none">
-                                    <Input
-                                        graph={graph}
-                                        value={searchNodeName}
-                                        onValueChange={(node) => setSearchNodeName(node.name!)}
-                                        icon={<Search />}
-                                        handelSubmit={handelSearchSubmit}
-                                    />
-                                    <Labels className="pointer-events-auto" categories={graph.Categories} onClick={onCategoryClick} />
+                                <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
+                                    <div className='flex gap-4 pointer-events-auto'>
+                                        <Input
+                                            graph={graph}
+                                            value={searchNodeName}
+                                            onValueChange={(node) => setSearchNodeName(node.name!)}
+                                            icon={<Search />}
+                                            handelSubmit={handelSearchSubmit}
+                                        />
+                                        <Labels categories={graph.Categories} onClick={onCategoryClick} />
+                                    </div>
+                                    {
+                                        isPathResponse &&
+                                        <button
+                                            className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
+                                            onClick={() => {
+                                                chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
+                                                setIsPathResponse(false)
+                                            }}
+                                        >
+                                            <X size={15} />
+                                            <p>Clear Graph</p>
+                                        </button>
+                                    }
                                 </div>
                                 <div className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
-                                    <div className="flex gap-4">
+                                    <div className="flex gap-4 text-gray-500">
                                         <p>{nodesCount} Nodes</p>
                                         <p>{edgesCount} Edges</p>
                                     </div>
-                                    <Toolbar className="pointer-events-auto" chartRef={chartRef} />
+                                    <div className='flex gap-4'>
+                                        {/* <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
+                                            <div className='flex gap-2 items-center'>
+                                                <Checkbox
+                                                    className='h-5 w-5 bg-gray-500 data-[state true]'
+                                                />
+                                                <p className='text-bold'>Display Changes</p>
+                                            </div>
+                                            <div className='flex gap-2 items-center'>
+                                                <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full'/>
+                                                <p className='text-pink-500'>Were added</p>
+                                            </div>
+                                            <div className='flex gap-2 items-center'>
+                                                <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full'/>
+                                                <p className='text-blue-500'>Were edited</p>
+                                            </div>
+                                        </div> */}
+                                        <Toolbar className="pointer-events-auto" chartRef={chartRef} />
+                                    </div>
                                 </div>
                                 <ElementTooltip
                                     label={tooltipLabel}
@@ -455,69 +489,15 @@ export function CodeGraph({
                 </main>
                 {
                     graph.Id &&
-                    <div className='bg-gray-200 flex border rounded-b-md'>
-                        <button
-                            className='p-4 border border-gray-300 rounded-br-md'
-                            onClick={() => {
-                                setCommitIndex(prev => prev - 1)
-                            }}
-                            disabled={commitIndex - COMMIT_LIMIT === 0}
-                        >
-                            {
-                                commitIndex - COMMIT_LIMIT !== 0 ?
-                                    <ChevronLeft />
-                                    : <div className='h-6 w-6' />
-                            }
-                        </button>
-                        <ul className='w-1 grow flex p-3 justify-between'>
-                            {
-                                commits.slice(commitIndex - COMMIT_LIMIT, commitIndex).map((commit: any) => {
-                                    const date = new Date(commit.date * 1000)
-                                    const month = `${date.getDate()} ${date.toLocaleString('default', { month: 'long' })}`
-                                    const hour = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`
-                                    return (
-                                        <HoverCard
-                                            key={commit.hash}
-                                        >
-                                            <HoverCardTrigger asChild>
-                                                <li
-                                                    className={cn(currentCommit === commit.hash && "bg-white", "grow p-1 rounded-md overflow-hidden")}
-                                                >
-                                                    <button
-                                                        className='w-full flex items-center justify-center gap-1'
-                                                        onClick={() => setCurrentCommit(commit.hash)}
-                                                    >
-                                                        <p className='truncate' title={month}>{month}</p>
-                                                        <p className='text-gray-400' title='hour'>{hour}</p>
-                                                    </button>
-                                                </li>
-                                            </HoverCardTrigger>
-                                            <HoverCardContent>
-                                                <div className='p-4'>
-                                                    <h1 className='text-bold'>{commit.author}:</h1>
-                                                    <p>{commit.message}</p>
-                                                    <p className='truncate' title={commit.hash}>{commit.hash}</p>
-                                                </div>
-                                            </HoverCardContent>
-                                        </HoverCard>
-                                    )
-                                })
-                            }
-                        </ul>
-                        <button
-                            className='p-4 border border-gray-300 rounded-bl-md'
-                            onClick={() => {
-                                setCommitIndex(prev => prev + 1)
-                            }}
-                            disabled={commitIndex === commits.length}
-                        >
-                            {
-                                commitIndex !== commits.length ?
-                                    <ChevronRight />
-                                    : <div className='h-6 w-6' />
-                            }
-                        </button>
-                    </div>
+                    <CommitList
+                        commitIndex={commitIndex}
+                        commits={commits}
+                        currentCommit={currentCommit}
+                        setCommitIndex={setCommitIndex}
+                        setCurrentCommit={setCurrentCommit}
+                        graph={graph}
+                        chartRef={chartRef}
+                    />
                 }
             </div>
         </div>

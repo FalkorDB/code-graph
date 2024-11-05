@@ -138,38 +138,38 @@ export default function Home() {
   return (
     <main className="h-screen flex flex-col">
       <header className="flex flex-col text-xl">
-        <div className="flex items-center justify-between py-4 px-4">
-          <div className="flex gap-8 items-center">
+        <div className="flex items-center justify-between py-4 px-8">
+          <div className="flex gap-4 items-center">
             <Link href="https://www.falkordb.com" target='_blank'>
-              <Image src="/color-logo.svg" alt="FalkorDB" width={200} height={30} />
+              <Image src="/logo_02.svg" alt="FalkorDB" width={27.3} height={30} />
             </Link>
-            <h1 className='font-extrabold'>
-              CODE GRAPH BY <Link href="https://www.falkordb.com" target='_blank'>FALKORDB</Link>
+            <h1 className='font-roberto title'>
+              CODE GRAPH
             </h1>
           </div>
-          <ul className="flex gap-8 items-center font-medium">
-            <Link className="flex gap-2 items-center" href="https://www.falkordb.com" target='_blank'>
+          <ul className="flex gap-4 items-center font-medium">
+            <Link className="flex gap-2.5 items-center p-4" href="https://www.falkordb.com" target='_blank'>
               <HomeIcon />
               <p>Home</p>
             </Link>
-            <Link className="flex gap-2 items-center" href="https://github.com/FalkorDB/code-graph" target='_blank'>
+            <Link className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
               <Github />
               <p>Github</p>
             </Link>
-            <Link className="flex gap-2 items-center" href="https://github.com/FalkorDB/code-graph" target='_blank'>
+            <Link className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
               <BookOpen />
               <p>Tip</p>
             </Link>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
                 <button
-                  className="bg-black p-3 text-white rounded-lg"
+                  className="h-full bg-black p-4 text-white rounded-lg"
                   title="Create new project"
                 >
                   <p>Create new project</p>
                 </button>
               </DialogTrigger>
-              <DialogContent className='max-w-[20%] gap-8'>
+              <DialogContent className='max-w-[26%] gap-8'>
                 <DialogHeader>
                   <DialogTitle>CREATE A NEW PROJECT</DialogTitle>
                 </DialogHeader>
@@ -178,7 +178,7 @@ export default function Home() {
                 </DialogDescription>
                 <form className='flex flex-col gap-4' onSubmit={onCreateRepo}>
                   <input
-                    className='border p-2 rounded-lg'
+                    className='border p-3 rounded-lg'
                     type="text"
                     value={createURL}
                     onChange={(e) => setCreateURL(e.target.value)}
@@ -186,7 +186,7 @@ export default function Home() {
                   />
                   <div className='flex flex-row-reverse'>
                     <button
-                      className='bg-black p-2 text-white rounded-lg'
+                      className='bg-black p-3 text-white rounded-lg'
                       type='submit'
                       title='Create Project'
                     >
@@ -213,11 +213,12 @@ export default function Home() {
               selectedValue={selectedValue}
               setSelectedPathId={setSelectedPathId}
               isPathResponse={isPathResponse}
+              setIsPathResponse={setIsPathResponse}
               />
           </GraphContext.Provider>
         </Panel>
         <PanelResizeHandle />
-        <Panel className="flex flex-col border-l min-w-[420px]" defaultSize={30} >
+        <Panel className="border-l min-w-[420px]" defaultSize={30} >
           <Chat
             chartRef={chartRef}
             setPath={setPath}
@@ -225,7 +226,8 @@ export default function Home() {
             repo={graph.Id}
             graph={graph}
             selectedPathId={selectedPathId}
-            setIsPathResponse={setIsPathResponse}
+            isPath={isPathResponse}
+            setIsPath={setIsPathResponse}
           />
         </Panel>
       </PanelGroup>
