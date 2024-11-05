@@ -127,7 +127,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                             const label = option.labels[0]
                             const name = option.properties.name
                             const path = option.properties.path
-                            const colorName = getCategoryColorName(graph.CategoriesMap.get(label)?.index)
+                            const colorName = getCategoryColorName(graph.CategoriesMap.get(label)!.index)
                             return (
                                 <button
                                     className={cn(
