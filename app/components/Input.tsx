@@ -46,7 +46,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 toast({
                     variant: "destructive",
                     title: "Uh oh! Something went wrong.",
-                    description: await result.text(),
+                    description: "Please try again later.",
                 })
                 return
             }
