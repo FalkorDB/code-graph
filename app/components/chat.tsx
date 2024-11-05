@@ -322,7 +322,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, set
                     >
                         <Lightbulb />
                         <div className="flex flex-col gap-2 text-start">
-                            <h1 className="font-bold">Show unreadable code</h1>
+                            <h1 className="font-bold">Show unreachable code</h1>
                             <p>Remove it if unnecessary or fix logic issues.</p>
                         </div>
                     </button>
