@@ -55,7 +55,9 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
 
             const { completions } = json.result
             setOptions(completions)
-            setOpen(true)
+            if (completions?.length > 0) {
+                setOpen(true)
+            }
         }, 500)
 
         return () => clearTimeout(timeout)
@@ -136,7 +138,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     )}
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onMouseLeave={() => setSelectedOption(-1)}
-                                    onClick={() => {
+                                    onClick={() => {    
                                         onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
                                         setOpen(false)
