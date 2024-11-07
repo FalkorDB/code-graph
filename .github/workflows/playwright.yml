@@ -8,6 +8,11 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports:
+          - 6379:6379
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -17,8 +22,24 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Run Playwright tests
-      run: npx playwright test
+    - name: Clone code_graph repository
+      run: git clone -b git-graph https://github.com/FalkorDB/code_graph.git
+    - name: Set up Python environment
+      run: |
+        python3 -m venv myproject_env
+        source myproject_env/bin/activate
+        pip install Flask
+        cd code_graph
+        poetry install
+    - name: Run Flask backend
+      run: |
+        cd code_graph
+        nohup flask --app code_graph run --debug &
+    - name: Run Playwright tests with detailed reporting
+      run: |
+        npm install
+        npm run build
+        NEXTAUTH_SECRET=SECRET npm start & npx playwright test --reporter=dot,list
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
