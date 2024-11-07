@@ -37,11 +37,11 @@ jobs:
         python3 -m venv myproject_env
         source myproject_env/bin/activate
         pip install Flask
-        cd code_graph
+        cd code-graph-backend
         poetry install
     - name: Run Flask backend
       run: |
-        cd code_graph
+        cd code-graph-backend
         nohup flask --app code_graph run --debug &
     - name: Run Playwright tests with detailed reporting
       run: |
