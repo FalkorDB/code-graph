@@ -23,13 +23,9 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Set up SSH
-      env:
-        DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
       run: |
-        mkdir -p ~/.ssh
-        echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan github.com >> ~/.ssh/known_hosts
+       eval ssh-agent -s
+       ssh-add - <<< '${{ secrets.DEPLOY_KEY }}'
     - name: Clone code_graph repository
       run: git clone git@github.com:FalkorDB/code-graph-backend.git
     - name: Set up Python environment
