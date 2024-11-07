@@ -24,7 +24,7 @@ jobs:
       run: npx playwright install --with-deps
     - name: Set up SSH
       run: |
-       eval ssh-agent -s
+       eval `ssh-agent -s`
        ssh-add - <<< '${{ secrets.DEPLOY_KEY }}'
     - name: Clone code_graph repository
       run: git clone git@github.com:FalkorDB/code-graph-backend.git
