@@ -31,7 +31,7 @@ jobs:
         chmod 600 ~/.ssh/deploy_key
         ssh-keyscan github.com >> ~/.ssh/known_hosts
     - name: Clone code_graph repository
-      run: git clone -b https://github.com/FalkorDB/code-graph-backend.git
+      run: git clone https://github.com/FalkorDB/code-graph-backend.git
     - name: Set up Python environment
       run: |
         python3 -m venv myproject_env
