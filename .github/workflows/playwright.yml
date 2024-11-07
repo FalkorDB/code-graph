@@ -32,6 +32,12 @@ jobs:
         python3 -m venv myproject_env
         source myproject_env/bin/activate
         pip install Flask
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        export PATH="$HOME/.local/bin:$PATH"
+    - name: Set up Flask and install backend dependencies
+      run: |
         cd code-graph-backend
         poetry install
     - name: Run Flask backend
