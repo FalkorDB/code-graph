@@ -27,23 +27,24 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Set up Python environment
+    - name: Set up Python environment, install dependencies, and run Flask
       run: |
+        # Install Poetry first
+        curl -sSL https://install.python-poetry.org | python3 -
+        export PATH="$HOME/.local/bin:$PATH"
+
+        # Set up Python virtual environment
         cd code-graph-backend
         python3 -m venv myproject_env
         source myproject_env/bin/activate
+
+        # Install Flask
         pip install Flask
-    - name: Install Poetry
-      run: |
-        curl -sSL https://install.python-poetry.org | python3 -
-        export PATH="$HOME/.local/bin:$PATH"
-    - name: Set up Flask and install backend dependencies
-      run: |
-        cd code-graph-backend
+
+        # Install dependencies using Poetry
         poetry install
-    - name: Run Flask backend
-      run: |
-        cd code-graph-backend
+
+        # Run Flask backend
         flask --app code_graph run --debug
     - name: Run Playwright tests with detailed reporting
       run: |
