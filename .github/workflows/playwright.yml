@@ -39,6 +39,7 @@ jobs:
         export PATH="$HOME/.local/bin:$PATH"
     - name: Set up Flask and install backend dependencies
       run: |
+        cd code-graph-backend
         poetry install
     - name: Run Flask backend
       run: |
