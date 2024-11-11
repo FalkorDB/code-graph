@@ -463,7 +463,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     return (
         <div className="h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
-            <main ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
+            <main data-name="main-chat" ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
                 <h1 className="font-oswald text-[20px] font-semibold leading-[32px] text-left text-[#13343B]">WELCOME TO OUR ASSISTANCE SERVICE</h1>
                 <span className="text-base font-normal leading-5 text-left text-[#7D7D7D]">
                     We can help you access and update only the needed
@@ -479,7 +479,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             <footer>
                 {repo &&
                     <div className="flex gap-4 px-4">
-                        <button className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setMessages(prev => [...prev, { type: MessageTypes.Tip }])}>
+                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setMessages(prev => [...prev, { type: MessageTypes.Tip }])}>
                             <Lightbulb />
                         </button>
                         <form className="grow relative" onSubmit={handleQueryClick}>

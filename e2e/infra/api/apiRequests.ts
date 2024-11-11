@@ -1,7 +1,7 @@
 import { APIRequestContext, request } from "@playwright/test"
 
 
-const getRequest = async (url: string, body: any, availableRequest?: APIRequestContext, headers?: Record<string, string>) => {
+const getRequest = async (url: string, body?: any, availableRequest?: APIRequestContext, headers?: Record<string, string>) => {
   const requestOptions = {
     data: body,
     headers: headers || undefined,
@@ -11,7 +11,7 @@ const getRequest = async (url: string, body: any, availableRequest?: APIRequestC
   return await requestContext.get(url, requestOptions);
 };
 
-const postRequest = async (url: string, body: any, availableRequest?: APIRequestContext, headers?: Record<string, string>) => {
+const postRequest = async (url: string, body?: any, availableRequest?: APIRequestContext, headers?: Record<string, string>) => {
   const requestOptions = {
     data: body,
     headers: headers || undefined,

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import BrowserWrapper from '../infra/ui/browserWrapper';
-import NavBarComponent from '../logic/POM/navBarComponent';
+import CodeGraph from '../logic/POM/codeGraph';
 import urls from '../config/urls.json';
 
 test.describe(' Navbar tests', () => {
@@ -15,7 +15,7 @@ test.describe(' Navbar tests', () => {
   });
 
   test("Verify clicking on Home redirects to specified URL", async () => {
-      const navBar = await browser.createNewPage(NavBarComponent, urls.baseUrl)
+      const navBar = await browser.createNewPage(CodeGraph, urls.baseUrl)
       const page = await navBar.clickOnHomeBtn()
       expect(navBar.getCurrentURL()).toBe("http://localhost:3000/")
   })
