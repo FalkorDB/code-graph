@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { PathNode } from "../page"
 import { cn } from "@/lib/utils"
 import twcolors from 'tailwindcss/colors'
+import { type } from "os"
 
 let colors = twcolors as any
 
@@ -63,41 +64,41 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
         return () => clearTimeout(timeout)
     }, [value])
 
-    const handelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        switch (e.code) {
+    const handelKeyDown = (e?: React.KeyboardEvent<HTMLInputElement>, code?: string) => {
+        switch (e?.code || code) {
             case "Enter": {
-                e.preventDefault()
+                e?.preventDefault()
                 const option = options.find((o, i) => i === selectedOption)
                 if (!option) return
                 if (handelSubmit) {
                     handelSubmit(option)
                     onValueChange({ name: option.properties.name, id: option.id })
-                } 
+                }
                 if (!open) return
                 onValueChange({ name: option.properties.name, id: option.id })
                 setOpen(false)
                 return
             }
             case "ArrowUp": {
-                e.preventDefault()
+                e?.preventDefault()
                 console.log(selectedOption <= 0 ? selectedOption : selectedOption - 1);
                 setSelectedOption(prev => prev <= 0 ? options.length - 1 : prev - 1)
                 return
             }
             case "ArrowDown": {
-                e.preventDefault()
+                e?.preventDefault()
                 setSelectedOption(prev => (prev + 1) % options.length)
                 return
             }
             case "Space": {
-                if (e.ctrlKey) {
-                    e.preventDefault()
+                if (e?.ctrlKey) {
+                    e?.preventDefault()
                     setOpen(true)
                 }
                 return
             }
             case "Escape": {
-                e.preventDefault()
+                e?.preventDefault()
                 setOpen(false)
             }
         }
@@ -132,6 +133,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                             const label = option.labels[0]
                             const name = option.properties.name
                             const path = option.properties.path
+                            const color = getCategoryColorValue(graph.CategoriesMap.get(label)!.index)
                             const colorName = getCategoryColorName(graph.CategoriesMap.get(label)!.index)
                             return (
                                 <button
@@ -142,13 +144,12 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
-                                        onValueChange({ name: option.properties.name, id: option.id })
-                                        handelSubmit && handelSubmit(option)
-                                        setOpen(false)
+                                        debugger
+                                        handelKeyDown(undefined, "Enter")
                                     }}
                                     key={option.id}
                                 >
-                                    <p className={`truncate w-[30%] bg-${colorName}-500 bg-opacity-20 p-1 rounded-md`} style={{ color: colors[colorName]["500"] }} title={label}>{label}</p>
+                                    <p className={`truncate w-[30%] bg-${colorName} bg-opacity-20 p-1 rounded-md`} style={{ color }} title={label}>{label}</p>
                                     <div className="w-1 grow text-start">
                                         <p className="truncate" title={name}>
                                             {name}

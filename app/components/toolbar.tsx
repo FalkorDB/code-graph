@@ -1,22 +1,15 @@
 import { CircleDot, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils"
+import { MutableRefObject } from "react";
 
 export function Toolbar(params: {
-    chartRef: React.RefObject<cytoscape.Core>, className?: string
+    chartRef: MutableRefObject<any>, className?: string
 }) {
 
     function handleZoomClick(changefactor: number) {
         let chart = params.chartRef.current
         if (chart) {
             chart.zoom(chart.zoom() * changefactor)
-        }
-    }
-
-    function handleCenterClick() {
-        let chart = params.chartRef.current
-        if (chart) {
-            chart.fit(undefined, 80)
-            chart.center()
         }
     }
 
@@ -31,7 +24,7 @@ export function Toolbar(params: {
             </button>
             <button
                 className="border p-2"
-                onClick={() => handleCenterClick()}
+                onClick={() => params.chartRef?.current?.zoomToFit(500, 200)}
                 title="Center"
             >
                 <CircleDot />

@@ -6,7 +6,6 @@ import { Path } from "../page";
 import Input from "./Input";
 import { Graph } from "./model";
 import { cn } from "@/lib/utils";
-import { LAYOUT } from "./code-graph";
 
 enum MessageTypes {
     Query,
@@ -29,7 +28,6 @@ interface Props {
     path: Path | undefined
     setPath: Dispatch<SetStateAction<Path | undefined>>
     graph: Graph
-    chartRef: MutableRefObject<cytoscape.Core | null>
     selectedPathId: string | undefined
     isPath: boolean
     setIsPath: (isPathResponse: boolean) => void
@@ -46,7 +44,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isPath, setIsPath }: Props) {
+export function Chat({ repo, path, setPath, graph, selectedPathId, isPath, setIsPath }: Props) {
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([{ type: MessageTypes.Tip }]);
@@ -95,7 +93,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         setSelectedPath(prev => {
             if (prev) {
                 if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...prev.nodes, ...prev.edges].some((el: any) => el.id === e.id)))) {
-                    chart.edges().forEach(e => {
+                    chart.edges().forEach((e: any) => {
                         const id = e.id()
 
                         if (prev.edges.some(el => el.id == id) && !p.edges.some(el => el.id == id)) {
@@ -272,57 +270,28 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
         const formattedPaths: { nodes: any[], edges: any[] }[] = json.result.paths.map((p: any) => ({ nodes: p.filter((node: any, i: number) => i % 2 === 0), edges: p.filter((edge: any, i: number) => i % 2 !== 0) }))
         chart.add(formattedPaths.flatMap((p: any) => graph.extend(p, false, path)))
-        formattedPaths.forEach(p => p.edges.forEach(e => e.id = `_${e.id}`))
-        graph.Elements.forEach((element: any) => {
+        formattedPaths.forEach(p => p.edges.forEach(e => e.id = `_${e.id}`));
+        [...graph.Elements.links, ...graph.Elements.nodes].forEach((element: any) => {
             const { id } = element.data
-            const e = chart.elements().filter(el => el.id() == id)
             if (id == path.start?.id || id == path.end?.id) {
-                e.style({
-                    'border-width': 1,
-                    'border-color': '#FF66B3',
-                    'border-opacity': 1,
-                });
-            } else if (formattedPaths.some((p: any) => [...p.nodes, ...p.edges].some((el: any) => el.id == id))) {
-                if (e.isNode()) {
-                    e.style({
-                        'border-width': 0.5,
-                        'border-color': '#FF66B3',
-                        'border-opacity': 1,
-                    });
-                }
 
-                if (e.isEdge()) {
-                    e.style({
-                        "line-style": "dashed",
-                        "line-color": "#FF66B3",
-                        "target-arrow-color": "#FF66B3",
-                        "opacity": 1
-                    });
+            } else if (formattedPaths.some((p: any) => [...p.nodes, ...p.edges].some((el: any) => el.id == id))) {
+                if ("category" in element) {
+
+                } else {
+
                 }
             } else {
-                if (e.isNode()) {
-                    e.style({
-                        "border-width": 0.5,
-                        "color": "gray",
-                        "border-color": "black",
-                        "background-color": "gray",
-                        "opacity": 0.5
-                    });
-                }
+                if ("category" in element) {
 
-                if (e.isEdge()) {
-                    e.style({
-                        "line-color": "gray",
-                        "target-arrow-color": "gray",
-                        "opacity": 0.5,
-                    });
+                } else {
+
                 }
             }
-        })
-        const elements = chart.elements().filter((element) => {
-            return formattedPaths.some(p => [...p.nodes, ...p.edges].some((node) => node.id == element.id()))
         });
-        elements.layout(LAYOUT).run()
+        [...graph.Elements.links, ...graph.Elements.nodes].filter((element) => {
+            return formattedPaths.some(p => [...p.nodes, ...p.edges].some((node) => node.id == element.id))
+        })
         setPaths(formattedPaths)
         setMessages(prev => [...prev.slice(0, -2), { type: MessageTypes.PathResponse, paths: formattedPaths }])
         setPath(undefined)
@@ -433,7 +402,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 { type: MessageTypes.Path, path }
                             ])
                             if (isPathResponse) {
-                                chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
                                 setIsPathResponse(false)
                             }
                         }}

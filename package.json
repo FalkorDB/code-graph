@@ -29,6 +29,7 @@
     "react": "^18",
     "react-cytoscapejs": "^2.0.0",
     "react-dom": "^18",
+    "react-force-graph": "^1.44.6",
     "react-resizable-panels": "^2.0.20",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",

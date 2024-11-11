@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, Node } from './components/model';
+import { Graph, GraphData, Node } from './components/model';
 import { BookOpen, Github, HomeIcon } from 'lucide-react';
 import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -32,7 +32,6 @@ export default function Home() {
   const [createOpen, setCreateOpen] = useState(false)
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
-  const chartRef = useRef<cytoscape.Core | null>(null)
 
   useEffect(() => {
     const run = async () => {
@@ -127,7 +126,7 @@ export default function Home() {
         title: "Uh oh! Something went wrong.",
         description: await result.text(),
       })
-      return []
+      return { nodes: [], links: [] }
     }
 
     const json = await result.json()
@@ -204,7 +203,6 @@ export default function Home() {
         <Panel defaultSize={70} className="flex flex-col" minSize={50}>
           <GraphContext.Provider value={graph}>
             <CodeGraph
-              chartRef={chartRef}
               options={options}
               onFetchGraph={onFetchGraph}
               onFetchNode={onFetchNode}
@@ -214,13 +212,12 @@ export default function Home() {
               setSelectedPathId={setSelectedPathId}
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
-              />
+            />
           </GraphContext.Provider>
         </Panel>
         <PanelResizeHandle />
         <Panel className="border-l min-w-[420px]" defaultSize={30} >
           <Chat
-            chartRef={chartRef}
             setPath={setPath}
             path={path}
             repo={graph.Id}

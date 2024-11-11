@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Node } from "./model";
-import { ChevronLeft, ChevronRight, ChevronsLeftRight, ChevronsRightLeft, Copy, Globe, Maximize2 } from "lucide-react";
+import { ChevronsLeftRight, Copy, Globe, Maximize2 } from "lucide-react";
 import DataPanel from "./dataPanel";
 import { Position } from "cytoscape";
 
@@ -11,11 +11,10 @@ interface Props {
     position: Position | undefined;
     url: string;
     handelMaximize: () => void;
-    parentWidth: number;
 }
 
 
-export default function ElementMenu({ obj, position, url, handelMaximize, parentWidth }: Props) {
+export default function ElementMenu({ obj, position, url, handelMaximize }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
 
@@ -39,7 +38,7 @@ export default function ElementMenu({ obj, position, url, handelMaximize, parent
                 className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
                 style={{
                     left: position.x - containerWidth / 2,
-                    top: position.y + 5
+                    top: position.y
                 }}
             >
                 <button

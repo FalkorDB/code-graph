@@ -1,32 +1,30 @@
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { toast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
-import cytoscape from "cytoscape"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { Dispatch, MutableRefObject, SetStateAction, useState } from "react"
+import { Dispatch, SetStateAction } from "react"
 import { Graph } from "./model"
-import { LAYOUT } from "./code-graph"
 
+export type CommitChanges = {
+    additionsIds: any[]
+    modifiedIds: any[]
+}
 interface Props {
+    commitChanges: CommitChanges | undefined
+    setCommitChanges: (commitChanges: CommitChanges | undefined) => void
     commits: any[]
     currentCommit: number
     setCurrentCommit: Dispatch<SetStateAction<number>>
     commitIndex: number
     setCommitIndex: Dispatch<SetStateAction<number>>
     graph: Graph,
-    chartRef: MutableRefObject<cytoscape.Core | null>
 }
 
 const COMMIT_LIMIT = 7
 
-export default function CommitList({ commitIndex, commits, currentCommit, setCommitIndex, setCurrentCommit, graph, chartRef }: Props) {
-
-    const [commitChanges, setCommitChanges] = useState<any>()
+export default function CommitList({ commitChanges, setCommitChanges, commitIndex, commits, currentCommit, setCommitIndex, setCurrentCommit, graph }: Props) {
 
     const handelCommitChange = async (commit: any) => {
-        const chart = chartRef.current
-
-        if (!chart) return
 
         const result = await fetch(`api/repo/${graph.Id}/?type=switchCommit`, {
             method: 'POST',
@@ -43,36 +41,30 @@ export default function CommitList({ commitIndex, commits, currentCommit, setCom
         const json = await result.json()
 
         json.result.deletions.nodes.forEach((e: any) => {
-            chart.remove(`#${e.id}`)
             graph.NodesMap.delete(e.id)
-            graph.Elements.splice(graph.Elements.findIndex((el) => el.data.id === e.id), 1)
+            graph.Elements.nodes.splice(graph.Elements.nodes.findIndex((el) => el.data.id === e.id), 1)
         })
 
         json.result.deletions.edges.forEach((e: any) => {
-            chart.remove(`#_${e.id}`)
             graph.EdgesMap.delete(e.id)
-            graph.Elements.splice(graph.Elements.findIndex((el) => el.data.id === e.id), 1)
+            graph.Elements.links.splice(graph.Elements.links.findIndex((el) => el.data.id === e.id), 1)
         })
 
-        const additionsIds = chart.add(graph.extend(json.result.additions))
-            .filter((e) => e.isNode()).style({ "border-color": "pink", "border-width": 2, "border-opacity": 1 })
-            .map((e) => e.id())!
+        const additionsIds = graph.extend(json.result.additions).nodes.map((e) => e.id)
 
         const g = Graph.empty()
         g.extend(json.result.modifications)
 
-        const modifiedIds = g.Elements.map((e) => {
-            const graphElement = graph.Elements.find((el) => el.data.id === e.data.id)
-            graphElement.data = e.data
+        const modifiedIds = [...g.Elements.nodes, ...g.Elements.nodes].map((e) => {
+            let graphElement = [...g.Elements.nodes, ...g.Elements.nodes].find((el) => el.data.id === e.data.id)
+            graphElement = e
 
-            if ("category" in e.data) {
-                chart.$(`#${e.data.id}`).data(e.data).style({ "border-color": "blue", "border-width": 2, "border-opacity": 1 })
+            if ("category" in e) {
+
             }
 
             return e.data.id
         })
-
-        chart.layout(LAYOUT).run()
 
         setCommitChanges({ additionsIds, modifiedIds })
         setCurrentCommit(commit.hash)
@@ -117,9 +109,9 @@ export default function CommitList({ commitIndex, commits, currentCommit, setCom
                                     </li>
                                 </HoverCardTrigger>
                                 <HoverCardContent className='bg-[#F9F9F9] flex flex-col gap-2 p-4 w-fit max-w-[70%]'>
-                                        <h1 className='text-bold'>{commit.author}</h1>
-                                        <p>{commit.message}</p>
-                                        <p className='text-[#7D7D7D] truncate' title={commit.hash}>{commit.hash}</p>
+                                    <h1 className='text-bold'>{commit.author}</h1>
+                                    <p>{commit.message}</p>
+                                    <p className='text-[#7D7D7D] truncate' title={commit.hash}>{commit.hash}</p>
                                 </HoverCardContent>
                             </HoverCard>
                         )

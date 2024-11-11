@@ -1,5 +1,7 @@
-import twcolors from 'tailwindcss/colors'
 import { Path } from '../page'
+
+
+export type GraphData = { links: Edge[], nodes: Node[] }
 
 export interface Category {
   name: string,
@@ -16,6 +18,7 @@ export interface Node {
 }
 
 export interface Edge {
+  id: string
   source: number,
   target: number,
   label: string,
@@ -46,13 +49,13 @@ export class Graph {
 
   private id: string;
   private categories: Category[];
-  private elements: any[];
+  private elements: GraphData;
 
   private categoriesMap: Map<string, Category>;
   private nodesMap: Map<number, Node>;
   private edgesMap: Map<number, Edge>;
 
-  private constructor(id: string, categories: Category[], elements: any[],
+  private constructor(id: string, categories: Category[], elements: GraphData,
     categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Edge>) {
     this.id = id;
     this.categories = categories;
@@ -74,8 +77,12 @@ export class Graph {
     return this.categoriesMap;
   }
 
-  get Elements(): any[] {
+  get Elements(): GraphData {
     return this.elements;
+  }
+
+  set Elements(elements: GraphData) {
+    this.elements = elements;
   }
 
   get EdgesMap(): Map<number, Edge> {
@@ -87,7 +94,7 @@ export class Graph {
   }
 
   public static empty(): Graph {
-    return new Graph("", [], [], new Map<string, Category>(), new Map<number, Node>(), new Map<number, Edge>())
+    return new Graph("", [], { links: [], nodes: [] }, new Map<string, Category>(), new Map<number, Node>(), new Map<number, Edge>())
   }
 
   public static create(results: any, graphName: string): Graph {
@@ -97,8 +104,8 @@ export class Graph {
     return graph
   }
 
-  public extend(results: any, collapsed = false, path?: Path): any[] {
-    let newElements: any[] = []
+  public extend(results: any, collapsed = false, path?: Path): GraphData {
+    let newElements: GraphData = { links: [], nodes: [] }
 
     results.nodes.forEach((nodeData: any) => {
       let label = nodeData.labels[0];
@@ -122,6 +129,7 @@ export class Graph {
       }
 
       node = {
+        nodeVisibility: true,
         id: nodeData.id.toString(),
         name: nodeData.name,
         color: getCategoryColorValue(category.index),
@@ -137,8 +145,8 @@ export class Graph {
         node[key] = value
       })
       this.nodesMap.set(nodeData.id, node)
-      this.elements.push({ data: node })
-      newElements.push({ data: node })
+      this.elements.nodes.push(node)
+      newElements.nodes.push(node)
     })
 
     results.edges.forEach((edgeData: any) => {
@@ -150,9 +158,10 @@ export class Graph {
 
       let sourceId = edgeData.src_node.toString();
       let destinationId = edgeData.dest_node.toString()
-
+      
       edge = {
-        id: `_${edgeData.id}`,
+        linkVisibility: true,
+        id: edgeData.id,
         source: sourceId,
         target: destinationId,
         label: edgeData.relation,
@@ -161,8 +170,8 @@ export class Graph {
         isPath: !!path,
       }
       this.edgesMap.set(edgeData.id, edge)
-      this.elements.push({ data: edge })
-      newElements.push({ data: edge })
+      this.elements.links.push(edge)
+      newElements.links.push(edge)
     })
 
     return newElements
