@@ -28,6 +28,9 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Set up Python environment, install dependencies, and run Flask
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       run: |
         # Install Poetry first
         curl -sSL https://install.python-poetry.org | python3 -
