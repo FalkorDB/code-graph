@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/use-toast';
 import { GraphContext } from './components/provider';
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 
 export type PathNode = {
   id?: number
@@ -28,10 +29,11 @@ export default function Home() {
   const [selectedValue, setSelectedValue] = useState("");
   const [selectedPathId, setSelectedPathId] = useState<string>();
   const [isPathResponse, setIsPathResponse] = useState<boolean>(false);
-  const [createURL, setCreateURL] = useState("https://github.com/FalkorDB/GraphRAG-SDK")
+  const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
+  const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const chartRef = useRef<cytoscape.Core | null>(null)
 
   useEffect(() => {
@@ -58,6 +60,8 @@ export default function Home() {
 
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+
+    setIsSubmit(true)
 
     if (!createURL) {
       toast({
@@ -87,6 +91,7 @@ export default function Home() {
     setSelectedValue(graphName)
     setCreateURL("")
     setCreateOpen(false)
+    setIsSubmit(false)
 
     toast({
       title: "Success",
@@ -171,29 +176,37 @@ export default function Home() {
               </DialogTrigger>
               <DialogContent className='max-w-[26%] gap-8'>
                 <DialogHeader>
-                  <DialogTitle>CREATE A NEW PROJECT</DialogTitle>
+                  <DialogTitle>{!isSubmit ? "CREATE A NEW PROJECT" : "THANK YOU FOR A NEW REQUEST"}</DialogTitle>
                 </DialogHeader>
                 <DialogDescription className='text-warp'>
-                  Please provide the URL of the model to connect and start querying data
+                  {
+                    !isSubmit
+                      ? "Please provide the URL of the model to connect and start querying data"
+                      : "Processing your graph, this could take a while. We appreciate your patience"
+                  }
                 </DialogDescription>
-                <form className='flex flex-col gap-4' onSubmit={onCreateRepo}>
-                  <input
-                    className='border p-3 rounded-lg'
-                    type="text"
-                    value={createURL}
-                    onChange={(e) => setCreateURL(e.target.value)}
-                    placeholder="Type URL"
-                  />
-                  <div className='flex flex-row-reverse'>
-                    <button
-                      className='bg-black p-3 text-white rounded-lg'
-                      type='submit'
-                      title='Create Project'
-                    >
-                      <p>Create</p>
-                    </button>
-                  </div>
-                </form>
+                {
+                  !isSubmit ?
+                    <form className='flex flex-col gap-4' onSubmit={onCreateRepo}>
+                      <input
+                        className='border p-3 rounded-lg'
+                        type="text"
+                        value={createURL}
+                        onChange={(e) => setCreateURL(e.target.value)}
+                        placeholder="Type URL"
+                      />
+                      <div className='flex flex-row-reverse'>
+                        <button
+                          className='bg-black p-3 text-white rounded-lg'
+                          type='submit'
+                          title='Create Project'
+                        >
+                          <p>Create</p>
+                        </button>
+                      </div>
+                    </form>
+                    : <Progress value={0} />
+                }
               </DialogContent>
             </Dialog>
           </ul>
@@ -215,7 +228,7 @@ export default function Home() {
               setSelectedPathId={setSelectedPathId}
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
-              />
+            />
           </GraphContext.Provider>
         </Panel>
         <PanelResizeHandle />
