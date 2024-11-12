@@ -7,11 +7,11 @@ import Input from "./Input";
 import { Graph } from "./model";
 import { cn } from "@/lib/utils";
 import { LAYOUT } from "./code-graph";
+import { TypeAnimation } from "react-type-animation";
 
 enum MessageTypes {
     Query,
     Response,
-    Tip,
     Path,
     PathResponse,
     Pending,
@@ -49,7 +49,7 @@ const RemoveLastPath = (messages: Message[]) => {
 export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isPath, setIsPath }: Props) {
 
     // Holds the messages in the chat
-    const [messages, setMessages] = useState<Message[]>([{ type: MessageTypes.Tip }]);
+    const [messages, setMessages] = useState<Message[]>([]);
 
     // Holds the messages in the chat
     const [paths, setPaths] = useState<{ nodes: any[], edges: any[] }[]>([]);
@@ -61,8 +61,18 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     const [isPathResponse, setIsPathResponse] = useState(false);
 
+    const [tipOpen, setTipOpen] = useState(false);
+
     // A reference to the chat container to allow scrolling to the bottom
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
+
+    const tipRef: React.RefObject<HTMLDivElement> = useRef(null);
+
+    useEffect(() => {
+        if (tipOpen) {
+            tipRef.current?.focus()
+        }
+    }, [tipOpen])
 
     useEffect(() => {
         const p = paths.find((path) => [...path.edges, ...path.nodes].some((e: any) => e.id === selectedPathId))
@@ -109,7 +119,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         }
                     })
                 } else {
-                    const elements = chart.elements().filter(e => [...prev.edges, ...prev.nodes].some(el => el.id == e.id())).removeStyle()
+                    const elements = chart.elements().filter(e => [...prev.edges, ...prev.nodes].some(el => el.id == e.id() && ![...p.nodes, ...p.edges].some(ele => ele.id == e.id()))).removeStyle()
                     if (isPathResponse) {
                         elements.forEach(e => {
                             if (e.isNode()) {
@@ -195,20 +205,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     // Send the user query to the server
     async function sendQuery(q: string) {
-        if (!q) {
-            toast({
-                variant: "destructive",
-                title: "Uh oh! Something went wrong.",
-                description: "Please enter a question.",
-            })
-            return
-        }
-
-        setQuery("")
-        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
-
-        containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
-
         const result = await fetch(`/api/chat/${repo}?msg=${encodeURIComponent(q)}`, {
             method: 'POST'
         })
@@ -232,12 +228,29 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     // A function that handles the click event
     const handleQueryClick = async (event: any) => {
         event.preventDefault();
-        return sendQuery(query.trim());
+
+        const q = query.trim()
+
+        if (!q) {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: "Please enter a question.",
+            })
+            return
+        }
+
+        setQuery("")
+        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
+
+        return await sendQuery(q);
     }
 
     // Scroll to the bottom of the chat on new message
     useEffect(() => {
-        containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
+        setTimeout(() => {
+            containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
+        }, 300)
     }, [messages]);
 
     const handelSubmit = async () => {
@@ -329,6 +342,38 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         setIsPathResponse(true)
     }
 
+    const getTip = () =>
+        <>
+            <button
+                className="Tip"
+                onClick={() => {
+                    setTipOpen(false)
+                    setPath({})
+                    setMessages(prev => [
+                        ...RemoveLastPath(prev),
+                        { type: MessageTypes.Query, text: "Create a path" },
+                    ])
+
+                    if (isPathResponse) {
+                        chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
+                        setIsPathResponse(false)
+                    }
+
+                    setTimeout(() => setMessages(prev => [...prev, {
+                        type: MessageTypes.Response,
+                        text: "Please select a starting point and the end point. Select or press relevant item on the graph"
+                    }]), 300)
+                    setTimeout(() => setMessages(prev => [...prev, { type: MessageTypes.Path }]), 4000)
+                }}
+            >
+                <Lightbulb />
+                <div>
+                    <h1 className="label">Show the path</h1>
+                    <p className="text">Fetch, update, batch, and navigate data efficiently</p>
+                </div>
+            </button>
+        </>
+
     const getMessage = (message: Message, index?: number) => {
         switch (message.type) {
             case MessageTypes.Query: return (
@@ -337,16 +382,22 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         <AlignLeft />
                         <h1 className="text-lg font-medium">You</h1>
                     </div>
-                    <p className="text-warp">{message.text}</p>
+                    <p className="break-words whitespace-pre-wrap">{message.text}</p>
                 </div>
             )
             case MessageTypes.Response: return (
                 <div key={index} className="flex flex-col gap-2">
                     <div className="flex gap-2">
                         <Undo2 className="rotate-180" />
-                        <h1 className="text-lg font-medium">Answer</h1>
+                        <h1 className="text-lg font-medium break-words whitespace-pre-wrap">Answer</h1>
                     </div>
-                    <p className="text-warp">{message.text?.replaceAll('"', "")}</p>
+                    <TypeAnimation
+                        key={message.text}
+                        sequence={[message.text!]}
+                        speed={60}
+                        wrapper="span"
+                        cursor={false}
+                    />
                 </div>
             )
             case MessageTypes.Text: return (
@@ -387,8 +438,9 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         message.paths.map((p, i: number) => (
                             <button
                                 key={i}
-                                className={cn("flex text-wrap border p-2 gap-2", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
+                                className={cn("flex text-wrap border p-2 gap-2 rounded-md", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
                                 onClick={() => {
+                                    if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return
                                     handelSetSelectedPath(p)
                                     setIsPath(true)
                                 }}
@@ -408,51 +460,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                     }
                 </div>
             )
-            case MessageTypes.Tip: return (
-                <div className="flex flex-col gap-6" key={index}>
-                    <button
-                        className="Tip"
-                    >
-                        <Lightbulb />
-                        <div>
-                            <h1 className="label">Show unreachable code</h1>
-                            <p className="text">Remove it if unnecessary or fix logic issues.</p>
-                        </div>
-                    </button>
-                    <button
-                        className="Tip"
-                        onClick={() => {
-                            setPath({})
-                            setMessages(prev => [
-                                ...RemoveLastPath(prev),
-                                { type: MessageTypes.Query, text: "Create a path" },
-                                {
-                                    type: MessageTypes.Response,
-                                    text: "Please select a starting point and the end point. Select or press relevant item on the graph"
-                                },
-                                { type: MessageTypes.Path, path }
-                            ])
-                            if (isPathResponse) {
-                                chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
-                                setIsPathResponse(false)
-                            }
-                        }}
-                    >
-                        <Lightbulb />
-                        <div>
-                            <h1 className="label">Show the path</h1>
-                            <p className="text">Fetch, update, batch, and navigate data efficiently</p>
-                        </div>
-                    </button>
-                    <button className="Tip">
-                        <Lightbulb />
-                        <div>
-                            <h1 className="label">Show me cluster</h1>
-                            <p className="text">Scale and distribute workloads across multiple servers</p>
-                        </div>
-                    </button>
-                </div>
-            )
             default: return (
                 <div key={index} className="flex gap-2">
                     <Image src="/dots.gif" width={100} height={10} alt="Waiting for response" />
@@ -463,28 +470,41 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     return (
         <div className="h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
-            <main data-name="main-chat" ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
-                <h1 className="font-oswald text-[20px] font-semibold leading-[32px] text-left text-[#13343B]">WELCOME TO OUR ASSISTANCE SERVICE</h1>
-                <span className="text-base font-normal leading-5 text-left text-[#7D7D7D]">
-                    We can help you access and update only the needed
-                    data via paths, optimizing network requests with
-                    batching and catching for better performance.
-                </span>
+            <main data-name="main-chat" ref={containerRef} className="relative grow flex flex-col overflow-y-auto gap-6 px-4">
+                {
+                    messages.length === 0 &&
+                    <>
+                        <h1 className="font-oswald text-[20px] font-semibold leading-[32px] text-left text-[#13343B]">WELCOME TO OUR ASSISTANCE SERVICE</h1>
+                        <span className="text-base font-normal leading-5 text-left text-[#7D7D7D]">
+                            We can help you access and update only the needed
+                            data via paths, optimizing network requests with
+                            batching and catching for better performance.
+                        </span>
+                        {getTip()}
+                    </>
+                }
                 {
                     messages.map((message, index) => {
                         return getMessage(message, index)
                     })
                 }
+                {
+                    tipOpen &&
+                    <div ref={tipRef} className="bg-white fixed bottom-[85px] border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" onBlur={() => setTipOpen(false)}>
+                        {getTip()}
+                    </div>
+                }
             </main>
             <footer>
-                {repo &&
+                {
+                    repo &&
                     <div className="flex gap-4 px-4">
-                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setMessages(prev => [...prev, { type: MessageTypes.Tip }])}>
+                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setTipOpen(prev => !prev)}>
                             <Lightbulb />
                         </button>
-                        <form className="grow relative" onSubmit={handleQueryClick}>
-                            <input className="w-full p-4 border rounded-md" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                            <button className="absolute bg-gray-200 top-2 right-2 p-2 rounded-md hover:bg-gray-300">
+                        <form className="grow flex items-center border rounded-md pr-2" onSubmit={handleQueryClick}>
+                            <input className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                            <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
                                 <ArrowRight color="white" />
                             </button>
                         </form>

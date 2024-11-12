@@ -27,7 +27,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
 
     useEffect(() => {
         setSelectedOption(0)
-        
+
         if (open) {
             scrollToBottom && scrollToBottom()
         }
@@ -36,7 +36,13 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     useEffect(() => {
         const timeout = setTimeout(async () => {
 
-            if (!value || node?.id) return
+            if (!value || node?.id) {
+                if (!value) {   
+                    setOptions([])
+                }
+                setOpen(false)
+                return
+            }
 
             const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}&type=autoComplete`, {
                 method: 'POST'
@@ -55,7 +61,9 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
 
             const { completions } = json.result
             setOptions(completions)
-            setOpen(true)
+            if (completions?.length > 0) {
+                setOpen(true)
+            }
         }, 500)
 
         return () => clearTimeout(timeout)
@@ -65,11 +73,14 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
         switch (e.code) {
             case "Enter": {
                 e.preventDefault()
-                if (!open) return
                 const option = options.find((o, i) => i === selectedOption)
                 if (!option) return
-                onValueChange({ name: option.properties.name, id: option.id })
-                handelSubmit && handelSubmit(option)
+                if (handelSubmit) {
+                    handelSubmit(option)
+                } else {
+                    if (!open) return
+                    onValueChange({ name: option.properties.name, id: option.id })
+                }
                 setOpen(false)
                 return
             }
@@ -111,7 +122,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                     const newVal = e.target.value
                     onValueChange({ name: newVal })
                 }}
-                onBlur={() => setOpen(false)}
                 {...props}
             />
             {
@@ -128,6 +138,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                             const name = option.properties.name
                             const path = option.properties.path
                             const colorName = getCategoryColorName(graph.CategoriesMap.get(label)!.index)
+                            const color = getCategoryColorValue(graph.CategoriesMap.get(label)!.index)
                             return (
                                 <button
                                     className={cn(
@@ -137,13 +148,14 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
+                                        debugger
                                         onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
                                         setOpen(false)
                                     }}
                                     key={option.id}
                                 >
-                                    <p className={`truncate w-[30%] bg-${colorName}-500 bg-opacity-20 p-1 rounded-md`} style={{ color: colors[colorName]["500"] }} title={label}>{label}</p>
+                                    <p className={`truncate w-[30%] bg-${colorName} bg-opacity-20 p-1 rounded-md`} style={{ color }} title={label}>{label}</p>
                                     <div className="w-1 grow text-start">
                                         <p className="truncate" title={name}>
                                             {name}
