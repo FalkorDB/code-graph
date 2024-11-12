@@ -11,7 +11,7 @@ import ElementMenu from "./elementMenu";
 import ElementTooltip from "./elementTooltip";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { Path } from '../page';
+import { Path, PathNode } from '../page';
 import Input from './Input';
 import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,6 +24,7 @@ interface Props {
     setPath: Dispatch<SetStateAction<Path | undefined>>
     chartRef: MutableRefObject<cytoscape.Core | null>
     selectedValue: string
+    selectedPathId: string | undefined
     setSelectedPathId: (selectedPathId: string) => void
     isPathResponse: boolean
     setIsPathResponse: Dispatch<SetStateAction<boolean>>
@@ -39,10 +40,10 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
             // to satisfy the linter...
             'active-bg-color': 'blue',
             'active-bg-opacity': 0.3,
-            "selection-box-border-color": 'blue',
-            "selection-box-border-width": 0,
-            "selection-box-opacity": 1,
-            "selection-box-color": 'blue',
+            "selection-box-border-color": 'gray',
+            "selection-box-border-width": 3,
+            "selection-box-opacity": 0.5,
+            "selection-box-color": 'gray',
             "outside-texture-bg-color": 'blue',
             "outside-texture-bg-opacity": 1,
         },
@@ -123,7 +124,8 @@ export function CodeGraph({
     selectedValue,
     setSelectedPathId,
     isPathResponse,
-    setIsPathResponse
+    setIsPathResponse,
+    selectedPathId
 }: Props) {
 
     let graph = useContext(GraphContext)
@@ -134,7 +136,7 @@ export function CodeGraph({
     const [position, setPosition] = useState<Position>();
     const [tooltipPosition, setTooltipPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
-    const [searchNodeName, setSearchNodeName] = useState<string>("");
+    const [searchNode, setSearchNode] = useState<PathNode>({});
     const [commits, setCommits] = useState<any[]>([]);
     const [nodesCount, setNodesCount] = useState<number>(0);
     const [edgesCount, setEdgesCount] = useState<number>(0);
@@ -319,7 +321,9 @@ export function CodeGraph({
 
         if (!chart) return
 
-        let chartNode = chart.elements(`node[name = "${node.properties.name}"]`)
+        const n = { name: node.properties.name, id: node.id }
+
+        let chartNode = chart.elements(`node[name = "${n.name}"]`)
 
         if (chartNode.length === 0) {
             const [newNode] = graph.extend({ nodes: [node], edges: [] })
@@ -329,7 +333,7 @@ export function CodeGraph({
         chartNode.select()
         const layout = { ...LAYOUT, padding: 250 }
         chartNode.layout(layout).run()
-        setSearchNodeName("")
+        setSearchNode(n)
     }
 
     return (
@@ -351,10 +355,11 @@ export function CodeGraph({
                                     <div className='flex gap-4 pointer-events-auto'>
                                         <Input
                                             graph={graph}
-                                            value={searchNodeName}
-                                            onValueChange={(node) => setSearchNodeName(node.name!)}
+                                            value={searchNode.name}
+                                            onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
                                             handelSubmit={handelSearchSubmit}
+                                            node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
                                     </div>
@@ -470,7 +475,7 @@ export function CodeGraph({
                                         cy.on('tap', 'edge', (evt) => {
                                             const { target } = evt
 
-                                            if (!isPathResponse) return
+                                            if (!isPathResponse || selectedPathId === target.id()) return
 
                                             setSelectedPathId(target.id())
                                         });
@@ -487,7 +492,7 @@ export function CodeGraph({
                             </div>
                     }
                 </main>
-                {
+                {/* {
                     graph.Id &&
                     <CommitList
                         commitIndex={commitIndex}
@@ -498,7 +503,7 @@ export function CodeGraph({
                         graph={graph}
                         chartRef={chartRef}
                     />
-                }
+                } */}
             </div>
         </div>
     )
