@@ -11,7 +11,7 @@ import ElementMenu from "./elementMenu";
 import ElementTooltip from "./elementTooltip";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { Path } from '../page';
+import { Path, PathNode } from '../page';
 import Input from './Input';
 import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -136,7 +136,7 @@ export function CodeGraph({
     const [position, setPosition] = useState<Position>();
     const [tooltipPosition, setTooltipPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
-    const [searchNodeName, setSearchNodeName] = useState<string>("");
+    const [searchNode, setSearchNode] = useState<PathNode>({});
     const [commits, setCommits] = useState<any[]>([]);
     const [nodesCount, setNodesCount] = useState<number>(0);
     const [edgesCount, setEdgesCount] = useState<number>(0);
@@ -321,7 +321,9 @@ export function CodeGraph({
 
         if (!chart) return
 
-        let chartNode = chart.elements(`node[name = "${node.properties.name}"]`)
+        const n = { name: node.properties.name, id: node.id }
+
+        let chartNode = chart.elements(`node[name = "${n.name}"]`)
 
         if (chartNode.length === 0) {
             const [newNode] = graph.extend({ nodes: [node], edges: [] })
@@ -331,7 +333,7 @@ export function CodeGraph({
         chartNode.select()
         const layout = { ...LAYOUT, padding: 250 }
         chartNode.layout(layout).run()
-        setSearchNodeName("")
+        setSearchNode(n)
     }
 
     return (
@@ -353,10 +355,11 @@ export function CodeGraph({
                                     <div className='flex gap-4 pointer-events-auto'>
                                         <Input
                                             graph={graph}
-                                            value={searchNodeName}
-                                            onValueChange={(node) => setSearchNodeName(node.name!)}
+                                            value={searchNode.name}
+                                            onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
                                             handelSubmit={handelSearchSubmit}
+                                            node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
                                     </div>

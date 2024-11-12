@@ -348,50 +348,28 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 className="Tip"
                 onClick={() => {
                     setTipOpen(false)
-                }}
-            >
-                <Lightbulb />
-                <div>
-                    <h1 className="label">Show unreachable code</h1>
-                    <p className="text">Remove it if unnecessary or fix logic issues.</p>
-                </div>
-            </button>
-            <button
-                className="Tip"
-                onClick={() => {
-                    setTipOpen(false)
                     setPath({})
                     setMessages(prev => [
                         ...RemoveLastPath(prev),
                         { type: MessageTypes.Query, text: "Create a path" },
-                        {
-                            type: MessageTypes.Response,
-                            text: "Please select a starting point and the end point. Select or press relevant item on the graph"
-                        },
-                        { type: MessageTypes.Path }
                     ])
+
                     if (isPathResponse) {
                         chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
                         setIsPathResponse(false)
                     }
+
+                    setTimeout(() => setMessages(prev => [...prev, {
+                        type: MessageTypes.Response,
+                        text: "Please select a starting point and the end point. Select or press relevant item on the graph"
+                    }]), 300)
+                    setTimeout(() => setMessages(prev => [...prev, { type: MessageTypes.Path }]), 4000)
                 }}
             >
                 <Lightbulb />
                 <div>
                     <h1 className="label">Show the path</h1>
                     <p className="text">Fetch, update, batch, and navigate data efficiently</p>
-                </div>
-            </button>
-            <button
-                className="Tip"
-                onClick={() => {
-                    setTipOpen(false)
-                }}
-            >
-                <Lightbulb />
-                <div>
-                    <h1 className="label">Show me cluster</h1>
-                    <p className="text">Scale and distribute workloads across multiple servers</p>
                 </div>
             </button>
         </>

@@ -36,7 +36,11 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     useEffect(() => {
         const timeout = setTimeout(async () => {
 
-            if (!value || node?.id) return
+            if (!value || node?.id) {
+                setOptions([])
+                setOpen(false)
+                return
+            }
 
             const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}&type=autoComplete`, {
                 method: 'POST'
@@ -71,10 +75,10 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 if (!option) return
                 if (handelSubmit) {
                     handelSubmit(option)
+                } else {
+                    if (!open) return
                     onValueChange({ name: option.properties.name, id: option.id })
-                } 
-                if (!open) return
-                onValueChange({ name: option.properties.name, id: option.id })
+                }
                 setOpen(false)
                 return
             }
