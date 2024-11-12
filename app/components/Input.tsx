@@ -133,6 +133,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                             const name = option.properties.name
                             const path = option.properties.path
                             const colorName = getCategoryColorName(graph.CategoriesMap.get(label)!.index)
+                            const color = getCategoryColorValue(graph.CategoriesMap.get(label)!.index)
                             return (
                                 <button
                                     className={cn(
@@ -148,7 +149,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     }}
                                     key={option.id}
                                 >
-                                    <p className={`truncate w-[30%] bg-${colorName}-500 bg-opacity-20 p-1 rounded-md`} style={{ color: colors[colorName]["500"] }} title={label}>{label}</p>
+                                    <p className={`truncate w-[30%] bg-${colorName} bg-opacity-20 p-1 rounded-md`} style={{ color }} title={label}>{label}</p>
                                     <div className="w-1 grow text-start">
                                         <p className="truncate" title={name}>
                                             {name}

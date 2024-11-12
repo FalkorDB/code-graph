@@ -24,6 +24,7 @@ interface Props {
     setPath: Dispatch<SetStateAction<Path | undefined>>
     chartRef: MutableRefObject<cytoscape.Core | null>
     selectedValue: string
+    selectedPathId: string | undefined
     setSelectedPathId: (selectedPathId: string) => void
     isPathResponse: boolean
     setIsPathResponse: Dispatch<SetStateAction<boolean>>
@@ -123,7 +124,8 @@ export function CodeGraph({
     selectedValue,
     setSelectedPathId,
     isPathResponse,
-    setIsPathResponse
+    setIsPathResponse,
+    selectedPathId
 }: Props) {
 
     let graph = useContext(GraphContext)
@@ -470,7 +472,7 @@ export function CodeGraph({
                                         cy.on('tap', 'edge', (evt) => {
                                             const { target } = evt
 
-                                            if (!isPathResponse) return
+                                            if (!isPathResponse || selectedPathId === target.id()) return
 
                                             setSelectedPathId(target.id())
                                         });

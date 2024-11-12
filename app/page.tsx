@@ -211,6 +211,7 @@ export default function Home() {
               setPath={setPath}
               isShowPath={!!path}
               selectedValue={selectedValue}
+              selectedPathId={selectedPathId}
               setSelectedPathId={setSelectedPathId}
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
