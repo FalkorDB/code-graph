@@ -37,7 +37,9 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
         const timeout = setTimeout(async () => {
 
             if (!value || node?.id) {
-                setOptions([])
+                if (!value) {   
+                    setOptions([])
+                }
                 setOpen(false)
                 return
             }
@@ -120,7 +122,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                     const newVal = e.target.value
                     onValueChange({ name: newVal })
                 }}
-                onBlur={() => setOpen(false)}
                 {...props}
             />
             {
@@ -147,6 +148,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
+                                        debugger
                                         onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
                                         setOpen(false)

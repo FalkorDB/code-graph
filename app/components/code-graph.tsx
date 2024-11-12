@@ -323,7 +323,7 @@ export function CodeGraph({
 
         const n = { name: node.properties.name, id: node.id }
 
-        let chartNode = chart.elements(`node[name = "${n.name}"]`)
+        let chartNode = chart.elements(`node[id = "${n.id}"]`)
 
         if (chartNode.length === 0) {
             const [newNode] = graph.extend({ nodes: [node], edges: [] })
