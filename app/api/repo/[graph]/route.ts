@@ -5,7 +5,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     const graphName = params.graph
 
     try {
-        const result = await fetch(`${process.env.BEAKEND_URL}/graph_entities?repo=${graphName}`, {
+        const result = await fetch(`${process.env.BACKEND_URL}/graph_entities?repo=${graphName}`, {
             method: 'GET',
             headers: {
                 "Authorization": process.env.SECRET_TOKEN!,
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
             // }
             case "autoComplete": {
                 const prefix = request.nextUrl.searchParams.get('prefix')!
-                const result = await fetch(`${process.env.BEAKEND_URL}/auto_complete`, {
+                const result = await fetch(`${process.env.BACKEND_URL}/auto_complete`, {
                     method: 'POST',
                     body: JSON.stringify({ repo: graphName, prefix }),
                     headers: {
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
                 return NextResponse.json({ result: json }, { status: 200 })
             }
             default: {
-                const result = await fetch(`${process.env.BEAKEND_URL}/repo_info`, {
+                const result = await fetch(`${process.env.BACKEND_URL}/repo_info`, {
                     method: 'POST',
                     body: JSON.stringify({ repo: graphName }),
                     headers: {

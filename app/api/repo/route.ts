@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
 	try {
-		const result = await fetch(`${process.env.BEAKEND_URL}/list_repos`, {
+		const result = await fetch(`${process.env.BACKEND_URL}/list_repos`, {
 			method: 'GET',
 			headers: {
 				"Authorization": process.env.SECRET_TOKEN!,
