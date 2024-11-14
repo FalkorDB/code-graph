@@ -21,26 +21,26 @@ export async function GET() {
 	}
 }
 
-export async function POST(request: NextRequest) {
+// export async function POST(request: NextRequest) {
 
-	const url = request.nextUrl.searchParams.get('url');
+// 	const url = request.nextUrl.searchParams.get('url');
 
-	try {
-		const result = await fetch(`${process.env.BEAKEND_URL}/process_repo`, {
-			method: 'POST',
-			body: JSON.stringify({ repo_url: url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
-			headers: {
-				"Authorization": process.env.SECRET_TOKEN!,
-				'Content-Type': 'application/json'
-			}
-		})
+// 	try {
+// 		const result = await fetch(`${process.env.BEAKEND_URL}/process_repo`, {
+// 			method: 'POST',
+// 			body: JSON.stringify({ repo_url: url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
+// 			headers: {
+// 				"Authorization": process.env.SECRET_TOKEN!,
+// 				'Content-Type': 'application/json'
+// 			}
+// 		})
 
-		if (!result.ok) {
-			throw new Error(await result.text())
-		}
+// 		if (!result.ok) {
+// 			throw new Error(await result.text())
+// 		}
 
-		return NextResponse.json({ message: "success" }, { status: 200 })
-	} catch (err) {
-		return NextResponse.json({ message: (err as Error).message }, { status: 400 })
-	}
-}
+// 		return NextResponse.json({ message: "success" }, { status: 200 })
+// 	} catch (err) {
+// 		return NextResponse.json({ message: (err as Error).message }, { status: 400 })
+// 	}
+// }
