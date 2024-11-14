@@ -22,7 +22,7 @@ export default class CodeGraph extends BasePage {
 
     /* Chat Locators */
     private get showPathBtn(): Locator {
-        return this.page.locator("//button[contains(@class, 'Tip')]//div//h1[text()='Show the path']");
+        return this.page.locator("//button[contains(@class, 'Tip')]");
     }
 
     private get askquestionInput(): Locator {
@@ -47,6 +47,22 @@ export default class CodeGraph extends BasePage {
 
     private get previousQuestionLoadingImage(): Locator {
         return this.page.locator("//main[@data-name='main-chat']/*[last()-2]//img[@alt='Waiting for response']")
+    }
+
+    private get selectInputForShowPath(): (inputNum: string) => Locator {
+        return (inputNum: string) => this.page.locator(`(//main[@data-name='main-chat']//input)[${inputNum}]`);
+    }
+
+    private get locateNodeInLastChatPath(): (node: string) => Locator {
+        return (node: string) => this.page.locator(`//main[@data-name='main-chat']/*[last()]//span[contains(text(), '${node}')]`);
+    }
+
+    private get selectFirstPathOption(): (inputNum: string) => Locator {
+        return (inputNum: string) => this.page.locator(`(//main[@data-name='main-chat']//input)[1]/following::div[${inputNum}]//button[1]`);
+    }
+
+    private get notificationNoPathFound(): Locator {
+        return this.page.locator("//div//ol/li");
     }
     
     /* NavBar functionality */
@@ -96,6 +112,19 @@ export default class CodeGraph extends BasePage {
 
     async getpreviousQuestionLoadingImage(): Promise<boolean> {
         return this.previousQuestionLoadingImage.isVisible();
+    }
+
+    async insertInputForShowPath(inputNum: string, node: string): Promise<void> {
+        await this.selectInputForShowPath(inputNum).fill(node);
+        await this.selectFirstPathOption(inputNum).click();
+    }
+
+    async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
+        return await this.locateNodeInLastChatPath(node).isVisible();
+    }
+
+    async isNotificationNoPathFound(): Promise<boolean> {
+        return await this.notificationNoPathFound.isVisible();
     }
 
     /* CodeGraph functionality */
