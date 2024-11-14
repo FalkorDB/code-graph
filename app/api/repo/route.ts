@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
 	try {
-		const result = await fetch(`${process.env.BEAKEND_URL}/list_repos`, {
+		const result = await fetch(`${process.env.BACKEND_URL}/list_repos`, {
 			method: 'GET',
 			headers: {
 				"Authorization": process.env.SECRET_TOKEN!,
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 	const url = request.nextUrl.searchParams.get('url');
 
 	try {
-		const result = await fetch(`${process.env.BEAKEND_URL}/process_repo`, {
+		const result = await fetch(`${process.env.BACKEND_URL}/process_repo`, {
 			method: 'POST',
 			body: JSON.stringify({ repo_url: url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
 			headers: {

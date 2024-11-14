@@ -7,7 +7,7 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
     const msg = request.nextUrl.searchParams.get('msg')
 
     try {
-        const result = await fetch(`${process.env.BEAKEND_URL}/chat`, {
+        const result = await fetch(`${process.env.BACKEND_URL}/chat`, {
             method: 'POST',
             body: JSON.stringify({ repo: graphName, msg }),
             headers: {
