@@ -58,11 +58,14 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             }
 
             const json = await result.json()
-
             const { completions } = json.result
-            setOptions(completions)
+            
+            setOptions(completions || [])
+
             if (completions?.length > 0) {
                 setOpen(true)
+            } else {
+                setOpen(false)
             }
         }, 500)
 
@@ -86,7 +89,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             }
             case "ArrowUp": {
                 e.preventDefault()
-                console.log(selectedOption <= 0 ? selectedOption : selectedOption - 1);
                 setSelectedOption(prev => prev <= 0 ? options.length - 1 : prev - 1)
                 return
             }

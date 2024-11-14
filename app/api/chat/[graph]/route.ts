@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 
+
 export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
 
     const graphName = params.graph
     const msg = request.nextUrl.searchParams.get('msg')
 
     try {
-        const result = await fetch(`http://127.0.0.1:5000/chat`, {
+        const result = await fetch(`${process.env.BEAKEND_URL}/chat`, {
             method: 'POST',
-            body: JSON.stringify({ repo: graphName, msg}),
+            body: JSON.stringify({ repo: graphName, msg }),
             headers: {
+                "Authorization": process.env.SECRET_TOKEN!,
                 "Content-Type": 'application/json'
             }
         })

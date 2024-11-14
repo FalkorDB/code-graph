@@ -1,5 +1,5 @@
 import { toast } from "@/components/ui/use-toast";
-import { Dispatch, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
@@ -67,6 +67,8 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
 
     const tipRef: React.RefObject<HTMLDivElement> = useRef(null);
+
+    const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
 
     useEffect(() => {
         if (tipOpen) {
@@ -192,10 +194,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     // A function that handles the change event of the url input box
     async function handleQueryInputChange(event: any) {
 
-        if (event.key === "Enter") {
-            await handleQueryClick(event);
-        }
-
         // Get the new value of the input box
         const value = event.target.value;
 
@@ -204,7 +202,25 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     }
 
     // Send the user query to the server
-    async function sendQuery(q: string) {
+    async function sendQuery(event: FormEvent) {
+
+        event.preventDefault();
+        
+        const q = query.trim()
+
+        if (!q) {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: "Please enter a question.",
+            })
+            return
+        }
+        
+        setQuery("")
+        
+        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { type: MessageTypes.Pending }]);
+        
         const result = await fetch(`/api/chat/${repo}?msg=${encodeURIComponent(q)}`, {
             method: 'POST'
         })
@@ -223,27 +239,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             prev = prev.slice(0, -1);
             return [...prev, { text: json.result.response, type: MessageTypes.Response }];
         });
-    }
 
-    // A function that handles the click event
-    const handleQueryClick = async (event: any) => {
-        event.preventDefault();
-
-        const q = query.trim()
-
-        if (!q) {
-            toast({
-                variant: "destructive",
-                title: "Uh oh! Something went wrong.",
-                description: "Please enter a question.",
-            })
-            return
-        }
-
-        setQuery("")
-        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { text: "", type: MessageTypes.Pending }]);
-
-        return await sendQuery(q);
     }
 
     // Scroll to the bottom of the chat on new message
@@ -502,9 +498,9 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         <button className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setTipOpen(prev => !prev)}>
                             <Lightbulb />
                         </button>
-                        <form className="grow flex items-center border rounded-md pr-2" onSubmit={handleQueryClick}>
-                            <input className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                            <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
+                        <form className="grow flex items-center border rounded-md pr-2" onSubmit={sendQuery}>
+                            <input disabled={isSendMessage} className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                            <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
                                 <ArrowRight color="white" />
                             </button>
                         </form>

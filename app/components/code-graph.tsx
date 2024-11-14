@@ -274,7 +274,7 @@ export function CodeGraph({
 
         if (!graphNode.data.expand) {
             elements = await onFetchNode(node)
-            console.log(elements);
+
             if (elements.length === 0) {
                 toast({
                     title: "No neighbors found",
@@ -492,7 +492,7 @@ export function CodeGraph({
                             </div>
                     }
                 </main>
-                {/* {
+                {
                     graph.Id &&
                     <CommitList
                         commitIndex={commitIndex}
@@ -503,7 +503,7 @@ export function CodeGraph({
                         graph={graph}
                         chartRef={chartRef}
                     />
-                } */}
+                }
             </div>
         </div>
     )
