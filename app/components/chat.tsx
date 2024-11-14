@@ -205,7 +205,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     async function sendQuery(event: FormEvent) {
 
         event.preventDefault();
-        
+
         const q = query.trim()
 
         if (!q) {
@@ -216,11 +216,11 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             })
             return
         }
-        
+
         setQuery("")
-        
+
         setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { type: MessageTypes.Pending }]);
-        
+
         const result = await fetch(`/api/chat/${repo}?msg=${encodeURIComponent(q)}`, {
             method: 'POST'
         })
@@ -495,7 +495,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 {
                     repo &&
                     <div className="flex gap-4 px-4">
-                        <button className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setTipOpen(prev => !prev)}>
+                        <button disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setTipOpen(prev => !prev)}>
                             <Lightbulb />
                         </button>
                         <form className="grow flex items-center border rounded-md pr-2" onSubmit={sendQuery}>
