@@ -161,7 +161,7 @@ export default function Home() {
               <Github />
               <p>Github</p>
             </Link>
-            <Link className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
+            {/* <Link className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
               <BookOpen />
               <p>Tip</p>
             </Link>
@@ -208,7 +208,7 @@ export default function Home() {
                     : <Progress value={0} />
                 }
               </DialogContent>
-            </Dialog>
+            </Dialog> */}
           </ul>
         </div>
         <div className='h-2.5 bg-gradient-to-r from-[#EC806C] via-[#B66EBD] to-[#7568F2]' />
