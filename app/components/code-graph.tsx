@@ -498,7 +498,7 @@ export function CodeGraph({
                             </div>
                     }
                 </main>
-                {
+                {/* {
                     graph.Id && commits.length > 0 &&
                     <CommitList
                         commitIndex={commitIndex}
@@ -509,7 +509,7 @@ export function CodeGraph({
                         graph={graph}
                         chartRef={chartRef}
                     />
-                }
+                } */}
             </div>
         </div>
     )
