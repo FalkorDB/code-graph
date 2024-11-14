@@ -1,10 +1,22 @@
-import { Locator } from "playwright";
+import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
 
 export default class CodeGraph extends BasePage {
     /* NavBar Locators*/
-    private get homeButton(): Locator {
-        return this.page.locator("//a[p[text() = 'Home']]")
+    private get falkorDBLogo(): Locator {
+        return this.page.locator("//*[img[@alt='FalkorDB']]")
+    }
+
+    private get navBaritem(): (navItem: string) => Locator {
+        return (navItem: string) => this.page.locator(`//a[p[text() = '${navItem}']]`);
+    }
+
+    private get createNewProjectBtn(): Locator {
+        return this.page.getByRole('button', { name: 'Create new project' });
+    }
+
+    private get createNewProjectDialog(): Locator {
+        return this.page.locator("//div[@role='dialog']")
     }
 
     /* CodeGraph Locators*/
@@ -66,8 +78,30 @@ export default class CodeGraph extends BasePage {
     }
     
     /* NavBar functionality */
-    async clickOnHomeBtn(): Promise<void> {
-        await this.homeButton.click()
+    async clickOnFalkorDbLogo(): Promise<Page> {
+        await this.page.waitForLoadState('networkidle'); 
+        const [newPage] = await Promise.all([
+            this.page.waitForEvent('popup'),
+            this.falkorDBLogo.click(),
+        ]);
+        return newPage
+    }
+
+    async getNavBarItem(navItem : string): Promise<Page> {
+        await this.page.waitForLoadState('networkidle'); 
+        const [newPage] = await Promise.all([
+            this.page.waitForEvent('popup'),
+            this.navBaritem(navItem).click(),
+        ]);
+        return newPage
+    }
+
+    async clickCreateNewProjectBtn(): Promise<void> {
+        await this.createNewProjectBtn.click();
+    }
+
+    async isCreateNewProjectDialog(): Promise<boolean> {
+        return await this.createNewProjectDialog.isVisible();
     }
 
     /* Chat functionality */
