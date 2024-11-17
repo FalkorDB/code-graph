@@ -28,7 +28,7 @@ export default function CommitList({ commitIndex, commits, currentCommit, setCom
 
         if (!chart) return
 
-        const result = await fetch(`api/repo/${graph.Id}/?type=switchCommit`, {
+        const result = await fetch(`api/repo/${graph.Id}/commit`, {
             method: 'POST',
         })
 

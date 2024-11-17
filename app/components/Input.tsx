@@ -45,7 +45,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 return
             }
 
-            const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}&type=autoComplete`, {
+            const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}`, {
                 method: 'POST'
             })
 
