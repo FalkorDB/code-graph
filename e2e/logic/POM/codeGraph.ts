@@ -1,5 +1,6 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
+import { delay } from "../utils";
 
 export default class CodeGraph extends BasePage {
     /* NavBar Locators*/
@@ -164,6 +165,7 @@ export default class CodeGraph extends BasePage {
     /* CodeGraph functionality */
     async selectGraph(graph: string): Promise<void> {
         await this.comboBoxbtn.click();
+        await delay(500);
         await this.selectGraphInComboBox(graph).click();
     }
 }
