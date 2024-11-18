@@ -175,6 +175,7 @@ export function CodeGraph({
 
         const run = async () => {
             fetchCount()
+            /*
             const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
                 method: 'POST'
             })
@@ -196,6 +197,7 @@ export function CodeGraph({
                 setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
                 setCommitIndex(commitsArr.length)
             }
+            */
         }
 
         run()
