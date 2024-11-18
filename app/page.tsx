@@ -30,29 +30,16 @@ type Tip = {
 
 const TIPS: Tip[] = [
   {
-    title: "Zoom In",
-    description: "Use this command to zoom into the graph.",
-    keyboardCommand: "Ctrl + Plus"
+    title: "Select Items in Specific Area",
+    description: `Click and drag your mouse over an area to create a selection box.
+    Any object within the selection area will be highlighted.
+    This is useful for selecting multiple objects at once within a specific region of your design.`,
+    keyboardCommand: "Click+Drag"
   },
   {
-    title: "Zoom Out",
-    description: "Use this command to zoom out of the graph.",
-    keyboardCommand: "Ctrl + Minus"
-  },
-  {
-    title: "Pan",
-    description: "Click and drag to pan around the graph.",
-    keyboardCommand: "Mouse Drag"
-  },
-  {
-    title: "Select Node",
-    description: "Click on a node to select it.",
-    keyboardCommand: "Mouse Click"
-  },
-  {
-    title: "Expand Node",
-    description: "Use this command to expand node.",
-    keyboardCommand: "Mouse Double Click"
+    title: "Open Menu",
+    description: "Right Click on object to open the menu.",
+    keyboardCommand: "Right Click"
   }
 ]
 
@@ -202,9 +189,9 @@ export default function Home() {
                   <p>Tip</p>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className='flex-col flex p-4 gap-6'>
+              <DropdownMenuContent className='flex-col flex p-4 gap-6 max-w-[30dvw]'>
                 <div className='flex justify-between items-center'>
-                    <DropdownMenuLabel className='font-oswald text-[20px] font-semibold leading-[20px] text-left'>HOW TO USE THE PRODUCT</DropdownMenuLabel>
+                  <DropdownMenuLabel className='font-oswald text-[20px] font-semibold leading-[20px] text-left'>HOW TO USE THE PRODUCT</DropdownMenuLabel>
                   <button
                     title='Close'
                     onClick={() => setTipOpen(false)}
@@ -217,7 +204,7 @@ export default function Home() {
                     <div key={index} className='flex flex-col gap-4 text-[#7D7D7D]'>
                       <div className='flex gap-3 items-center'>
                         <h1 className='text-black font-bold'>{tip.title}</h1>
-                        <p className='bg-[#ECECEC] p-1 rounded'>{tip.keyboardCommand}</p>
+                        <p className='bg-[#ECECEC] p-1 rounded italic'>{tip.keyboardCommand}</p>
                       </div>
                       <p>{tip.description}</p>
                     </div>

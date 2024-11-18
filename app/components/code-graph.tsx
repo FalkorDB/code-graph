@@ -132,6 +132,8 @@ export function CodeGraph({
 
     const [url, setURL] = useState("");
     const [selectedObj, setSelectedObj] = useState<Node>();
+    const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
+    const [isSelectedObj, setIsSelectedObj] = useState<string>("");
     const [tooltipLabel, setTooltipLabel] = useState<string>();
     const [position, setPosition] = useState<Position>();
     const [tooltipPosition, setTooltipPosition] = useState<Position>();
@@ -175,27 +177,27 @@ export function CodeGraph({
 
         const run = async () => {
             fetchCount()
-            const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
-                method: 'POST'
-            })
+            // const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
+            //     method: 'POST'
+            // })
 
-            if (!result.ok) {
-                toast({
-                    variant: "destructive",
-                    title: "Uh oh! Something went wrong.",
-                    description: await result.text(),
-                })
-                return
-            }
+            // if (!result.ok) {
+            //     toast({
+            //         variant: "destructive",
+            //         title: "Uh oh! Something went wrong.",
+            //         description: await result.text(),
+            //     })
+            //     return
+            // }
 
-            const json = await result.json()
-            const commitsArr = json.result.commits
-            setCommits(commitsArr)
+            // const json = await result.json()
+            // const commitsArr = json.result.commits
+            // setCommits(commitsArr)
 
-            if (commitsArr.length > 0) {
-                setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
-                setCommitIndex(commitsArr.length)
-            }
+            // if (commitsArr.length > 0) {
+            //     setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+            //     setCommitIndex(commitsArr.length)
+            // }
         }
 
         run()
@@ -295,30 +297,6 @@ export function CodeGraph({
         chart.elements().layout(LAYOUT).run();
     }
 
-    const handelTap = (evt: EventObject) => {
-        const chart = chartRef.current
-
-        if (!chart) return
-
-        const { target } = evt
-        setTooltipLabel(undefined)
-
-        if (isShowPath) {
-            setPath(prev => {
-                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
-                    return ({ start: { id: Number(target.id()), name: target.data().name as string } })
-                } else {
-                    return ({ end: { id: Number(target.id()), name: target.data().name as string }, start: prev.start })
-                }
-            })
-            return
-        }
-
-        const position = target.renderedPosition()
-        setPosition(() => position ? { x: position.x, y: position.y + chart.zoom() * 8 } : { x: 0, y: 0 });
-        setSelectedObj(target.json().data)
-    }
-
     const handelSearchSubmit = (node: any) => {
         const chart = chartRef.current
 
@@ -334,6 +312,7 @@ export function CodeGraph({
         }
 
         chartNode.select()
+        setIsSelectedObj(String(n.id))
         const layout = { ...LAYOUT, padding: 250 }
         chartNode.layout(layout).run()
         setSearchNode(n)
@@ -415,6 +394,8 @@ export function CodeGraph({
                                 />
                                 <ElementMenu
                                     obj={selectedObj}
+                                    objects={selectedObjects}
+                                    setPath={setPath}
                                     position={position}
                                     url={url}
                                     handelMaximize={handleDoubleTap}
@@ -430,26 +411,21 @@ export function CodeGraph({
                                         // Listen to the click event on nodes for expanding the node
                                         cy.on('dbltap', 'node', handleDoubleTap);
 
-                                        cy.on('mousedown', (evt) => {
+                                        cy.on('mousedown', () => {
                                             setTooltipLabel(undefined)
-                                            const { target } = evt
-
-                                            if (target !== cy && !target.isEdge()) return;
-
                                             setSelectedObj(undefined)
+                                            setSelectedObjects([])
+                                            setIsSelectedObj("")
                                         })
 
-                                        cy.on('mouseout', (evt) => {
+                                        cy.on('mouseout', 'node', (evt) => {
                                             const { target } = evt
-
-                                            if (target === cy || target.isEdge()) {
-                                                setTooltipLabel(undefined)
-                                                return
-                                            }
 
                                             setTooltipLabel(undefined)
 
-                                            if (selectedObj) return
+                                            const { id } = target.json().data
+                                            debugger
+                                            if (selectedObj?.id === id || isSelectedObj === id || selectedObjects.some(e => e.id === id)) return
 
                                             target.unselect()
                                         })
@@ -461,6 +437,7 @@ export function CodeGraph({
 
                                         cy.on('mouseover', 'node', (evt) => {
                                             const { target } = evt
+
                                             target.select()
 
                                             if (selectedObj) return
@@ -471,11 +448,37 @@ export function CodeGraph({
                                             setTooltipLabel(() => target.json().data.name);
                                         })
 
-                                        cy.on('tap', 'node', handelTap);
+                                        cy.on('tap', 'node', (evt) => {
+                                            const { target } = evt
 
-                                        cy.on('drag', 'node', () => {
+                                            target.select()
+
+                                            setIsSelectedObj(target.json().data.id)
+
+                                            if (isShowPath) {
+                                                setPath(prev => {
+                                                    if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
+                                                        return ({ start: { id: Number(target.id()), name: target.data().name as string } })
+                                                    } else {
+                                                        return ({ end: { id: Number(target.id()), name: target.data().name as string }, start: prev.start })
+                                                    }
+                                                })
+                                                return
+                                            }
+                                        });
+
+                                        cy.on('cxttap', 'node', (evt) => {
+                                            const chart = chartRef.current
+
+                                            if (!chart) return
+
                                             setTooltipLabel(undefined)
-                                            setSelectedObj(undefined)
+
+                                            const { target } = evt
+                                            const { x, y } = target.renderedPosition()
+
+                                            setPosition(() => (x && y) ? { x, y: y + chart.zoom() * 8 } : { x: 0, y: 0 });
+                                            setSelectedObj(target.json().data)
                                         });
 
                                         cy.on('tap', 'edge', (evt) => {
@@ -484,6 +487,12 @@ export function CodeGraph({
                                             if (!isPathResponse || selectedPathId === target.id()) return
 
                                             setSelectedPathId(target.id())
+                                        });
+
+                                        cy.on('boxselect', 'node', (evt) => {
+                                            const { target } = evt
+
+                                            selectedObjects.push(target.json().data)
                                         });
                                     }}
                                     stylesheet={STYLESHEET}

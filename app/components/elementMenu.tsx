@@ -1,13 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { Node } from "./model";
 import { ChevronLeft, ChevronRight, ChevronsLeftRight, ChevronsRightLeft, Copy, Globe, Maximize2 } from "lucide-react";
 import DataPanel from "./dataPanel";
 import { Position } from "cytoscape";
+import { Path } from "../page";
 
 interface Props {
     obj: Node | undefined;
+    objects: Node[];
+    setPath: Dispatch<SetStateAction<Path | undefined>>;
     position: Position | undefined;
     url: string;
     handelMaximize: () => void;
@@ -15,7 +18,7 @@ interface Props {
 }
 
 
-export default function ElementMenu({ obj, position, url, handelMaximize, parentWidth }: Props) {
+export default function ElementMenu({ obj, objects, setPath, position, url, handelMaximize, parentWidth }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
 
@@ -42,45 +45,63 @@ export default function ElementMenu({ obj, position, url, handelMaximize, parent
                     top: position.y + 5
                 }}
             >
-                <button
-                    className="p-2"
-                    title="Copy src to clipboard"
-                    onClick={() => navigator.clipboard.writeText(obj.src)}
-                >
-                    <Copy color="white" />
-                </button>
-                <a
-                    className="p-2"
-                    href={objURL}
-                    target="_blank"
-                    title="Go to repo"
-                    onClick={() => {
-                        const newTab = window.open(objURL, '_blank');
+                {
+                    objects.some(o => o.id === obj.id) && objects.length > 1 ?
+                        objects.length === 2 ?
+                            <>
+                                <button
+                                    className="p-2"
+                                    title="Create a path"
+                                    onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].name }, end: { id: Number(objects[1].id), name: objects[1].name } })}
+                                >
+                                    <Copy color="white" />
+                                </button>
+                            </>
+                            :
+                            <>
+                            </>
+                        : <>
+                            <button
+                                className="p-2"
+                                title="Copy src to clipboard"
+                                onClick={() => navigator.clipboard.writeText(obj.src)}
+                            >
+                                <Copy color="white" />
+                            </button>
+                            <a
+                                className="p-2"
+                                href={objURL}
+                                target="_blank"
+                                title="Go to repo"
+                                onClick={() => {
+                                    const newTab = window.open(objURL, '_blank');
 
-                        if (!obj.src_start || !obj.src_end || !newTab) return
+                                    if (!obj.src_start || !obj.src_end || !newTab) return
 
-                        newTab.scroll({
-                            top: obj.src_start,
-                            left: obj.src_end,
-                            behavior: 'smooth'
-                        })
-                    }}
-                >
-                    <Globe color="white" />
-                </a>
-                <button
-                    className="flex p-2"
-                    title="View Node"
-                    onClick={() => setCurrentObj(obj)}
-                >
-                    <ChevronsLeftRight color="white" />
-                </button>
-                <button
-                    className="p-2"
-                    onClick={() => handelMaximize()}
-                >
-                    <Maximize2 color="white" />
-                </button>
+                                    newTab.scroll({
+                                        top: obj.src_start,
+                                        left: obj.src_end,
+                                        behavior: 'smooth'
+                                    })
+                                }}
+                            >
+                                <Globe color="white" />
+                            </a>
+                            <button
+                                className="flex p-2"
+                                title="View Node"
+                                onClick={() => setCurrentObj(obj)}
+                            >
+                                <ChevronsLeftRight color="white" />
+                            </button>
+                            <button
+                                className="p-2"
+                                onClick={() => handelMaximize()}
+                            >
+                                <Maximize2 color="white" />
+                            </button>
+                        </>
+                }
             </div>
             <DataPanel
                 obj={currentObj}
