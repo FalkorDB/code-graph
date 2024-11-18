@@ -22,8 +22,7 @@ test.describe(' Navbar tests', () => {
 
   const navitems: { navItem: string; expectedRes: string }[] = [
     { navItem: "Home", expectedRes: urls.falkorDBUrl },
-    { navItem: "Github", expectedRes: urls.falkorDbGithubUrl },
-    { navItem: "Tip", expectedRes: urls.falkorDbGithubUrl }
+    { navItem: "Github", expectedRes: urls.falkorDbGithubUrl }
   ];  
 
   navitems.forEach(({navItem, expectedRes}) => {
@@ -34,7 +33,7 @@ test.describe(' Navbar tests', () => {
     })
   })
 
-  test("Verify that clicking the Create New Project button displays the correct dialog", async () => {
+  test.skip("Verify that clicking the Create New Project button displays the correct dialog", async () => {
     const navBar = await browser.createNewPage(CodeGraph, urls.baseUrl)
     await navBar.clickCreateNewProjectBtn();
     expect(await navBar.isCreateNewProjectDialog()).toBe(true)

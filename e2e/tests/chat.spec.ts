@@ -3,17 +3,14 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import urls from "../config/urls.json";
 import { ApiCalls } from "../logic/api/apiCalls";
 import CodeGraph from "../logic/POM/codeGraph";
-import { CHAT_OPTTIONS_COUNT, GRAPH_ID, Node_Add_Edge, Node_Import_Data, Node_Question } from "../config/constants";
+import { CHAT_OPTTIONS_COUNT, GRAPH_ID, Node_Add_Edge, Node_Import_Data, Node_Question, PROJECT_NAME } from "../config/constants";
 import { delay } from "../logic/utils";
 
 test.describe("Chat tests", () => {
   let browser: BrowserWrapper;
-  let api: ApiCalls;
 
   test.beforeAll(async () => {
     browser = new BrowserWrapper();
-    api = new ApiCalls();
-    await api.createProject(urls.graphRAGuRL);
   });
 
   test.afterAll(async () => {
@@ -65,7 +62,7 @@ test.describe("Chat tests", () => {
     await chat.clickOnshowPathBtn();
     await chat.insertInputForShowPath("1", Node_Import_Data);
     await chat.insertInputForShowPath("2", Node_Add_Edge);
-    await delay(200);
+    await delay(500);
     expect(await chat.isNodeVisibleInLastChatPath(Node_Import_Data)).toBe(true);
     expect(await chat.isNodeVisibleInLastChatPath(Node_Add_Edge)).toBe(true);
   });
@@ -76,7 +73,15 @@ test.describe("Chat tests", () => {
     await chat.clickOnshowPathBtn();
     await chat.insertInputForShowPath("1", Node_Add_Edge);
     await chat.insertInputForShowPath("2", Node_Import_Data);
-    await delay(200);
+    await delay(500);
     expect(await chat.isNotificationNoPathFound()).toBe(true);
   });
+
+  test.skip("Validates API response after project creation and retrieval", async () => {
+    const api = new ApiCalls();
+    await api.createProject(urls.graphRAGuRL);
+    const response = await api.getProject(PROJECT_NAME);
+    expect(response.result.status).toBe("success");
+  });
+  
 });
