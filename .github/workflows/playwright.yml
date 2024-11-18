@@ -48,7 +48,7 @@ jobs:
         poetry install
 
         # Run Flask backend
-        flask --app code_graph run --debug &
+        flask --app api run --debug &
     - name: Run Playwright tests with detailed reporting
       run: |
         npm install
