@@ -145,8 +145,8 @@ export function CodeGraph({
     const containerRef = useRef<HTMLDivElement>(null);
 
     async function fetchCount() {
-        const result = await fetch(`/api/repo/${graphName}`, {
-            method: 'POST'
+        const result = await fetch(`/api/repo/${graphName}/info`, {
+            method: 'GET'
         })
 
         if (!result.ok) {
@@ -176,8 +176,8 @@ export function CodeGraph({
         const run = async () => {
             fetchCount()
             /*
-            const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
-                method: 'POST'
+            const result = await fetch(`/api/repo/${graphName}/commit`, {
+                method: 'GET'
             })
 
             if (!result.ok) {
