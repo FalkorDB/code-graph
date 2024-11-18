@@ -1,13 +1,14 @@
 import { toast } from "@/components/ui/use-toast";
 import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
+import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
 import { Graph } from "./model";
 import { cn } from "@/lib/utils";
 import { LAYOUT } from "./code-graph";
 import { TypeAnimation } from "react-type-animation";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 enum MessageTypes {
     Query,
@@ -34,6 +35,14 @@ interface Props {
     isPath: boolean
     setIsPath: (isPathResponse: boolean) => void
 }
+
+const SUGGETSTIONS = [
+    "List a few recursive functions",
+    "What is the name of the most used method?",
+    "Who is calling the most used method?",
+    "Which function has the largest number of arguments? List a few arguments",
+    "Show a calling path between the drop_edge_range_index function and _query, only return function(s) names",
+]
 
 const RemoveLastPath = (messages: Message[]) => {
     const index = messages.findIndex((m) => m.type === MessageTypes.Path)
@@ -62,6 +71,8 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const [isPathResponse, setIsPathResponse] = useState(false);
 
     const [tipOpen, setTipOpen] = useState(false);
+    
+    const [sugOpen, setSugOpen] = useState(false);
 
     // A reference to the chat container to allow scrolling to the bottom
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
@@ -202,11 +213,13 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     }
 
     // Send the user query to the server
-    async function sendQuery(event: FormEvent) {
+    async function sendQuery(event?: FormEvent, sugQuery?: string) {
 
-        event.preventDefault();
+        event?.preventDefault();
 
-        const q = query.trim()
+        if (isSendMessage) return
+
+        const q = query?.trim() || sugQuery!
 
         if (!q) {
             toast({
@@ -491,22 +504,46 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                     </div>
                 }
             </main>
-            <footer>
-                {
-                    repo &&
-                    <div className="flex gap-4 px-4">
-                        <button disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setTipOpen(prev => !prev)}>
-                            <Lightbulb />
-                        </button>
-                        <form className="grow flex items-center border rounded-md pr-2" onSubmit={sendQuery}>
-                            <input disabled={isSendMessage} className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                            <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
-                                <ArrowRight color="white" />
+            <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
+                <footer>
+                    {
+                        repo &&
+                        <div className="flex gap-4 px-4">
+                            <button disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                                <Lightbulb />
                             </button>
-                        </form>
-                    </div>
-                }
-            </footer>
+                            <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
+                                <DropdownMenuTrigger asChild>
+                                    <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                                        <ArrowDown color="white" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <input className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                                <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                                    <ArrowRight color="white" />
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </footer>
+                <DropdownMenuContent className="flex flex-col gap-1">
+                    {
+                        SUGGETSTIONS.map((s, i) => (
+                            <button
+                                type="submit"
+                                key={i}
+                                className="p-2 text-left hover:bg-gray-200"
+                                onClick={() => {
+                                    sendQuery(undefined, s)
+                                    setSugOpen(false)
+                                }}
+                            >
+                                {s}
+                            </button>
+                        ))
+                    }
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 }
