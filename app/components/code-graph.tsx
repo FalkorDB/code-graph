@@ -175,6 +175,7 @@ export function CodeGraph({
 
         const run = async () => {
             fetchCount()
+            /*
             const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
                 method: 'POST'
             })
@@ -191,8 +192,12 @@ export function CodeGraph({
             const json = await result.json()
             const commitsArr = json.result.commits
             setCommits(commitsArr)
-            setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
-            setCommitIndex(commitsArr.length)
+
+            if (commitsArr.length > 0) {
+                setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+                setCommitIndex(commitsArr.length)
+            }
+            */
         }
 
         run()
@@ -274,7 +279,7 @@ export function CodeGraph({
 
         if (!graphNode.data.expand) {
             elements = await onFetchNode(node)
-            console.log(elements);
+
             if (elements.length === 0) {
                 toast({
                     title: "No neighbors found",
@@ -383,22 +388,25 @@ export function CodeGraph({
                                         <p>{edgesCount} Edges</p>
                                     </div>
                                     <div className='flex gap-4'>
-                                        {/* <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
-                                            <div className='flex gap-2 items-center'>
-                                                <Checkbox
-                                                    className='h-5 w-5 bg-gray-500 data-[state true]'
-                                                />
-                                                <p className='text-bold'>Display Changes</p>
+                                        {
+                                            commitIndex !== commits.length &&
+                                            <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
+                                                <div className='flex gap-2 items-center'>
+                                                    <Checkbox
+                                                        className='h-5 w-5 bg-gray-500 data-[state true]'
+                                                    />
+                                                    <p className='text-bold'>Display Changes</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full' />
+                                                    <p className='text-pink-500'>Were added</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full' />
+                                                    <p className='text-blue-500'>Were edited</p>
+                                                </div>
                                             </div>
-                                            <div className='flex gap-2 items-center'>
-                                                <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full'/>
-                                                <p className='text-pink-500'>Were added</p>
-                                            </div>
-                                            <div className='flex gap-2 items-center'>
-                                                <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full'/>
-                                                <p className='text-blue-500'>Were edited</p>
-                                            </div>
-                                        </div> */}
+                                        }
                                         <Toolbar className="pointer-events-auto" chartRef={chartRef} />
                                     </div>
                                 </div>
@@ -493,7 +501,7 @@ export function CodeGraph({
                     }
                 </main>
                 {/* {
-                    graph.Id &&
+                    graph.Id && commits.length > 0 &&
                     <CommitList
                         commitIndex={commitIndex}
                         commits={commits}

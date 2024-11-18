@@ -6,8 +6,11 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     const graphId = params.graph;
     try {
 
-        const result = await fetch(`http://127.0.0.1:5000/get_neighbors?repo=${graphId}&node_id=${nodeId}`, {
+        const result = await fetch(`${process.env.BACKEND_URL}/get_neighbors?repo=${graphId}&node_id=${nodeId}`, {
             method: 'GET',
+            headers: {
+                "Authorization": process.env.SECRET_TOKEN!,
+            }
         })
 
         const json = await result.json()
@@ -23,12 +26,13 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
     const nodeId = params.node;
     const graphId = params.graph;
     const targetId = request.nextUrl.searchParams.get('targetId')
-    
+
     try {
 
-        const result = await fetch(`http://127.0.0.1:5000/find_paths`, {
+        const result = await fetch(`${process.env.BACKEND_URL}/find_paths`, {
             method: 'POST',
             headers: {
+                "Authorization": process.env.SECRET_TOKEN!,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({

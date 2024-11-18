@@ -24,6 +24,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     const [options, setOptions] = useState<any[]>([])
     const [selectedOption, setSelectedOption] = useState<number>(0)
     const inputRef = useRef<HTMLInputElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         setSelectedOption(0)
@@ -37,7 +38,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
         const timeout = setTimeout(async () => {
 
             if (!value || node?.id) {
-                if (!value) {   
+                if (!value) {
                     setOptions([])
                 }
                 setOpen(false)
@@ -58,11 +59,14 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             }
 
             const json = await result.json()
-
             const { completions } = json.result
-            setOptions(completions)
+
+            setOptions(completions || [])
+
             if (completions?.length > 0) {
                 setOpen(true)
+            } else {
+                setOpen(false)
             }
         }, 500)
 
@@ -86,13 +90,18 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             }
             case "ArrowUp": {
                 e.preventDefault()
-                console.log(selectedOption <= 0 ? selectedOption : selectedOption - 1);
-                setSelectedOption(prev => prev <= 0 ? options.length - 1 : prev - 1)
+                setSelectedOption(prev => {
+                    containerRef.current?.scrollTo({ behavior: 'smooth', top: (prev <= 0 ? options.length - 1 : prev - 1) * 64 })
+                    return prev <= 0 ? options.length - 1 : prev - 1
+                })
                 return
             }
             case "ArrowDown": {
                 e.preventDefault()
-                setSelectedOption(prev => (prev + 1) % options.length)
+                setSelectedOption(prev => {
+                    containerRef.current?.scrollTo({ behavior: 'smooth', top: ((prev + 1) % options.length) * 64 })
+                    return (prev + 1) % options.length
+                })
                 return
             }
             case "Space": {
@@ -123,10 +132,16 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                     onValueChange({ name: newVal })
                 }}
                 {...props}
+                onBlur={(e) => {
+                    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+                        setOpen(false)
+                    }
+                }}
             />
             {
                 open &&
                 <div
+                    ref={containerRef}
                     className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
                     style={{
                         top: (inputRef.current?.clientHeight || 0) + 16
