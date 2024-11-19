@@ -43,13 +43,12 @@ jobs:
 
         # Install Flask and requests
         pip install Flask
-        pip install requests
         
         # Install dependencies using Poetry
         poetry install
 
         # Run Flask backend
-        flask --app api run --debug &
+        flask --app api/index.py run --debug &
     - name: Run Playwright tests with detailed reporting
       run: |
         npm install
