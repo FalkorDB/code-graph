@@ -336,7 +336,7 @@ export function CodeGraph({
         }
 
         chartNode.select()
-        const layout = { ...LAYOUT, padding: 250 }
+        const layout = { ...LAYOUT, padding: chart.width() / 5 }
         chartNode.layout(layout).run()
         setSearchNode(n)
     }

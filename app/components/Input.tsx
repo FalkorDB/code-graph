@@ -163,7 +163,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
-                                        debugger
                                         onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
                                         setOpen(false)
