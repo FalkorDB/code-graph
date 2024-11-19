@@ -43,6 +43,7 @@ jobs:
 
         # Install Flask and requests
         pip install Flask
+        pip install requests
         
         # Install dependencies using Poetry
         poetry install
