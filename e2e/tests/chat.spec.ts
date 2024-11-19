@@ -25,63 +25,56 @@ test.describe("Chat tests", () => {
     expect(count).toBe(CHAT_OPTTIONS_COUNT);
   });
 
-  // test(`Validate that multiple consecutive questions receive individual answers`, async () => {
-  //   const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-  //   await chat.selectGraph(GRAPH_ID);
-  //   const isLoadingArray: boolean[] = [];
+  test(`Validate that multiple consecutive questions receive individual answers`, async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+    const isLoadingArray: boolean[] = [];
 
-  //   for (let i = 0; i < 10; i++) {
-  //     await chat.sendMessage(Node_Question);
-  //     const isLoading: boolean = await chat.getpreviousQuestionLoadingImage();
-  //     isLoadingArray.push(isLoading);
-  //     if (i > 0) {
-  //       const prevIsLoading = isLoadingArray[i - 1];
-  //       expect(prevIsLoading).toBe(false);
-  //     }
-  //   }
-  // });
+    for (let i = 0; i < 10; i++) {
+      await chat.sendMessage(Node_Question);
+      const isLoading: boolean = await chat.getpreviousQuestionLoadingImage();
+      isLoadingArray.push(isLoading);
+      if (i > 0) {
+        const prevIsLoading = isLoadingArray[i - 1];
+        expect(prevIsLoading).toBe(false);
+      }
+    }
+  });
 
-  // test("Verify auto-scroll and manual scroll in chat", async () => {
-  //   const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-  //   await chat.selectGraph(GRAPH_ID);
-  //   for (let i = 0; i < 10; i++) {
-  //     await chat.sendMessage(Node_Question);
-  //   }
-  //   await delay(500);
-  //   await chat.scrollToTop();
-  //   const { scrollTop } = await chat.getScrollMetrics();
-  //   expect(scrollTop).toBeLessThanOrEqual(1);
-  //   await chat.sendMessage("Latest Message");
-  //   await delay(500);
-  //   expect(await chat.isAtBottom()).toBe(true);
-  // });
+  test("Verify auto-scroll and manual scroll in chat", async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+    for (let i = 0; i < 10; i++) {
+      await chat.sendMessage(Node_Question);
+    }
+    await delay(500);
+    await chat.scrollToTop();
+    const { scrollTop } = await chat.getScrollMetrics();
+    expect(scrollTop).toBeLessThanOrEqual(1);
+    await chat.sendMessage("Latest Message");
+    await delay(500);
+    expect(await chat.isAtBottom()).toBe(true);
+  });
 
-  // test("Verify successful node path connection between two nodes in chat", async () => {
-  //   const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-  //   await chat.selectGraph(GRAPH_ID);
-  //   await chat.clickOnshowPathBtn();
-  //   await chat.insertInputForShowPath("1", Node_Import_Data);
-  //   await chat.insertInputForShowPath("2", Node_Add_Edge);
-  //   await delay(500);
-  //   expect(await chat.isNodeVisibleInLastChatPath(Node_Import_Data)).toBe(true);
-  //   expect(await chat.isNodeVisibleInLastChatPath(Node_Add_Edge)).toBe(true);
-  // });
+  test("Verify successful node path connection between two nodes in chat", async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+    await chat.clickOnshowPathBtn();
+    await chat.insertInputForShowPath("1", Node_Import_Data);
+    await chat.insertInputForShowPath("2", Node_Add_Edge);
+    await delay(500);
+    expect(await chat.isNodeVisibleInLastChatPath(Node_Import_Data)).toBe(true);
+    expect(await chat.isNodeVisibleInLastChatPath(Node_Add_Edge)).toBe(true);
+  });
 
-  // test("Verify unsuccessful node path connection between two nodes in chat", async () => {
-  //   const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-  //   await chat.selectGraph(GRAPH_ID);
-  //   await chat.clickOnshowPathBtn();
-  //   await chat.insertInputForShowPath("1", Node_Add_Edge);
-  //   await chat.insertInputForShowPath("2", Node_Import_Data);
-  //   await delay(500);
-  //   expect(await chat.isNotificationNoPathFound()).toBe(true);
-  // });
-
-  // test.skip("Validates API response after project creation and retrieval", async () => {
-  //   const api = new ApiCalls();
-  //   await api.createProject(urls.graphRAGuRL);
-  //   const response = await api.getProject(PROJECT_NAME);
-  //   expect(response.result.status).toBe("success");
-  // });
+  test("Verify unsuccessful node path connection between two nodes in chat", async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+    await chat.clickOnshowPathBtn();
+    await chat.insertInputForShowPath("1", Node_Add_Edge);
+    await chat.insertInputForShowPath("2", Node_Import_Data);
+    await delay(500);
+    expect(await chat.isNotificationNoPathFound()).toBe(true);
+  });
   
 });

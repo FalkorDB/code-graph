@@ -165,7 +165,7 @@ export default class CodeGraph extends BasePage {
     /* CodeGraph functionality */
     async selectGraph(graph: string): Promise<void> {
         await this.comboBoxbtn.click();
-        await delay(500);
+        await this.selectGraphInComboBox(graph).waitFor({ state : 'visible'})
         await this.selectGraphInComboBox(graph).click();
     }
 }
