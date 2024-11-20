@@ -76,5 +76,12 @@ test.describe("Chat tests", () => {
     await delay(500);
     expect(await chat.isNotificationNoPathFound()).toBe(true);
   });
+
+  test("Validate error notification when sending an empty question in chat", async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+    await chat.clickAskquestionBtn();
+    expect(await chat.isNotificationNoPathFound()).toBe(true);
+  });
   
 });

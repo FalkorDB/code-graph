@@ -75,7 +75,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get notificationNoPathFound(): Locator {
-        return this.page.locator("//div//ol/li");
+        return this.page.locator("//div[@role='region']//ol//li");
     }
     
     /* NavBar functionality */
@@ -109,8 +109,13 @@ export default class CodeGraph extends BasePage {
     async clickOnshowPathBtn(): Promise<void> {
         await this.showPathBtn.click();
     }
+    
+    async clickAskquestionBtn(): Promise<void> {
+        await this.askquestionBtn.click();
+    }
 
     async sendMessage(message: string) {
+        await this.askquestionInput.isEnabled();
         await this.askquestionInput.fill(message);
         await this.askquestionBtn.click();
     }
