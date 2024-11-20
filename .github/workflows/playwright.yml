@@ -22,14 +22,13 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Set up environment variables
+    - name: Set up environment variables and run tests
       env:
         FALKORDB_URL: ${{ secrets.FALKORDB_URL }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
         NEXT_PUBLIC_MODE: UNLIMITED
         BACKEND_URL: ${{ secrets.BACKEND_URL }}
-    - name: Run Playwright tests with detailed reporting
       run: |
         npm install
         npm run build
