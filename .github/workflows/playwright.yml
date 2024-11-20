@@ -15,11 +15,6 @@ jobs:
           - 6379:6379
     steps:
     - uses: actions/checkout@v4
-    - uses: webfactory/ssh-agent@v0.9.0
-      with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-    - name: Clone code_graph repository
-      run: git clone git@github.com:FalkorDB/code-graph-backend.git
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
@@ -27,29 +22,13 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Set up Python environment, install dependencies, and run Flask
+    - name: Set up environment variables
       env:
+        FALKORDB_URL: ${{ secrets.FALKORDB_URL }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-      run: |
-        # Install Poetry first
-        curl -sSL https://install.python-poetry.org | python3 -
-        export PATH="$HOME/.local/bin:$PATH"
-
-        # Set up Python virtual environment
-        cd code-graph-backend
-        python3 -m venv myproject_env
-        source myproject_env/bin/activate
-
-        # Install Flask and requests
-        pip install Flask
-        pip install requests
-        
-        # Install dependencies using Poetry
-        poetry install
-
-        # Run Flask backend
-        flask --app api/index.py run --debug &
+        SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
+        NEXT_PUBLIC_MODE: UNLIMITED
+        BACKEND_URL: ${{ secrets.BACKEND_URL }}
     - name: Run Playwright tests with detailed reporting
       run: |
         npm install
