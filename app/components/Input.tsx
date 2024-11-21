@@ -121,6 +121,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     return (
         <div
             className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            data-name='search-bar'
         >
             <input
                 ref={inputRef}
