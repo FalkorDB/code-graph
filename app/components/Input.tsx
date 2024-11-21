@@ -144,6 +144,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 <div
                     ref={containerRef}
                     className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    data-name='search-bar-list'
                     style={{
                         top: (inputRef.current?.clientHeight || 0) + 16
                     }}
