@@ -11,6 +11,8 @@ import { toast } from '@/components/ui/use-toast';
 import { GraphContext } from './components/provider';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 
 export type PathNode = {
   id?: number
@@ -40,7 +42,12 @@ const TIPS: Tip[] = [
     title: "Open Menu",
     description: "Right Click on object to open the menu.",
     keyboardCommand: "Right Click"
-  }
+  },
+  {
+    title: "Remove Items",
+    description: `Press delete to remove the selected object.`,
+    keyboardCommand: "Delete"
+  },
 ]
 
 export default function Home() {
@@ -142,9 +149,14 @@ export default function Home() {
   }
 
   // Send the user query to the server to expand a node
-  async function onFetchNode(node: Node) {
-    const result = await fetch(`/api/repo/${graph.Id}/${node.id}`, {
-      method: 'GET'
+  async function onFetchNode(nodeIds: string[]) {
+
+    const result = await fetch(`/api/repo/${graph.Id}/neighbors`, {
+      method: 'POST',
+      body: JSON.stringify({ nodeIds }),
+      headers: {
+        'Content-Type': 'application/json'
+      },
     })
 
     if (!result.ok) {

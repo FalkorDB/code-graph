@@ -18,7 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 interface Props {
     onFetchGraph: (graphName: string) => void,
-    onFetchNode: (node: Node) => Promise<any[]>,
+    onFetchNode: (nodeIds: string[]) => Promise<any[]>,
     options: string[]
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
@@ -144,7 +144,28 @@ export function CodeGraph({
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
+    const [containerWidth, setContainerWidth] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        setContainerWidth(containerRef.current?.clientWidth || 0)
+    }, [containerRef.current?.clientWidth])
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (!isSelectedObj && selectedObj && selectedObjects.length === 0) return
+
+            if (event.key === 'Delete') {
+                handelRemove(selectedObjects.length > 0 ? selectedObjects.map(obj => Number(obj.id)) : [Number(isSelectedObj || selectedObj?.id)]);
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [selectedObjects, selectedObj, isSelectedObj]);
 
     async function fetchCount() {
         const result = await fetch(`/api/repo/${graphName}`, {
@@ -228,8 +249,8 @@ export function CodeGraph({
         }
     }
 
-    const deleteNeighbors = (node: Node, chart: cytoscape.Core) => {
-        const neighbors = chart.elements(`#${node.id}`).outgoers()
+    const deleteNeighbors = (nodes: Node[], chart: cytoscape.Core) => {
+        const neighbors = chart.elements(nodes.map(node => `#${node.id}`).join(',')).outgoers()
         neighbors.forEach((n) => {
             const id = n.id()
             const index = graph.Elements.findIndex(e => e.data.id === id);
@@ -263,36 +284,70 @@ export function CodeGraph({
         if (!chart) return
 
         let node: Node
-        let elements: ElementDefinition[]
-
         if (evt) {
             const { target } = evt
             target.unselect()
-            node = target.json().data;
+            node = target.json().data
         } else {
             node = selectedObj!
         }
 
-        const graphNode = graph.Elements.find(e => e.data.id === node.id);
+        const graphNode = graph.Elements.find(e => e.data.id === node.id)
 
         if (!graphNode) return
 
         if (!graphNode.data.expand) {
-            elements = await onFetchNode(node)
+            const elements = await onFetchNode([node.id])
 
             if (elements.length === 0) {
                 toast({
-                    title: "No neighbors found",
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
                 })
                 return
             }
 
             chart.add(elements);
         } else {
-            deleteNeighbors(node, chart)
+            deleteNeighbors([node], chart);
         }
 
-        graphNode.data.expand = !graphNode.data.expand;
+        graphNode.data.expand = !graphNode.data.expand
+
+        setSelectedObj(undefined)
+        chart.elements().layout(LAYOUT).run();
+    }
+
+    const handleExpand = async (nodes: Node[], expand: boolean) => {
+
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        if (expand) {
+            const elements = await onFetchNode(nodes.map(n => n.id))
+
+            if (elements.length === 0) {
+                toast({
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
+                })
+                return
+            }
+
+            chart.add(elements);
+        } else {
+            deleteNeighbors(nodes, chart);
+        }
+
+        nodes.forEach((node) => {
+            const graphNode = graph.Elements.find(e => e.data.id === node.id)
+
+            if (!graphNode) return
+
+            graphNode.data.expand = expand
+        })
+
         setSelectedObj(undefined)
         chart.elements().layout(LAYOUT).run();
     }
@@ -312,14 +367,22 @@ export function CodeGraph({
         }
 
         chartNode.select()
+        chartNode.style({ display: "element" })
         setIsSelectedObj(String(n.id))
         const layout = { ...LAYOUT, padding: 250 }
         chartNode.layout(layout).run()
         setSearchNode(n)
     }
 
+    const handelRemove = (ids: number[]) => {
+        chartRef.current?.elements(`#${ids.join(',#')}`).style({ display: 'none' })
+        if (ids.some(id => Number(selectedObj?.id) === id)) {
+            setSelectedObj(undefined)
+        }
+    }
+
     return (
-        <div ref={containerRef} className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
+        <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
             <header className="flex flex-col gap-4">
                 <Combobox
                     options={options}
@@ -328,13 +391,12 @@ export function CodeGraph({
                 />
             </header>
             <div className='h-1 grow flex flex-col'>
-
-                <main className="bg-white h-1 grow">
+                <main ref={containerRef} className="bg-white h-1 grow">
                     {
                         graph.Id ?
                             <div className="h-full relative border">
                                 <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
-                                    <div className='flex gap-4 pointer-events-auto'>
+                                    <div className='flex gap-4'>
                                         <Input
                                             graph={graph}
                                             value={searchNode.name}
@@ -384,22 +446,35 @@ export function CodeGraph({
                                                 </div>
                                             </div>
                                         }
-                                        <Toolbar className="pointer-events-auto" chartRef={chartRef} />
+                                        <Toolbar
+                                            className="pointer-events-auto"
+                                            chartRef={chartRef}
+                                        />
                                     </div>
                                 </div>
                                 <ElementTooltip
                                     label={tooltipLabel}
                                     position={tooltipPosition}
-                                    parentWidth={containerRef.current?.clientWidth || 0}
+                                    parentWidth={containerWidth}
                                 />
                                 <ElementMenu
                                     obj={selectedObj}
                                     objects={selectedObjects}
-                                    setPath={setPath}
+                                    setPath={(path) => {
+                                        setPath(path)
+                                        setSelectedObj(undefined)
+                                    }}
+                                    handelRemove={handelRemove}
                                     position={position}
                                     url={url}
-                                    handelMaximize={handleDoubleTap}
-                                    parentWidth={containerRef.current?.clientWidth || 0}
+                                    handelExpand={(nodes, expand) => {
+                                        if (nodes && expand !== undefined) {
+                                            handleExpand(nodes, expand)
+                                        } else {
+                                            handleDoubleTap()
+                                        }
+                                    }}
+                                    parentWidth={containerWidth}
                                 />
                                 <CytoscapeComponent
                                     cy={(cy) => {
@@ -414,7 +489,6 @@ export function CodeGraph({
                                         cy.on('mousedown', () => {
                                             setTooltipLabel(undefined)
                                             setSelectedObj(undefined)
-                                            setSelectedObjects([])
                                             setIsSelectedObj("")
                                         })
 
@@ -424,7 +498,7 @@ export function CodeGraph({
                                             setTooltipLabel(undefined)
 
                                             const { id } = target.json().data
-                                            debugger
+
                                             if (selectedObj?.id === id || isSelectedObj === id || selectedObjects.some(e => e.id === id)) return
 
                                             target.unselect()
@@ -440,12 +514,16 @@ export function CodeGraph({
 
                                             target.select()
 
-                                            if (selectedObj) return
+                                            if (selectedObj && target.id() === selectedObj.id) return
 
                                             const position = target.renderedPosition()
 
                                             setTooltipPosition(() => ({ x: position.x, y: position.y + cy.zoom() * 8 }));
                                             setTooltipLabel(() => target.json().data.name);
+                                        })
+
+                                        cy.on('tap', () => {
+                                            setSelectedObjects([])
                                         })
 
                                         cy.on('tap', 'node', (evt) => {
@@ -473,6 +551,15 @@ export function CodeGraph({
                                             if (!chart) return
 
                                             setTooltipLabel(undefined)
+
+                                            if (isSelectedObj && isSelectedObj !== evt.target.id()) {
+                                                chart.elements(`#${isSelectedObj}`).unselect()
+                                                setIsSelectedObj("")
+                                            }
+
+                                            if (selectedObj && selectedObj !== evt.target.id()) {
+                                                chart.elements(`#${selectedObj.id}`).unselect()
+                                            }
 
                                             const { target } = evt
                                             const { x, y } = target.renderedPosition()
