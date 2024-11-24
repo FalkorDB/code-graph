@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
 
-    const { nodeIds } = await request.json();
+    const nodeIds = (await request.json()).nodeIds.map((id: string) => Number(id));
     const graphId = params.graph;
     try {
-
+        console.log(nodeIds, graphId);
+        
         const result = await fetch(`${process.env.BACKEND_URL}/get_neighbors`, {
             method: 'POST',
             body: JSON.stringify({ node_ids: nodeIds, repo: graphId }),

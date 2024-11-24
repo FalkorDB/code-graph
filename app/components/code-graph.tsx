@@ -261,7 +261,7 @@ export function CodeGraph({
             const type = "category" in element.data
 
             if (element.data.expand) {
-                deleteNeighbors(element.data, chart)
+                deleteNeighbors([element.data], chart)
             }
 
             graph.Elements.splice(index, 1);
@@ -296,7 +296,9 @@ export function CodeGraph({
 
         if (!graphNode) return
 
-        if (!graphNode.data.expand) {
+        const expand = !graphNode.data.expand
+
+        if (expand) {
             const elements = await onFetchNode([node.id])
 
             if (elements.length === 0) {
@@ -312,7 +314,9 @@ export function CodeGraph({
             deleteNeighbors([node], chart);
         }
 
-        graphNode.data.expand = !graphNode.data.expand
+        const element = chart.elements(`#${node.id}`)
+        element.data('expand', expand)
+        graphNode.data.expand = expand
 
         setSelectedObj(undefined)
         chart.elements().layout(LAYOUT).run();
@@ -336,20 +340,26 @@ export function CodeGraph({
             }
 
             chart.add(elements);
+            chart.elements().layout(LAYOUT).run();
         } else {
-            deleteNeighbors(nodes, chart);
+            const deleteNodes = nodes.filter(n => n.expand === true)
+            if (deleteNodes.length > 0) {
+                deleteNeighbors(deleteNodes, chart);
+                chart.elements().layout(LAYOUT).run();
+            }
         }
 
         nodes.forEach((node) => {
             const graphNode = graph.Elements.find(e => e.data.id === node.id)
+            const element = chart.elements(`#${node.id}`)
 
             if (!graphNode) return
 
+            element.data("expand", expand)
             graphNode.data.expand = expand
         })
 
         setSelectedObj(undefined)
-        chart.elements().layout(LAYOUT).run();
     }
 
     const handelSearchSubmit = (node: any) => {
