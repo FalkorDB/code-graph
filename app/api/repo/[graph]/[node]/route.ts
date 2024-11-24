@@ -1,24 +1,34 @@
-import { FalkorDB, Graph } from "falkordb";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(request: NextRequest, { params }: { params: { graph: string, node: string } }) {
-    
-    const nodeId  = parseInt(params.node);
+export async function POST(request: NextRequest, { params }: { params: { graph: string, node: string } }) {
+
+    const nodeId = params.node;
     const graphId = params.graph;
+    const targetId = request.nextUrl.searchParams.get('targetId')
 
-    const db = await FalkorDB.connect({url: process.env.FALKORDB_URL || 'falkor://localhost:6379',});
-    const graph = db.selectGraph(graphId);
+    try {
 
-    // Get node's neighbors    
-    const q_params = {nodeId: nodeId};
-    const query    = `MATCH (src)-[e]-(n)
-                      WHERE ID(src) = $nodeId
-                      RETURN collect(distinct { label:labels(n)[0], id:ID(n), name: n.name } ) as nodes,
-                      collect( { src: ID(startNode(e)), id: ID(e), dest: ID(endNode(e)), type: type(e) } ) as edges`;
+        const result = await fetch(`${process.env.BACKEND_URL}/find_paths`, {
+            method: 'POST',
+            headers: {
+                "Authorization": process.env.SECRET_TOKEN!,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                repo: graphId,
+                src: Number(nodeId),
+                dest: Number(targetId!)
+            })
+        })
 
-    let res: any = await graph.query(query, { params: q_params });
-    let nodes = res.data[0]['nodes'];
-    let edges = res.data[0]['edges'];
+        if (!result.ok) {
+            throw new Error(await result.text())
+        }
 
-    return NextResponse.json({ id: graphId, nodes: nodes, edges: edges }, { status: 200 })
+        const json = await result.json()
+
+        return NextResponse.json({ result: json }, { status: 200 })
+    } catch (err) {
+        return NextResponse.json({ massage: (err as Error).message }, { status: 200 })
+    }
 }
