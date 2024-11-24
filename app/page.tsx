@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
 import { Graph, Node } from './components/model';
-import { BookOpen, Github, HomeIcon } from 'lucide-react';
+import { BookOpen, Github, HomeIcon, X } from 'lucide-react';
 import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { CodeGraph } from './components/code-graph';
 import { toast } from '@/components/ui/use-toast';
 import { GraphContext } from './components/provider';
 import Image from 'next/image';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 
@@ -23,6 +24,32 @@ export type Path = {
   end?: PathNode
 }
 
+type Tip = {
+  title: string
+  description: string
+  keyboardCommand: string
+}
+
+const TIPS: Tip[] = [
+  {
+    title: "Select Items in Specific Area",
+    description: `Click and drag your mouse over an area to create a selection box.
+    Any object within the selection area will be highlighted.
+    This is useful for selecting multiple objects at once within a specific region of your design.`,
+    keyboardCommand: "Click+Drag"
+  },
+  {
+    title: "Open Menu",
+    description: "Right Click on object to open the menu.",
+    keyboardCommand: "Right Click"
+  },
+  {
+    title: "Remove Items",
+    description: `Press delete to remove the selected object.`,
+    keyboardCommand: "Delete"
+  },
+]
+
 export default function Home() {
 
   const [graph, setGraph] = useState(Graph.empty());
@@ -31,6 +58,7 @@ export default function Home() {
   const [isPathResponse, setIsPathResponse] = useState<boolean>(false);
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
+  const [tipOpen, setTipOpen] = useState(false)
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
@@ -121,9 +149,14 @@ export default function Home() {
   }
 
   // Send the user query to the server to expand a node
-  async function onFetchNode(node: Node) {
-    const result = await fetch(`/api/repo/${graph.Id}/${node.id}`, {
-      method: 'GET'
+  async function onFetchNode(nodeIds: string[]) {
+
+    const result = await fetch(`/api/repo/${graph.Id}/neighbors`, {
+      method: 'POST',
+      body: JSON.stringify({ nodeIds }),
+      headers: {
+        'Content-Type': 'application/json'
+      },
     })
 
     if (!result.ok) {
@@ -153,19 +186,45 @@ export default function Home() {
             </h1>
           </div>
           <ul className="flex gap-4 items-center font-medium">
-            <Link className="flex gap-2.5 items-center p-4" href="https://www.falkordb.com" target='_blank'>
+            <Link title="Home" className="flex gap-2.5 items-center p-4" href="https://www.falkordb.com" target='_blank'>
               <HomeIcon />
               <p>Home</p>
             </Link>
-            <Link className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
+            <Link title="Github" className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
               <Github />
               <p>Github</p>
             </Link>
-            {/* <Link className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
-              <BookOpen />
-              <p>Tip</p>
-            </Link>
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DropdownMenu open={tipOpen} onOpenChange={setTipOpen}>
+              <DropdownMenuTrigger asChild>
+                <button title="Tip" className="flex gap-2.5 items-center p-4">
+                  <BookOpen />
+                  <p>Tip</p>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className='flex-col flex p-4 gap-6 max-w-[30dvw]'>
+                <div className='flex justify-between items-center'>
+                  <DropdownMenuLabel className='font-oswald text-[20px] font-semibold leading-[20px] text-left'>HOW TO USE THE PRODUCT</DropdownMenuLabel>
+                  <button
+                    title='Close'
+                    onClick={() => setTipOpen(false)}
+                  >
+                    <X />
+                  </button>
+                </div>
+                {
+                  TIPS.map((tip, index) => (
+                    <div key={index} className='flex flex-col gap-4 text-[#7D7D7D]'>
+                      <div className='flex gap-3 items-center'>
+                        <h1 className='text-black font-bold'>{tip.title}</h1>
+                        <p className='bg-[#ECECEC] p-1 rounded italic'>{tip.keyboardCommand}</p>
+                      </div>
+                      <p>{tip.description}</p>
+                    </div>
+                  ))
+                }
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
                 <button
                   className="h-full bg-black p-4 text-white rounded-lg"
