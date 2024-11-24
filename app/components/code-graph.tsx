@@ -451,7 +451,6 @@ export function CodeGraph({
                                             chartRef={chartRef}
                                             setSelectedObj={setSelectedObj}
                                         />
-                                        <Toolbar  className="pointer-events-auto" chartRef={chartRef} />
                                     </div>
                                 </div>
                                 <ElementTooltip
