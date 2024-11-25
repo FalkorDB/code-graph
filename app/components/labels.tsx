@@ -8,7 +8,7 @@ export function Labels(params: { categories: Category[], className?: string, onC
     const [reload, setReload] = useState(false)
 
     return (
-        <div className={cn("flex gap-4", params.className)} >
+        <div className={cn("flex gap-4 pointer-events-auto", params.className)} >
             {params.categories.map((category) =>
                 <div className="bg-white flex gap-2 items-center p-2 border rounded-md" key={category.index}>
                     <Checkbox
