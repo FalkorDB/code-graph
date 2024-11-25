@@ -261,7 +261,7 @@ export function CodeGraph({
             const type = "category" in element.data
 
             if (element.data.expand) {
-                deleteNeighbors([element.data], chart)
+                deleteNeighbors([element.data] as Node[], chart)
             }
 
             graph.Elements.splice(index, 1);
@@ -314,8 +314,6 @@ export function CodeGraph({
             deleteNeighbors([node], chart);
         }
 
-        const element = chart.elements(`#${node.id}`)
-        element.data('expand', expand)
         graphNode.data.expand = expand
 
         setSelectedObj(undefined)
@@ -342,20 +340,21 @@ export function CodeGraph({
             chart.add(elements);
             chart.elements().layout(LAYOUT).run();
         } else {
-            const deleteNodes = nodes.filter(n => n.expand === true)
+            const deleteNodes = graph.Elements.filter(n => n.data.expand === true && nodes.some(e => e.id === n.data.id))
+
+            debugger
+
             if (deleteNodes.length > 0) {
-                deleteNeighbors(deleteNodes, chart);
+                deleteNeighbors(deleteNodes.map(n => n.data) as Node[], chart);
                 chart.elements().layout(LAYOUT).run();
             }
         }
 
         nodes.forEach((node) => {
             const graphNode = graph.Elements.find(e => e.data.id === node.id)
-            const element = chart.elements(`#${node.id}`)
 
             if (!graphNode) return
 
-            element.data("expand", expand)
             graphNode.data.expand = expand
         })
 
@@ -479,11 +478,7 @@ export function CodeGraph({
                                     position={position}
                                     url={url}
                                     handelExpand={(nodes, expand) => {
-                                        if (nodes && expand !== undefined) {
-                                            handleExpand(nodes, expand)
-                                        } else {
-                                            handleDoubleTap()
-                                        }
+                                        handleExpand(nodes, expand)
                                     }}
                                     parentWidth={containerWidth}
                                 />
