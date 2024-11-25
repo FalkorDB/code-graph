@@ -1,20 +1,26 @@
 import { CircleDot, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils"
-import { MutableRefObject } from "react";
+import { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
+import { Node } from "./model";
 
-export function Toolbar(params: {
-    chartRef: MutableRefObject<any>, className?: string
-}) {
+interface Props {
+    chartRef: MutableRefObject<any>
+    setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
+    className?: string
+}
+
+export function Toolbar({ chartRef, setSelectedObj, className }: Props) {
 
     function handleZoomClick(changefactor: number) {
-        let chart = params.chartRef.current
+        let chart = chartRef.current
         if (chart) {
             chart.zoom(chart.zoom() * changefactor)
         }
+        setSelectedObj(undefined)
     }
 
     return (
-        <div className={cn("bg-white flex flex-row rounded overflow-hidden", params.className)}>
+        <div className={cn("bg-white flex flex-row rounded overflow-hidden", className)}>
             <button
                 className="border p-2"
                 onClick={() => handleZoomClick(0.9)}
@@ -24,7 +30,7 @@ export function Toolbar(params: {
             </button>
             <button
                 className="border p-2"
-                onClick={() => params.chartRef?.current?.zoomToFit(500, 200)}
+                onClick={() => chartRef.current?.zoomToFit(500, 200)}
                 title="Center"
             >
                 <CircleDot />

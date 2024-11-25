@@ -25,6 +25,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     const [options, setOptions] = useState<any[]>([])
     const [selectedOption, setSelectedOption] = useState<number>(0)
     const inputRef = useRef<HTMLInputElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         setSelectedOption(0)
@@ -37,7 +38,13 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     useEffect(() => {
         const timeout = setTimeout(async () => {
 
-            if (!value || node?.id) return
+            if (!value || node?.id) {
+                if (!value) {
+                    setOptions([])
+                }
+                setOpen(false)
+                return
+            }
 
             const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}&type=autoComplete`, {
                 method: 'POST'
@@ -53,11 +60,14 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             }
 
             const json = await result.json()
-
             const { completions } = json.result
-            setOptions(completions)
+
+            setOptions(completions || [])
+
             if (completions?.length > 0) {
                 setOpen(true)
+            } else {
+                setOpen(false)
             }
         }, 500)
 
@@ -72,22 +82,27 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 if (!option) return
                 if (handelSubmit) {
                     handelSubmit(option)
+                } else {
+                    if (!open) return
                     onValueChange({ name: option.properties.name, id: option.id })
                 }
-                if (!open) return
-                onValueChange({ name: option.properties.name, id: option.id })
                 setOpen(false)
                 return
             }
             case "ArrowUp": {
                 e?.preventDefault()
-                console.log(selectedOption <= 0 ? selectedOption : selectedOption - 1);
-                setSelectedOption(prev => prev <= 0 ? options.length - 1 : prev - 1)
+                setSelectedOption(prev => {
+                    containerRef.current?.scrollTo({ behavior: 'smooth', top: (prev <= 0 ? options.length - 1 : prev - 1) * 64 })
+                    return prev <= 0 ? options.length - 1 : prev - 1
+                })
                 return
             }
             case "ArrowDown": {
                 e?.preventDefault()
-                setSelectedOption(prev => (prev + 1) % options.length)
+                setSelectedOption(prev => {
+                    containerRef.current?.scrollTo({ behavior: 'smooth', top: ((prev + 1) % options.length) * 64 })
+                    return (prev + 1) % options.length
+                })
                 return
             }
             case "Space": {
@@ -107,6 +122,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     return (
         <div
             className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            data-name='search-bar'
         >
             <input
                 ref={inputRef}
@@ -117,13 +133,19 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                     const newVal = e.target.value
                     onValueChange({ name: newVal })
                 }}
-                onBlur={() => setOpen(false)}
                 {...props}
+                onBlur={(e) => {
+                    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+                        setOpen(false)
+                    }
+                }}
             />
             {
                 open &&
                 <div
+                    ref={containerRef}
                     className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    data-name='search-bar-list'
                     style={{
                         top: (inputRef.current?.clientHeight || 0) + 16
                     }}

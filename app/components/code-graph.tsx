@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from "react";
-import { Edge, GraphData, Node } from "./model";
+import { Edge, Graph, GraphData, Node } from "./model";
 import { GraphContext } from "./provider";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
@@ -7,7 +7,7 @@ import { GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { Path } from '../page';
+import { Path, PathNode } from '../page';
 import Input from './Input';
 import CommitList, { CommitChanges } from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,14 +15,22 @@ import GraphView from "./graphView";
 
 interface Props {
     onFetchGraph: (graphName: string) => void,
-    onFetchNode: (node: Node) => Promise<GraphData>,
+    onFetchNode: (nodeIds: string[]) => Promise<GraphData>,
     options: string[]
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     selectedValue: string
+    selectedPathId: string | undefined
     setSelectedPathId: (selectedPathId: string) => void
     isPathResponse: boolean
     setIsPathResponse: Dispatch<SetStateAction<boolean>>
+}
+
+const removeLinks = (nodes: Node[], graph: Graph) => {
+    graph.Elements = {
+        nodes: [...graph.Elements.nodes],
+        links: graph.Elements.links.filter(e => !nodes.some(n => String((e.source as unknown as Edge).id) === n.id || String((e.target as unknown as Edge).id) === n.id)),
+    }
 }
 
 export function CodeGraph({
@@ -34,7 +42,8 @@ export function CodeGraph({
     selectedValue,
     setSelectedPathId,
     isPathResponse,
-    setIsPathResponse
+    setIsPathResponse,
+    selectedPathId
 }: Props) {
 
     let graph = useContext(GraphContext)
@@ -42,21 +51,49 @@ export function CodeGraph({
     const [url, setURL] = useState("");
     const [data, setData] = useState<GraphData>(graph.Elements);
     const [selectedObj, setSelectedObj] = useState<Node>();
+    const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
+    const [isSelectedObj, setIsSelectedObj] = useState<string>("");
     const [position, setPosition] = useState<{ x: number, y: number }>();
     const [graphName, setGraphName] = useState<string>("");
-    const [searchNodeName, setSearchNodeName] = useState<string>("");
+    const [searchNode, setSearchNode] = useState<PathNode>({});
     const [commits, setCommits] = useState<any[]>([]);
     const [nodesCount, setNodesCount] = useState<number>(0);
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
     const [commitChanges, setCommitChanges] = useState<CommitChanges>();
+    const [containerWidth, setContainerWidth] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<any>();
 
     useEffect(() => {
         setData({ ...graph.Elements })
     }, [graph])
+
+    useEffect(() => {
+        setContainerWidth(containerRef.current?.clientWidth || 0)
+    }, [containerRef.current?.clientWidth])
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (!isSelectedObj && selectedObj && selectedObjects.length === 0) return
+
+            if (event.key === 'Delete') {
+
+                graph.Elements = {
+                    nodes: graph.Elements.nodes.filter(e => e.id !== selectedObj?.id && !selectedObjects.some(obj => obj.id === e.id)),
+                    links: [...graph.Elements.links]
+                }
+                handelRemove([selectedObj?.id || "", ...selectedObjects.map(e => e.id)])
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [selectedObjects, selectedObj, isSelectedObj]);
 
     async function fetchCount() {
         const result = await fetch(`/api/repo/${graphName}`, {
@@ -89,24 +126,27 @@ export function CodeGraph({
 
         const run = async () => {
             fetchCount()
-            const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
-                method: 'POST'
-            })
+            // const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
+            //     method: 'POST'
+            // })
 
-            if (!result.ok) {
-                toast({
-                    variant: "destructive",
-                    title: "Uh oh! Something went wrong.",
-                    description: await result.text(),
-                })
-                return
-            }
+            // if (!result.ok) {
+            //     toast({
+            //         variant: "destructive",
+            //         title: "Uh oh! Something went wrong.",
+            //         description: await result.text(),
+            //     })
+            //     return
+            // }
 
-            const json = await result.json()
-            const commitsArr = json.result.commits
-            setCommits(commitsArr)
-            setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
-            setCommitIndex(commitsArr.length)
+            // const json = await result.json()
+            // const commitsArr = json.result.commits
+            // setCommits(commitsArr)
+
+            // if (commitsArr.length > 0) {
+            //     setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+            //     setCommitIndex(commitsArr.length)
+            // }
         }
 
         run()
@@ -138,29 +178,30 @@ export function CodeGraph({
 
         graph.Elements.links.forEach((link) => {
             if (show) {
-                    if (elements.some(e => e.id === String((link.source as unknown as Edge).id) || e.id === String((link.target as unknown as Edge).id)) && graph.Elements.nodes.some(e => e.id === (String((link.source as unknown as Edge).id) && (link.source as unknown as Edge).linkVisible) || (e.id === String((link.target as unknown as Edge).id) && (link.target as unknown as Edge).linkVisible))) {
-                        link.linkVisibility = true
-                    }
-                } else {
-                    if (elements.some(e => e.id === String((link.source as unknown as Edge).id) || e.id === String((link.target as unknown as Edge).id))) {
-                        link.linkVisibility = false
-                    }
+                if (elements.some(e => e.id === String((link.source as unknown as Edge).id) || e.id === String((link.target as unknown as Edge).id)) && graph.Elements.nodes.some(e => e.id === (String((link.source as unknown as Edge).id) && (link.source as unknown as Edge).linkVisible) || (e.id === String((link.target as unknown as Edge).id) && (link.target as unknown as Edge).linkVisible))) {
+                    link.linkVisibility = true
                 }
+            } else {
+                if (elements.some(e => e.id === String((link.source as unknown as Edge).id) || e.id === String((link.target as unknown as Edge).id))) {
+                    link.linkVisibility = false
+                }
+            }
         })
-        
+
         setData({ ...graph.Elements })
         chartRef.current?.zoomToFit(1000, 200);
     }
 
-    const deleteNeighbors = (node: Node) => {
-        const { id } = node
-        const neighbors = graph.Elements.nodes.filter(n => graph.Elements.links.filter(e => String((e.source as unknown as Edge).id) === id).some(e => String((e.target as unknown as Edge).id) === n.id))
+    const deleteNeighbors = (nodes: Node[]) => {
+        const neighbors = graph.Elements.nodes.filter(n => graph.Elements.links.filter(e => nodes.some((node) => String((e.source as unknown as Edge).id) === node.id)).some(e => String((e.target as unknown as Edge).id) === n.id))
+
+        const expandNodes: Node[] = []
 
         neighbors.forEach((n) => {
             if (!n || !n.collapsed) return
 
             if (n.expand) {
-                deleteNeighbors(n)
+                expandNodes.push(n)
             }
 
             graph.Elements = {
@@ -176,30 +217,60 @@ export function CodeGraph({
 
             graph.NodesMap.delete(Number(n.id))
         })
+
+        deleteNeighbors(expandNodes)
     }
-    
+
     const handleNodeRightTap = async (node?: Node) => {
 
         node ??= selectedObj
 
         if (!node) return
-        
+
         if (!node.expand) {
-            const elements = await onFetchNode(node)
+            const elements = await onFetchNode([node.id])
             if (elements.nodes.length === 0) {
                 toast({
-                    title: "No neighbors found",
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
                 })
                 return
             }
         } else {
-            deleteNeighbors(node)
+            deleteNeighbors([node]);
         }
-        
-        node.expand = !node.expand;
-        setSelectedObj(undefined)
+
+        node.expand = !node.expand
+    }
+
+    const handleExpand = async (nodes: Node[], expand: boolean) => {
+
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        if (expand) {
+            const elements = await onFetchNode(nodes.map(n => n.id))
+
+            if (elements.nodes.length === 0) {
+                toast({
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
+                })
+                return
+            }
+
+            graph.Elements
+
+        } else {
+            deleteNeighbors(nodes);
+        }
+
+        nodes.forEach((node) => {
+            node.expand = expand
+        })
+
         setData({ ...graph.Elements })
-        chartRef.current?.zoomToFit(1000, 200);
     }
 
     const handelSearchSubmit = (node: any) => {
@@ -210,8 +281,15 @@ export function CodeGraph({
             setData({ ...graph.Elements })
         }
 
-        setSearchNodeName("")
         chartRef.current?.zoomToFit(1000, 200);
+    }
+
+    const handelRemove = (nodeIds: string[]) => {
+        graph.Elements = {
+            nodes: graph.Elements.nodes.filter(e => !nodeIds.includes(e.id)),
+            links: graph.Elements.links.filter(e => !nodeIds.includes(String((e.source as unknown as Edge).id)) && !nodeIds.includes(String((e.target as unknown as Edge).id))
+            )
+        }
     }
 
     return (
@@ -224,19 +302,19 @@ export function CodeGraph({
                 />
             </header>
             <div className='h-1 grow flex flex-col'>
-
-                <main className="bg-white h-1 grow">
+                <main ref={containerRef} className="bg-white h-1 grow">
                     {
                         graph.Id ?
                             <div ref={containerRef} className="h-full relative border">
                                 <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
-                                    <div className='flex gap-4 pointer-events-auto'>
+                                    <div className='flex gap-4'>
                                         <Input
                                             graph={graph}
-                                            value={searchNodeName}
-                                            onValueChange={(node) => setSearchNodeName(node.name!)}
+                                            value={searchNode.name}
+                                            onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
                                             handelSubmit={handelSearchSubmit}
+                                            node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
                                     </div>
@@ -278,14 +356,25 @@ export function CodeGraph({
                                                 </div>
                                             </div>
                                         }
-                                        <Toolbar className="pointer-events-auto" chartRef={chartRef} />
+                                        <Toolbar
+                                            className="pointer-events-auto"
+                                            chartRef={chartRef}
+                                            setSelectedObj={setSelectedObj}
+                                        />
                                     </div>
                                 </div>
                                 <ElementMenu
                                     obj={selectedObj}
+                                    objects={selectedObjects}
+                                    setPath={(path) => {
+                                        setPath(path);
+                                        setSelectedObj(undefined);
+                                    }}
+                                    handelRemove={handelRemove}
                                     position={position}
                                     url={url}
-                                    handelMaximize={handleNodeRightTap}
+                                    handelExpand={handleExpand}
+                                    parentWidth={containerWidth}
                                 />
                                 <GraphView
                                     height={containerRef.current?.clientHeight || 0}
@@ -300,15 +389,15 @@ export function CodeGraph({
                                     setSelectedPathId={setSelectedPathId}
                                     handelNodeRightTap={handleNodeRightTap}
                                 />
-                            </div>
+                            </div >
                             : <div className="flex flex-col items-center justify-center h-full text-gray-400">
                                 <GitFork size={100} color="gray" />
                                 <h1 className="text-4xl">Select a repo to show its graph here</h1>
                             </div>
                     }
-                </main>
-                {
-                    graph.Id &&
+                </main >
+                {/* {
+                    graph.Id && commits.length > 0 &&
                     <CommitList
                         commitChanges={commitChanges}
                         setCommitChanges={setCommitChanges}
@@ -319,8 +408,8 @@ export function CodeGraph({
                         setCurrentCommit={setCurrentCommit}
                         graph={graph}
                     />
-                }
-            </div>
-        </div>
+                } */}
+            </div >
+        </div >
     )
 }
