@@ -1,6 +1,10 @@
 import twcolors from 'tailwindcss/colors'
 import { Path } from '../page'
 
+export interface Element {
+  data: Node | Edge,
+}
+
 export interface Category {
   name: string,
   index: number,
@@ -74,7 +78,7 @@ export class Graph {
     return this.categoriesMap;
   }
 
-  get Elements(): any[] {
+  get Elements(): Element[] {
     return this.elements;
   }
 
