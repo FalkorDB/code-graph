@@ -11,10 +11,10 @@ interface Props {
     obj: Node | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
-    handelRemove: (nodes: number[]) => void;
+    handelRemove: (nodes: string[]) => void;
     position: Position | undefined;
     url: string;
-    handelMaximize: () => void;
+    handelExpand: (objects: Node[], expand: boolean) => void;
     parentWidth: number;
 }
 
@@ -61,7 +61,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove(objects.map(o => Number(o.id)))}
+                                onClick={() => handelRemove(objects.map(o => o.id))}
                             >
                                 <EyeOff color="white" />
                             </button>
@@ -89,7 +89,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove([Number(obj.id)])}
+                                onClick={() => handelRemove([obj.id])}
                             >
                                 <EyeOff color="white" />
                             </button>
