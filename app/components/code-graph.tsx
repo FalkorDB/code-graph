@@ -13,7 +13,7 @@ import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
 import { Path, PathNode } from '../page';
 import Input from './Input';
-import CommitList from './commitList';
+// import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Props {
