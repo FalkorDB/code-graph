@@ -7,7 +7,7 @@ interface Props {
     parentWidth: number;
 }
 
-export default function ElementTooltip({ label, position }: Props) {
+export default function ElementTooltip({ label, position, parentWidth }: Props) {
     const [containerWidth, setContainerWidth] = useState<number>(0);
 
     if (!label || !position) return null
@@ -18,9 +18,9 @@ export default function ElementTooltip({ label, position }: Props) {
                 if (!ref) return
                 setContainerWidth(ref.clientWidth)
             }}
-            className="absolute z-10 bg-white rounded-lg shadow-lg p-3"
+            className="absolute z-20 bg-white rounded-lg shadow-lg p-3"
             style={{
-                left: position.x - containerWidth / 2,
+                left: Math.max(-34, Math.min(position.x - containerWidth / 2, parentWidth + 34 - containerWidth)),
                 top: position.y
             }}
         >

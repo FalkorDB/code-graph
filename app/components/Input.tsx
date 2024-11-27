@@ -121,6 +121,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     return (
         <div
             className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            data-name='search-bar'
         >
             <input
                 ref={inputRef}
@@ -143,6 +144,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 <div
                     ref={containerRef}
                     className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    data-name='search-bar-list'
                     style={{
                         top: (inputRef.current?.clientHeight || 0) + 16
                     }}
@@ -163,7 +165,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
-                                        debugger
                                         onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
                                         setOpen(false)
