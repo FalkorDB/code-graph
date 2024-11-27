@@ -71,21 +71,13 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const [isPathResponse, setIsPathResponse] = useState(false);
 
     const [tipOpen, setTipOpen] = useState(false);
-    
+
     const [sugOpen, setSugOpen] = useState(false);
 
     // A reference to the chat container to allow scrolling to the bottom
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
 
-    const tipRef: React.RefObject<HTMLDivElement> = useRef(null);
-
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
-
-    useEffect(() => {
-        if (tipOpen) {
-            tipRef.current?.focus()
-        }
-    }, [tipOpen])
 
     useEffect(() => {
         const p = paths.find((path) => [...path.edges, ...path.nodes].some((e: any) => e.id === selectedPathId))
@@ -499,7 +491,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 }
                 {
                     tipOpen &&
-                    <div ref={tipRef} className="bg-white fixed bottom-[85px] border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" onBlur={() => setTipOpen(false)}>
+                    <div ref={ref => ref?.focus()} className="bg-white absolute bottom-0 border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onBlur={() => setTipOpen(false)}>
                         {getTip()}
                     </div>
                 }
@@ -509,7 +501,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                     {
                         repo &&
                         <div className="flex gap-4 px-4">
-                            <button disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                            <button onClick={() => setTipOpen(prev => !prev)} disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
                                 <Lightbulb />
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>

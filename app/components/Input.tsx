@@ -163,7 +163,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                         selectedOption === index && "bg-gray-100"
                                     )}
                                     onMouseEnter={() => setSelectedOption(index)}
-                                    onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
                                         onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
