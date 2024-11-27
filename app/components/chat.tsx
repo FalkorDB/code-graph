@@ -36,7 +36,7 @@ interface Props {
     setIsPath: (isPathResponse: boolean) => void
 }
 
-const SUGGETSTIONS = [
+const SUGGESTIONS = [
     "List a few recursive functions",
     "What is the name of the most used method?",
     "Who is calling the most used method?",
@@ -526,9 +526,9 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         </div>
                     }
                 </footer>
-                <DropdownMenuContent className="flex flex-col gap-1">
+                <DropdownMenuContent className="flex flex-col mb-4 w-[20dvw]" side="top">
                     {
-                        SUGGETSTIONS.map((s, i) => (
+                        SUGGESTIONS.map((s, i) => (
                             <button
                                 type="submit"
                                 key={i}
