@@ -506,7 +506,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
                                 <DropdownMenuTrigger asChild>
-                                    <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                                    <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
                                         <ArrowDown color="white" />
                                     </button>
                                 </DropdownMenuTrigger>
@@ -522,6 +522,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                     {
                         SUGGESTIONS.map((s, i) => (
                             <button
+                                disabled={isSendMessage}
                                 type="submit"
                                 key={i}
                                 className="p-2 text-left hover:bg-gray-200"
