@@ -501,7 +501,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                     {
                         repo &&
                         <div className="flex gap-4 px-4">
-                            <button onClick={() => setTipOpen(prev => !prev)} disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                            <button data-name="lightbulb" onClick={() => setTipOpen(prev => !prev)} disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
                                 <Lightbulb />
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
