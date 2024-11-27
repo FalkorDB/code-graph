@@ -168,8 +168,8 @@ export function CodeGraph({
     }, [selectedObjects, selectedObj, isSelectedObj]);
 
     async function fetchCount() {
-        const result = await fetch(`/api/repo/${graphName}`, {
-            method: 'POST'
+        const result = await fetch(`/api/repo/${graphName}/info`, {
+            method: 'GET'
         })
 
         if (!result.ok) {
@@ -198,27 +198,29 @@ export function CodeGraph({
 
         const run = async () => {
             fetchCount()
-            // const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
-            //     method: 'POST'
-            // })
+            /*
+            const result = await fetch(`/api/repo/${graphName}/commit`, {
+                method: 'GET'
+            })
 
-            // if (!result.ok) {
-            //     toast({
-            //         variant: "destructive",
-            //         title: "Uh oh! Something went wrong.",
-            //         description: await result.text(),
-            //     })
-            //     return
-            // }
+            if (!result.ok) {
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description: await result.text(),
+                })
+                return
+            }
 
-            // const json = await result.json()
-            // const commitsArr = json.result.commits
-            // setCommits(commitsArr)
+            const json = await result.json()
+            const commitsArr = json.result.commits
+            setCommits(commitsArr)
 
-            // if (commitsArr.length > 0) {
-            //     setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
-            //     setCommitIndex(commitsArr.length)
-            // }
+            if (commitsArr.length > 0) {
+                setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+                setCommitIndex(commitsArr.length)
+            }
+            */
         }
 
         run()
