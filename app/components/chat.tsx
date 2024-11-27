@@ -441,7 +441,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 key={i}
                                 className={cn("flex text-wrap border p-2 gap-2 rounded-md", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
                                 onClick={() => {
-                                    if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return
+                                    if (p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return
                                     handelSetSelectedPath(p)
                                     setIsPath(true)
                                 }}
