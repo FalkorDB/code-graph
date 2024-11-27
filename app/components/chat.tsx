@@ -479,7 +479,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     return (
         <div className="h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
-            <main ref={containerRef} className="relative grow flex flex-col overflow-y-auto gap-6 px-4">
+            <main data-name="main-chat" ref={containerRef} className="relative grow flex flex-col overflow-y-auto gap-6 px-4">
                 {
                     messages.length === 0 &&
                     <>
