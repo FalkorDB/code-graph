@@ -45,7 +45,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 return
             }
 
-            const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}&type=autoComplete`, {
+            const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}`, {
                 method: 'POST'
             })
 
@@ -91,7 +91,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             case "ArrowUp": {
                 e.preventDefault()
                 setSelectedOption(prev => {
-                    containerRef.current?.scrollTo({ behavior: 'smooth', top: (prev <= 0 ? options.length - 1 : prev - 1) * 64 })
+                    containerRef.current?.scrollTo({ behavior: 'smooth', top: (prev <= 0 ? options.length - 1 : prev - 1) * containerRef.current.children[0].clientHeight })
                     return prev <= 0 ? options.length - 1 : prev - 1
                 })
                 return
@@ -99,7 +99,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             case "ArrowDown": {
                 e.preventDefault()
                 setSelectedOption(prev => {
-                    containerRef.current?.scrollTo({ behavior: 'smooth', top: ((prev + 1) % options.length) * 64 })
+                    containerRef.current?.scrollTo({ behavior: 'smooth', top: ((prev + 1) % options.length) * containerRef.current.children[0].clientHeight })
                     return (prev + 1) % options.length
                 })
                 return
@@ -163,7 +163,6 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                         selectedOption === index && "bg-gray-100"
                                     )}
                                     onMouseEnter={() => setSelectedOption(index)}
-                                    onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
                                         onValueChange({ name: option.properties.name, id: option.id })
                                         handelSubmit && handelSubmit(option)
