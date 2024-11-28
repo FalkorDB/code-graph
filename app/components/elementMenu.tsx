@@ -11,15 +11,15 @@ interface Props {
     obj: Node | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
-    handelRemove: (nodes: number[]) => void;
+    handleRemove: (nodes: number[]) => void;
     position: Position | undefined;
     url: string;
-    handelExpand: (nodes: Node[], expand: boolean) => void;
+    handleExpand: (nodes: Node[], expand: boolean) => void;
     parentWidth: number;
 }
 
 
-export default function ElementMenu({ obj, objects, setPath, handelRemove, position, url, handelExpand, parentWidth }: Props) {
+export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handleExpand, parentWidth }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
 
@@ -62,19 +62,19 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove(objects.map(o => Number(o.id)))}
+                                onClick={() => handleRemove(objects.map(o => Number(o.id)))}
                             >
                                 <EyeOff color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand(objects, true)}
+                                onClick={() => handleExpand(objects, true)}
                             >
                                 <Maximize2 color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand(objects, false)}
+                                onClick={() => handleExpand(objects, false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
@@ -90,7 +90,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove([Number(obj.id)])}
+                                onClick={() => handleRemove([Number(obj.id)])}
                             >
                                 <EyeOff color="white" />
                             </button>
@@ -114,13 +114,13 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand([obj], true)}
+                                onClick={() => handleExpand([obj], true)}
                             >
                                 <Maximize2 color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand([obj], false)}
+                                onClick={() => handleExpand([obj], false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
