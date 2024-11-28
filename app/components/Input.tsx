@@ -170,8 +170,16 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                             const label = option.labels[0]
                             const name = option.properties.name
                             const path = option.properties.path
-                            const colorName = getCategoryColorName(graph.CategoriesMap.get(label)!.index)
-                            const color = getCategoryColorValue(graph.CategoriesMap.get(label)!.index)
+                            let category = graph.CategoriesMap.get(label)
+                            
+                            if (!category) {
+                                category = { name: label, index: graph.CategoriesMap.size, show: true }
+                                graph.CategoriesMap.set(label, category)
+                                graph.Categories.push(category)
+                            }
+                            
+                            const colorName = getCategoryColorName(category.index)
+                            const color = getCategoryColorValue(category.index)
                             return (
                                 <button
                                     className={cn(

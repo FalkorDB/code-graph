@@ -6,7 +6,8 @@ export async function GET() {
 			method: 'GET',
 			headers: {
 				"Authorization": process.env.SECRET_TOKEN!,
-			}
+			},
+			cache: "no-cache"
 		})
 
 		if (!result.ok) {
