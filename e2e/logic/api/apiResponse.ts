@@ -73,3 +73,54 @@ export interface askQuestionResponse{
     }
 }
 
+export interface searchAutoCompleteResponse {
+    result: {
+      completions: {
+        alias: string;
+        id: number;
+        labels: string[];
+        properties: {
+          args: any[];
+          name: string;
+          path: string;
+          src_end: number;
+          src_start: number;
+        };
+      }[];
+      status: string;
+    };
+  }
+
+  export interface getNodeNeighborsResponse {
+    result: {
+      neighbors: {
+        edges: {
+          alias: string;
+          dest_node: number;
+          id: number;
+          properties: Record<string, any>;
+          relation: string;
+          src_node: number;
+        }[];
+        nodes: {
+          alias: string;
+          id: number;
+          labels: string[];
+          properties: {
+            args: [string, string][];
+            doc?: string;
+            name: string;
+            path: string;
+            ret_type?: string;
+            src: string;
+            src_end: number;
+            src_start: number;
+          };
+        }[];
+      };
+      status: string;
+    };
+  }
+  
+  
+

@@ -1,6 +1,6 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
-import { delay } from "../utils";
+import { waitToBeEnabled } from "../utils";
 
 export default class CodeGraph extends BasePage {
     /* NavBar Locators*/
@@ -31,6 +31,42 @@ export default class CodeGraph extends BasePage {
 
     private get lastElementInChat(): Locator {
         return this.page.locator("//main[@data-name='main-chat']/*[last()]/p");
+    }
+
+    private get typeUrlInput(): Locator {
+        return this.page.locator("//div[@role='dialog']/form/input");
+    }
+
+    private get createBtnInCreateProjectDialog(): Locator {
+        return this.page.locator("//div[@role='dialog']/form//following::button//p[contains(text(), 'Create')]")
+    }
+
+    private get createProjectWaitDialog(): Locator {
+        return this.page.locator("//div[@role='dialog']//div//h2[contains(text(), 'THANK YOU FOR A NEW REQUEST')]")
+    }
+
+    private get dialogCreatedGraphsList(): (graph: string) => Locator {
+        return (graph: string) => this.page.locator(`//div[@role='presentation']/div//span[2][contains(text(), '${graph}')]`);
+    }
+
+    private get searchBarInput(): Locator {
+        return this.page.locator("//div[@data-name='search-bar']/input");
+    }
+
+    private get searchBarAutoCompleteOptions(): Locator {
+        return this.page.locator("//div[@data-name='search-bar']/div/button");
+    }
+
+    private get searchBarElements(): Locator {
+        return this.page.locator("//div[@data-name='search-bar']/div/button/div/p[1]");
+    }
+
+    private get searchBarOptionBtn(): (buttonNum: string) => Locator {
+        return (buttonNum: string) => this.page.locator(`//div[@data-name='search-bar']//button[${buttonNum}]`);
+    }
+
+    private get searchBarList(): Locator {
+        return this.page.locator("//div[@data-name='search-bar-list']");
     }
 
     /* Chat Locators */
@@ -74,7 +110,7 @@ export default class CodeGraph extends BasePage {
         return (inputNum: string) => this.page.locator(`(//main[@data-name='main-chat']//input)[1]/following::div[${inputNum}]//button[1]`);
     }
 
-    private get notificationNoPathFound(): Locator {
+    private get notificationError(): Locator {
         return this.page.locator("//div[@role='region']//ol//li");
     }
     
@@ -115,7 +151,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async sendMessage(message: string) {
-        await this.askquestionInput.isEnabled();
+        await waitToBeEnabled(this.askquestionInput);
         await this.askquestionInput.fill(message);
         await this.askquestionBtn.click();
     }
@@ -160,11 +196,12 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
+        await this.locateNodeInLastChatPath(node).waitFor({ state: 'visible' }); 
         return await this.locateNodeInLastChatPath(node).isVisible();
     }
 
-    async isNotificationNoPathFound(): Promise<boolean> {
-        return await this.notificationNoPathFound.isVisible();
+    async isNotificationError(): Promise<boolean> {
+        return await this.notificationError.isVisible();
     }
 
     /* CodeGraph functionality */
@@ -173,4 +210,49 @@ export default class CodeGraph extends BasePage {
         await this.selectGraphInComboBox(graph).waitFor({ state : 'visible'})
         await this.selectGraphInComboBox(graph).click();
     }
+
+    async createProject(url : string): Promise<void> {
+        await this.clickCreateNewProjectBtn();
+        await this.typeUrlInput.fill(url);
+        await this.createBtnInCreateProjectDialog.click();
+        await this.createProjectWaitDialog.waitFor({ state : 'hidden'});
+    }
+
+    async isGraphCreated(graph: string): Promise<boolean> {
+        await this.comboBoxbtn.click();
+        return await this.dialogCreatedGraphsList(graph).isVisible();
+    }
+
+    async fillSearchBar(searchValue: string): Promise<void> {
+        await this.searchBarInput.fill(searchValue);
+    }
+
+    async getSearchAutoCompleteCount(): Promise<number> {
+        return await this.searchBarAutoCompleteOptions.count();
+    }
+
+    async getSearchBarElementsText(): Promise<string[]> {
+        return await this.searchBarElements.allTextContents();
+    }
+
+    async selectSearchBarOptionBtn(buttonNum: string): Promise<void> {
+        await this.searchBarOptionBtn(buttonNum).click();
+    }
+
+    async getSearchBarInputValue(): Promise<string> {
+        return await this.searchBarInput.inputValue();
+    }
+    
+
+    async scrollToBottomInSearchBarList(): Promise<void> {
+        await this.searchBarList.evaluate((element) => {
+          element.scrollTop = element.scrollHeight;
+    })};
+
+    async isScrolledToBottomInSearchBarList(): Promise<boolean> {
+        return await this.searchBarList.evaluate((element) => {
+          return element.scrollTop + element.clientHeight >= element.scrollHeight;
+        });
+      }
+    
 }
