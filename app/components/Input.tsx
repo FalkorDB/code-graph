@@ -98,7 +98,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 setSelectedOption(prev => {
                     const newIndex = prev <= 0 ? options.length - 1 : prev - 1
                     if (container) {
-                        container.children[newIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                        container.scrollTo({ behavior: 'smooth', top: 64 * newIndex })
                     }
                     return newIndex
                 })
@@ -109,7 +109,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 setSelectedOption(prev => {
                     const newIndex = (prev + 1) % options.length
                     if (container) {
-                        container.children[newIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                        container.scrollTo({ behavior: 'smooth', top: Math.min(64 * newIndex, container.scrollHeight) })
                     }
                     return newIndex
                 })
@@ -171,13 +171,13 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                             const name = option.properties.name
                             const path = option.properties.path
                             let category = graph.CategoriesMap.get(label)
-                            
+
                             if (!category) {
                                 category = { name: label, index: graph.CategoriesMap.size, show: true }
                                 graph.CategoriesMap.set(label, category)
                                 graph.Categories.push(category)
                             }
-                            
+
                             const colorName = getCategoryColorName(category.index)
                             const color = getCategoryColorValue(category.index)
                             return (
