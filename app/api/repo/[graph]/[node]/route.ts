@@ -18,7 +18,8 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
                 repo: graphId,
                 src: Number(nodeId),
                 dest: Number(targetId!)
-            })
+            }),
+            cache: 'no-store'
         })
 
         if (!result.ok) {
