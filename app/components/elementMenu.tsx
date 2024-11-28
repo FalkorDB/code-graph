@@ -14,7 +14,7 @@ interface Props {
     handelRemove: (nodes: number[]) => void;
     position: Position | undefined;
     url: string;
-    handelExpand: (nodes?: Node[], expand?: boolean) => void;
+    handelExpand: (nodes: Node[], expand: boolean) => void;
     parentWidth: number;
 }
 
@@ -114,13 +114,15 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand()}
+                                onClick={() => handelExpand([obj], true)}
                             >
-                                {
-                                    obj.expand ?
-                                        <Minimize2 color="white" />
-                                        : <Maximize2 color="white" />
-                                }
+                                <Maximize2 color="white" />
+                            </button>
+                            <button
+                                className="p-2"
+                                onClick={() => handelExpand([obj], false)}
+                            >
+                                <Minimize2 color="white" />
                             </button>
                         </>
                 }

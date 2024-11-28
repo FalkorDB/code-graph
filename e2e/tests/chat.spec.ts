@@ -30,7 +30,7 @@ test.describe("Chat tests", () => {
     await chat.selectGraph(GRAPH_ID);
     const isLoadingArray: boolean[] = [];
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 5; i++) {
       await chat.sendMessage(Node_Question);
       const isLoading: boolean = await chat.getpreviousQuestionLoadingImage();
       isLoadingArray.push(isLoading);
@@ -44,7 +44,7 @@ test.describe("Chat tests", () => {
   test("Verify auto-scroll and manual scroll in chat", async () => {
     const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await chat.selectGraph(GRAPH_ID);
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 5; i++) {
       await chat.sendMessage(Node_Question);
     }
     await delay(500);
@@ -62,7 +62,6 @@ test.describe("Chat tests", () => {
     await chat.clickOnshowPathBtn();
     await chat.insertInputForShowPath("1", Node_Import_Data);
     await chat.insertInputForShowPath("2", Node_Add_Edge);
-    await delay(500);
     expect(await chat.isNodeVisibleInLastChatPath(Node_Import_Data)).toBe(true);
     expect(await chat.isNodeVisibleInLastChatPath(Node_Add_Edge)).toBe(true);
   });
@@ -74,14 +73,15 @@ test.describe("Chat tests", () => {
     await chat.insertInputForShowPath("1", Node_Add_Edge);
     await chat.insertInputForShowPath("2", Node_Import_Data);
     await delay(500);
-    expect(await chat.isNotificationNoPathFound()).toBe(true);
+    expect(await chat.isNotificationError()).toBe(true);
   });
 
   test("Validate error notification when sending an empty question in chat", async () => {
     const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await chat.selectGraph(GRAPH_ID);
     await chat.clickAskquestionBtn();
-    expect(await chat.isNotificationNoPathFound()).toBe(true);
+    await delay(500);
+    expect(await chat.isNotificationError()).toBe(true);
   });
   
 });

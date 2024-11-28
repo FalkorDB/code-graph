@@ -13,7 +13,7 @@ import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
 import { Path, PathNode } from '../page';
 import Input from './Input';
-import CommitList from './commitList';
+// import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Props {
@@ -168,8 +168,8 @@ export function CodeGraph({
     }, [selectedObjects, selectedObj, isSelectedObj]);
 
     async function fetchCount() {
-        const result = await fetch(`/api/repo/${graphName}`, {
-            method: 'POST'
+        const result = await fetch(`/api/repo/${graphName}/info`, {
+            method: 'GET'
         })
 
         if (!result.ok) {
@@ -198,27 +198,29 @@ export function CodeGraph({
 
         const run = async () => {
             fetchCount()
-            // const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
-            //     method: 'POST'
-            // })
+            /*
+            const result = await fetch(`/api/repo/${graphName}/commit`, {
+                method: 'GET'
+            })
 
-            // if (!result.ok) {
-            //     toast({
-            //         variant: "destructive",
-            //         title: "Uh oh! Something went wrong.",
-            //         description: await result.text(),
-            //     })
-            //     return
-            // }
+            if (!result.ok) {
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description: await result.text(),
+                })
+                return
+            }
 
-            // const json = await result.json()
-            // const commitsArr = json.result.commits
-            // setCommits(commitsArr)
+            const json = await result.json()
+            const commitsArr = json.result.commits
+            setCommits(commitsArr)
 
-            // if (commitsArr.length > 0) {
-            //     setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
-            //     setCommitIndex(commitsArr.length)
-            // }
+            if (commitsArr.length > 0) {
+                setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+                setCommitIndex(commitsArr.length)
+            }
+            */
         }
 
         run()
@@ -261,7 +263,7 @@ export function CodeGraph({
             const type = "category" in element.data
 
             if (element.data.expand) {
-                deleteNeighbors(element.data, chart)
+                deleteNeighbors([element.data] as Node[], chart)
             }
 
             graph.Elements.splice(index, 1);
@@ -296,7 +298,9 @@ export function CodeGraph({
 
         if (!graphNode) return
 
-        if (!graphNode.data.expand) {
+        const expand = !graphNode.data.expand
+
+        if (expand) {
             const elements = await onFetchNode([node.id])
 
             if (elements.length === 0) {
@@ -312,7 +316,7 @@ export function CodeGraph({
             deleteNeighbors([node], chart);
         }
 
-        graphNode.data.expand = !graphNode.data.expand
+        graphNode.data.expand = expand
 
         setSelectedObj(undefined)
         chart.elements().layout(LAYOUT).run();
@@ -336,8 +340,16 @@ export function CodeGraph({
             }
 
             chart.add(elements);
+            chart.elements().layout(LAYOUT).run();
         } else {
-            deleteNeighbors(nodes, chart);
+            const deleteNodes = graph.Elements.filter(n => n.data.expand === true && nodes.some(e => e.id === n.data.id))
+
+            debugger
+
+            if (deleteNodes.length > 0) {
+                deleteNeighbors(deleteNodes.map(n => n.data) as Node[], chart);
+                chart.elements().layout(LAYOUT).run();
+            }
         }
 
         nodes.forEach((node) => {
@@ -349,7 +361,6 @@ export function CodeGraph({
         })
 
         setSelectedObj(undefined)
-        chart.elements().layout(LAYOUT).run();
     }
 
     const handelSearchSubmit = (node: any) => {
@@ -469,11 +480,7 @@ export function CodeGraph({
                                     position={position}
                                     url={url}
                                     handelExpand={(nodes, expand) => {
-                                        if (nodes && expand !== undefined) {
-                                            handleExpand(nodes, expand)
-                                        } else {
-                                            handleDoubleTap()
-                                        }
+                                        handleExpand(nodes, expand)
                                     }}
                                     parentWidth={containerWidth}
                                 />
