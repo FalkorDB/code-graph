@@ -12,7 +12,8 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
             headers: {
                 "Content-Type": 'application/json',
                 "Authorization": process.env.SECRET_TOKEN!,
-            }
+            },
+            cache: 'no-store'
         })
 
         const json = await result.json()

@@ -9,7 +9,8 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
             headers: {
                 "Authorization": process.env.SECRET_TOKEN!,
                 "Content-Type": 'application/json'
-            }
+            },
+            cache: 'no-store'
         })
 
         if (!result.ok) {

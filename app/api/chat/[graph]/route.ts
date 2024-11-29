@@ -13,7 +13,8 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
             headers: {
                 "Authorization": process.env.SECRET_TOKEN!,
                 "Content-Type": 'application/json'
-            }
+            },
+            cache: 'no-store'
         })
 
         if (!result.ok) {

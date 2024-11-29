@@ -6,7 +6,8 @@ export async function GET() {
 			method: 'GET',
 			headers: {
 				"Authorization": process.env.SECRET_TOKEN!,
-			}
+			},
+			cache: 'no-store'
 		})
 
 		if (!result.ok) {
@@ -32,7 +33,8 @@ export async function GET() {
 // 			headers: {
 // 				"Authorization": process.env.SECRET_TOKEN!,
 // 				'Content-Type': 'application/json'
-// 			}
+// 			},
+// 			cache: 'no-store'
 // 		})
 
 // 		if (!result.ok) {
