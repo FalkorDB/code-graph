@@ -10,6 +10,6 @@ const categorizeCharacters = (characters: string[], expectedRes: boolean): { cha
 };
 
 export const specialCharacters: { character: string; expectedRes: boolean }[] = [
-  ...categorizeCharacters([ '#', '%', '&', '*', '(', ')', '-', '[', ']', '{', '}', ';', ':', '"', '|', '~'], true),
-  ...categorizeCharacters(['!', '@', '$', '^', '_', '=', '+', "'", ',', '.', '<', '>', '/', '?', '\\', '`'], false)
+  ...categorizeCharacters(['%', '*', '(', ')', '-', '[', ']', '{', '}', ';', ':', '"', '|', '~'], true),
+  ...categorizeCharacters(['!', '@', '$', '^', '_', '=', '+', "'", ',', '.', '<', '>', '/', '?', '\\', '`', '&', '#'], false)
 ];
