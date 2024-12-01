@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEnvVariables } from "@/app/api/utils";
 
-export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
-    const repo = params.graph
+    const repo = (await params).graph
 
     try {
-        
+
         const { url, token } = getEnvVariables();
 
         const result = await fetch(`${url}/repo_info`, {

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getEnvVariables } from "../../utils"
 
 
-export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
-    const repo = params.graph
+    const repo = (await params).graph
     const msg = request.nextUrl.searchParams.get('msg')
 
     try {
