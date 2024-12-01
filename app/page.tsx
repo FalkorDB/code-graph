@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { prepareArg } from './utils';
 
 export type PathNode = {
   id?: number
@@ -100,7 +101,7 @@ export default function Home() {
       return
     }
 
-    const result = await fetch(`/api/repo/?url=${createURL}`, {
+    const result = await fetch(`/api/repo/?url=${prepareArg(createURL)}`, {
       method: 'POST',
     })
 
@@ -131,7 +132,7 @@ export default function Home() {
 
     setGraph(Graph.empty())
 
-    const result = await fetch(`/api/repo/${graphName}`, {
+    const result = await fetch(`/api/repo/${prepareArg(graphName)}`, {
       method: 'GET'
     })
 
@@ -151,7 +152,7 @@ export default function Home() {
   // Send the user query to the server to expand a node
   async function onFetchNode(nodeIds: string[]) {
 
-    const result = await fetch(`/api/repo/${graph.Id}/neighbors`, {
+    const result = await fetch(`/api/repo/${prepareArg(graph.Id)}/neighbors`, {
       method: 'POST',
       body: JSON.stringify({ nodeIds }),
       headers: {
