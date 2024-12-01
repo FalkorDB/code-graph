@@ -15,7 +15,8 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
             headers: {
                 "Authorization": token,
                 "Content-Type": 'application/json'
-            }
+            },
+            cache: 'no-store'
         })
 
         if (!result.ok) {

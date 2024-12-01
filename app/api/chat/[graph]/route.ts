@@ -21,7 +21,8 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
             headers: {
                 "Authorization": token,
                 "Content-Type": 'application/json'
-            }
+            },
+            cache: 'no-store'
         })
 
         if (!result.ok) {

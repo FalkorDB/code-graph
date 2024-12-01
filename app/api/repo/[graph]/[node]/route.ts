@@ -26,6 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
                 src,
                 dest
             })
+            cache: 'no-store'
         })
 
         if (!result.ok) {

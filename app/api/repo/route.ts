@@ -10,6 +10,7 @@ export async function GET() {
 			headers: {
 				"Authorization": token,
 			}
+			cache: 'no-store'
 		})
 
 		if (!result.ok) {
@@ -43,8 +44,9 @@ export async function GET() {
 // 			headers: {
 // 				"Authorization": token,
 // 				'Content-Type': 'application/json'
-// 			}
-// 		});
+// 		  },
+// 			cache: 'no-store'
+//     });
 
 // 		if (!result.ok) {
 // 			throw new Error(await result.text());

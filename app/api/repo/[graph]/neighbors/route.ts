@@ -21,6 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
                 "Content-Type": 'application/json',
                 "Authorization": token,
             }
+            cache: 'no-store'
         })
 
         const json = await result.json()
