@@ -9,7 +9,7 @@ export async function GET() {
 			method: 'GET',
 			headers: {
 				"Authorization": token,
-			}
+			},
 			cache: 'no-store'
 		})
 
