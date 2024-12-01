@@ -15,6 +15,7 @@ import { Path, PathNode } from '../page';
 import Input from './Input';
 // import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
+import { prepareArg } from '../utils';
 
 interface Props {
     onFetchGraph: (graphName: string) => void,
@@ -156,7 +157,7 @@ export function CodeGraph({
             if (!isSelectedObj && selectedObj && selectedObjects.length === 0) return
 
             if (event.key === 'Delete') {
-                handelRemove(selectedObjects.length > 0 ? selectedObjects.map(obj => Number(obj.id)) : [Number(isSelectedObj || selectedObj?.id)]);
+                handleRemove(selectedObjects.length > 0 ? selectedObjects.map(obj => Number(obj.id)) : [Number(isSelectedObj || selectedObj?.id)]);
             }
         };
 
@@ -168,7 +169,7 @@ export function CodeGraph({
     }, [selectedObjects, selectedObj, isSelectedObj]);
 
     async function fetchCount() {
-        const result = await fetch(`/api/repo/${graphName}/info`, {
+        const result = await fetch(`/api/repo/${prepareArg(graphName)}/info`, {
             method: 'GET'
         })
 
@@ -190,7 +191,7 @@ export function CodeGraph({
 
     useEffect(() => {
         if (!selectedValue) return
-        handelSelectedValue(selectedValue)
+        handleSelectedValue(selectedValue)
     }, [selectedValue])
 
     useEffect(() => {
@@ -199,7 +200,7 @@ export function CodeGraph({
         const run = async () => {
             fetchCount()
             /*
-            const result = await fetch(`/api/repo/${graphName}/commit`, {
+            const result = await fetch(`/api/repo/${prepareArg(graphName)}/commit`, {
                 method: 'GET'
             })
 
@@ -226,7 +227,7 @@ export function CodeGraph({
         run()
     }, [graphName])
 
-    function handelSelectedValue(value: string) {
+    function handleSelectedValue(value: string) {
         setGraphName(value)
         onFetchGraph(value)
     }
@@ -252,31 +253,32 @@ export function CodeGraph({
     }
 
     const deleteNeighbors = (nodes: Node[], chart: cytoscape.Core) => {
+        if (nodes.length === 0) return
+
         const neighbors = chart.elements(nodes.map(node => `#${node.id}`).join(',')).outgoers()
+
         neighbors.forEach((n) => {
             const id = n.id()
-            const index = graph.Elements.findIndex(e => e.data.id === id);
-            const element = graph.Elements[index]
+            graph.Elements.forEach((e, i) => {
+                if (e.data.id === id) {
+                    const type = "category" in e.data
 
-            if (index === -1 || !element.data.collapsed) return
+                    if (e.data.expand) {
+                        deleteNeighbors([e.data] as Node[], chart)
+                    }
 
-            const type = "category" in element.data
+                    graph.Elements.splice(i, 1);
 
-            if (element.data.expand) {
-                deleteNeighbors([element.data] as Node[], chart)
-            }
+                    if (type) {
+                        graph.NodesMap.delete(Number(id))
+                    } else {
+                        graph.EdgesMap.delete(Number(id.split('_')[1]))
+                    }
 
-            graph.Elements.splice(index, 1);
-
-            if (type) {
-                graph.NodesMap.delete(Number(id))
-            } else {
-                graph.EdgesMap.delete(Number(id.split('_')[1]))
-            }
-
-            chart.remove(`#${id}`)
+                    chart.remove(`#${id}`)
+                }
+            });
         })
-
     }
 
     const handleDoubleTap = async (evt?: EventObject) => {
@@ -344,8 +346,6 @@ export function CodeGraph({
         } else {
             const deleteNodes = graph.Elements.filter(n => n.data.expand === true && nodes.some(e => e.id === n.data.id))
 
-            debugger
-
             if (deleteNodes.length > 0) {
                 deleteNeighbors(deleteNodes.map(n => n.data) as Node[], chart);
                 chart.elements().layout(LAYOUT).run();
@@ -363,7 +363,7 @@ export function CodeGraph({
         setSelectedObj(undefined)
     }
 
-    const handelSearchSubmit = (node: any) => {
+    const handleSearchSubmit = (node: any) => {
         const chart = chartRef.current
 
         if (!chart) return
@@ -385,7 +385,7 @@ export function CodeGraph({
         setSearchNode(n)
     }
 
-    const handelRemove = (ids: number[]) => {
+    const handleRemove = (ids: number[]) => {
         chartRef.current?.elements(`#${ids.join(',#')}`).style({ display: 'none' })
         if (ids.some(id => Number(selectedObj?.id) === id)) {
             setSelectedObj(undefined)
@@ -398,7 +398,7 @@ export function CodeGraph({
                 <Combobox
                     options={options}
                     selectedValue={graphName}
-                    onSelectedValue={handelSelectedValue}
+                    onSelectedValue={handleSelectedValue}
                 />
             </header>
             <div className='h-1 grow flex flex-col'>
@@ -413,7 +413,7 @@ export function CodeGraph({
                                             value={searchNode.name}
                                             onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
-                                            handelSubmit={handelSearchSubmit}
+                                            handleSubmit={handleSearchSubmit}
                                             node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
@@ -476,10 +476,10 @@ export function CodeGraph({
                                         setPath(path)
                                         setSelectedObj(undefined)
                                     }}
-                                    handelRemove={handelRemove}
+                                    handleRemove={handleRemove}
                                     position={position}
                                     url={url}
-                                    handelExpand={(nodes, expand) => {
+                                    handleExpand={(nodes, expand) => {
                                         handleExpand(nodes, expand)
                                     }}
                                     parentWidth={containerWidth}
