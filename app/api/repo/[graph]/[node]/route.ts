@@ -1,10 +1,12 @@
 import { getEnvVariables } from "@/app/api/utils";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(request: NextRequest, { params }: { params: { graph: string, node: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string, node: string }> }) {
 
-    const repo = params.graph;
-    const src = Number(params.node);
+    const p = await params;
+
+    const repo = p.graph;
+    const src = Number(p.node);
     const dest = Number(request.nextUrl.searchParams.get('targetId'))
 
     try {
