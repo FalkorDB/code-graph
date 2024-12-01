@@ -23,12 +23,12 @@
 
 //     const [commitChanges, setCommitChanges] = useState<any>()
 
-//     const handelCommitChange = async (commit: any) => {
+//     const handleCommitChange = async (commit: any) => {
 //         const chart = chartRef.current
 
 //         if (!chart) return
 
-//         const result = await fetch(`api/repo/${graph.Id}/?type=switchCommit`, {
+//         const result = await fetch(`api/repo/${prepareArg(graph.Id)}/commit`, {
 //             method: 'POST',
 //         })
 
@@ -109,7 +109,7 @@
 //                                     >
 //                                         <button
 //                                             className='w-full flex items-center justify-center gap-2'
-//                                             onClick={() => handelCommitChange(commit)}
+//                                             onClick={() => handleCommitChange(commit)}
 //                                         >
 //                                             <p title={month}>{month}</p>
 //                                             <p className='text-gray-400' title='hour'>{hour}</p>
