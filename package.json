@@ -24,7 +24,7 @@
     "cytoscape": "^3.30.4",
     "cytoscape-fcose": "^2.2.0",
     "lucide-react": "^0.441.0",
-    "next": "14.2.18",
+    "next": "15.0.3",
     "react": "^18",
     "react-cytoscapejs": "^2.0.0",
     "react-dom": "^18",
