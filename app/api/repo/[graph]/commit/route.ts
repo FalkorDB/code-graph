@@ -1,15 +1,22 @@
+import { getEnvVariables } from "@/app/api/utils";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {
 
+    const repo = params.graph
+    
     try {
-        const result = await fetch(`${process.env.BEAKEND_URL}/list_commits`, {
+
+        const { url, token } = getEnvVariables()
+
+        const result = await fetch(`${url}/list_commits`, {
             method: 'POST',
-            body: JSON.stringify({ repo: params.graph }),
+            body: JSON.stringify({ repo }),
             headers: {
-                "Authorization": process.env.SECRET_TOKEN!,
+                "Authorization": token,
                 "Content-Type": 'application/json'
-            }
+            },
+            cache: 'no-store'
         })
 
         if (!result.ok) {
@@ -20,7 +27,8 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 
         return NextResponse.json({ result: json }, { status: 200 })
     } catch (err) {
-        return NextResponse.json({ message: (err as Error).message }, { status: 400 })
+        console.error(err)
+        return NextResponse.json((err as Error).message, { status: 400 })
     }
 }
 

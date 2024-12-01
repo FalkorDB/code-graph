@@ -1,24 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getEnvVariables } from "@/app/api/utils";
 
 export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
 
-    const nodeIds = (await request.json()).nodeIds.map((id: string) => Number(id));
-    const graphId = params.graph;
-    
+    const repo = params.graph;
+    const node_ids = (await request.json()).nodeIds.map((id: string) => Number(id));
+
     try {
-        const result = await fetch(`${process.env.BACKEND_URL}/get_neighbors`, {
+
+        const { url, token } = getEnvVariables();
+
+        if (node_ids.length === 0) {
+            throw new Error("nodeIds is required");
+        }
+        
+        const result = await fetch(`${url}/get_neighbors`, {
             method: 'POST',
-            body: JSON.stringify({ node_ids: nodeIds, repo: graphId }),
+            body: JSON.stringify({ node_ids, repo }),
             headers: {
                 "Content-Type": 'application/json',
-                "Authorization": process.env.SECRET_TOKEN!,
-            }
+                "Authorization": token,
+            },
+            cache: 'no-store'
         })
 
         const json = await result.json()
 
         return NextResponse.json({ result: json }, { status: 200 })
     } catch (err) {
-        return NextResponse.json({ massage: (err as Error).message }, { status: 400 })
+        console.error(err)
+        return NextResponse.json((err as Error).message, { status: 400 })
     }
 }
