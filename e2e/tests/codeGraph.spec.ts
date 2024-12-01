@@ -62,7 +62,7 @@ test.describe("Code graph tests", () => {
       await codeGraph.selectGraph(GRAPH_ID);
       await codeGraph.fillSearchBar(character);
       await delay(1000);
-      expect(await codeGraph.isNotificationError()).toBe(expectedRes);
+      expect((await codeGraph.getSearchBarInputValue()).includes(character)).toBe(expectedRes);
     });
   });
 
