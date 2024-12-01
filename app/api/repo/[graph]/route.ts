@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getEnvVariables } from "../../utils"
 
-export async function GET(request: NextRequest, { params }: { params: { graph: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
-    const graphName = params.graph
+    const graphName = (await params).graph
 
     try {
 
@@ -29,9 +29,9 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
     }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
-    const repo = params.graph
+    const repo = (await params).graph
     const prefix = request.nextUrl.searchParams.get('prefix')
 
     try {
