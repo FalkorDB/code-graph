@@ -7,7 +7,6 @@ export async function GET() {
 			headers: {
 				"Authorization": process.env.SECRET_TOKEN!,
 			},
-			cache: 'no-store'
 		})
 
 		if (!result.ok) {
