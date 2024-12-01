@@ -145,6 +145,16 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 value={value || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
+                    const invalidChars = /[%*()\-\[\]{};:"|~]/;
+                    const invalidChar = newVal.match(invalidChars)?.[0];
+                    if (invalidChars.test(newVal)) {
+                        toast({
+                            variant: "destructive",
+                            title: "Invalid Input",
+                            description: `The character "${invalidChar}" is not allowed in this field.`,
+                        });
+                        return;
+                    }
                     onValueChange({ name: newVal })
                 }}
                 {...props}
