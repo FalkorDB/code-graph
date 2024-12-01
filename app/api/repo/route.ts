@@ -44,7 +44,7 @@ export async function GET() {
 // 			headers: {
 // 				"Authorization": token,
 // 				'Content-Type': 'application/json'
-// 		  },POST
+// 		  },
 // 			cache: 'no-store'
 //     });
 
