@@ -1,11 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { getEnvVariables } from "../utils";
 
 export async function GET() {
 	try {
-		const result = await fetch(`${process.env.BACKEND_URL}/list_repos`, {
+
+		const { url, token } = getEnvVariables()
+		const result = await fetch(`${url}/list_repos`, {
 			method: 'GET',
 			headers: {
-				"Authorization": process.env.SECRET_TOKEN!,
+				"Authorization": token,
 			},
 			cache: 'no-store'
 		})
@@ -18,31 +21,40 @@ export async function GET() {
 
 		return NextResponse.json({ result: repositories }, { status: 200 })
 	} catch (err) {
-		return NextResponse.json({ message: (err as Error).message }, { status: 400 })
+		console.error(err)
+        return NextResponse.json((err as Error).message, { status: 400 })
 	}
 }
 
 // export async function POST(request: NextRequest) {
-
-// 	const url = request.nextUrl.searchParams.get('url');
-
+	
+// 	const repo_url = request.nextUrl.searchParams.get('url');
+	
 // 	try {
-// 		const result = await fetch(`${process.env.BEAKEND_URL}/process_repo`, {
+
+// 		if (!repo_url) {
+// 			throw new Error("URL parameter is missing");
+// 		}
+		
+// 		const { url, token } = getEnvVariables();
+
+// 		const result = await fetch(`${url}/process_repo`, {
 // 			method: 'POST',
-// 			body: JSON.stringify({ repo_url: url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
+// 			body: JSON.stringify({ repo_url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
 // 			headers: {
-// 				"Authorization": process.env.SECRET_TOKEN!,
+// 				"Authorization": token,
 // 				'Content-Type': 'application/json'
-// 			},
+// 		  },
 // 			cache: 'no-store'
-// 		})
+//     });
 
 // 		if (!result.ok) {
-// 			throw new Error(await result.text())
+// 			throw new Error(await result.text());
 // 		}
 
-// 		return NextResponse.json({ message: "success" }, { status: 200 })
+// 		return NextResponse.json({ message: "success" }, { status: 200 });
 // 	} catch (err) {
-// 		return NextResponse.json({ message: (err as Error).message }, { status: 400 })
+// 		console.error(err)
+//      return NextResponse.json((err as Error).message, { status: 400 });
 // 	}
 // }

@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getEnvVariables } from "../../utils"
 
 
 export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
 
-    const graphName = params.graph
+    const repo = params.graph
     const msg = request.nextUrl.searchParams.get('msg')
 
     try {
-        const result = await fetch(`${process.env.BACKEND_URL}/chat`, {
+
+        if (!msg) {
+            throw new Error("Message parameter is required")
+        }
+
+        const { url, token } = getEnvVariables()
+
+        const result = await fetch(`${url}/chat`, {
             method: 'POST',
-            body: JSON.stringify({ repo: graphName, msg }),
+            body: JSON.stringify({ repo, msg }),
             headers: {
-                "Authorization": process.env.SECRET_TOKEN!,
+                "Authorization": token,
                 "Content-Type": 'application/json'
             },
             cache: 'no-store'
@@ -25,6 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
 
         return NextResponse.json({ result: json }, { status: 200 })
     } catch (err) {
-        return NextResponse.json({ message: (err as Error).message }, { status: 400 })
+        console.error(err)
+        return NextResponse.json((err as Error).message, { status: 400 })
     }
 }
