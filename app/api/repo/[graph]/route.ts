@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: { graph: s
 export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
 
     const repo = params.graph
-    const prefix = request.nextUrl.searchParams.get('prefix')!
+    const prefix = request.nextUrl.searchParams.get('prefix')
 
     try {
 

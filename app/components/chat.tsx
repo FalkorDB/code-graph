@@ -92,46 +92,53 @@ const SUGGESTIONS = [
 
 const RemoveLastPath = (messages: Message[]) => {
     const index = messages.findIndex((m) => m.type === MessageTypes.Path)
-
+    
     if (index !== -1) {
         messages = [...messages.slice(0, index - 2), ...messages.slice(index + 1)];
         messages = RemoveLastPath(messages)
     }
-
+    
     return messages
 }
 
 export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isPath, setIsPath }: Props) {
-
+    
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
-
+    
     // Holds the messages in the chat
     const [paths, setPaths] = useState<{ nodes: any[], edges: any[] }[]>([]);
-
+    
     const [selectedPath, setSelectedPath] = useState<{ nodes: any[], edges: any[] }>();
-
+    
     // Holds the user input while typing
     const [query, setQuery] = useState('');
-
+    
     const [isPathResponse, setIsPathResponse] = useState(false);
-
+    
     const [tipOpen, setTipOpen] = useState(false);
-
+    
     const [sugOpen, setSugOpen] = useState(false);
-
+    
     // A reference to the chat container to allow scrolling to the bottom
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
-
+    
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
-
+    
     useEffect(() => {
         const p = paths.find((path) => [...path.edges, ...path.nodes].some((e: any) => e.id === selectedPathId))
-
+        
         if (!p) return
-
+        
         handleSetSelectedPath(p)
     }, [selectedPathId])
+    
+    // Scroll to the bottom of the chat on new message
+    useEffect(() => {
+        setTimeout(() => {
+            containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
+        }, 300)
+    }, [messages]);
 
     useEffect(() => {
         handleSubmit()
@@ -261,13 +268,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     }
 
-    // Scroll to the bottom of the chat on new message
-    useEffect(() => {
-        setTimeout(() => {
-            containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
-        }, 300)
-    }, [messages]);
-
     const handleSubmit = async () => {
         setSelectedPath(undefined)
 
@@ -329,7 +329,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         });
         elements.layout(LAYOUT).run()
         setPaths(formattedPaths)
-        setMessages(prev => [...(prev.some(m => m.type === MessageTypes.Path) ? prev.slice(0, -2) : prev), { type: MessageTypes.PathResponse, paths: formattedPaths }])
+        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths }]);
         setPath(undefined)
         setIsPathResponse(true)
     }
