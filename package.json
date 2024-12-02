@@ -19,7 +19,7 @@
     "@radix-ui/react-toast": "^1.2.2",
     "@radix-ui/react-tooltip": "^1.0.7",
     "autoprefixer": "^10.4.20",
-    "class-variance-authority": "^0.7.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.0",
     "cytoscape": "^3.30.4",
     "cytoscape-fcose": "^2.2.0",
