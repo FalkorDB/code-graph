@@ -1,6 +1,7 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
-import { waitToBeEnabled } from "../utils";
+import { delay, waitToBeEnabled } from "../utils";
+import { analyzeCanvasWithLocator, CanvasAnalysisResult } from "../canvasAnalysis";
 
 export default class CodeGraph extends BasePage {
     /* NavBar Locators*/
@@ -112,6 +113,28 @@ export default class CodeGraph extends BasePage {
 
     private get notificationError(): Locator {
         return this.page.locator("//div[@role='region']//ol//li");
+    }
+
+    /* Canvas Locators*/
+
+    private get canvasElement(): Locator {
+        return this.page.locator("//canvas[position()=3]");
+    }
+
+    private get zoomInBtn(): Locator {
+        return this.page.locator("//button[@title='Zoom In']");
+    }
+
+    private get zoomOutBtn(): Locator {
+        return this.page.locator("//button[@title='Zoom Out']");
+    }
+
+    private get centerBtn(): Locator {
+        return this.page.locator("//button[@title='Center']");
+    }
+
+    private get removeNodeViaElementMenu(): Locator {
+        return this.page.locator("//button[@title='Remove']");
     }
     
     /* NavBar functionality */
@@ -253,6 +276,36 @@ export default class CodeGraph extends BasePage {
         return await this.searchBarList.evaluate((element) => {
           return element.scrollTop + element.clientHeight >= element.scrollHeight;
         });
-      }
+    }
+
+    /* Canvas functionality */
+    
+    async getCanvasAnalysis(): Promise<CanvasAnalysisResult> {
+        await delay(2000);
+        return await analyzeCanvasWithLocator(this.canvasElement);
+    }
+
+    async clickZoomIn(): Promise<void> {
+        await this.zoomInBtn.click();
+    }
+
+    async clickZoomOut(): Promise<void> {
+        await this.zoomOutBtn.click();
+    }
+
+    async clickCenter(): Promise<void> {
+        await this.centerBtn.click();
+    }
+
+    async clickOnRemoveNodeViaElementMenu(): Promise<void> {
+        await this.removeNodeViaElementMenu.click();
+    }
+
+    async rightClickOnNode(x : number, y: number): Promise<void> {
+        const boundingBox = (await this.canvasElement.boundingBox())!;
+        const adjustedX = boundingBox.x + Math.round(x);
+        const adjustedY = boundingBox.y + Math.round(y);
+        await this.page.mouse.click(adjustedX, adjustedY, { button: 'right' });
+    }
     
 }
