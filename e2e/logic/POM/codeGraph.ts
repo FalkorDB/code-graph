@@ -136,7 +136,15 @@ export default class CodeGraph extends BasePage {
     private get removeNodeViaElementMenu(): Locator {
         return this.page.locator("//button[@title='Remove']");
     }
-    
+
+    private get codeGraphCheckbox(): (checkbox: string) => Locator {
+        return (checkbox: string) => this.page.locator(`(//button[@role='checkbox'])[${checkbox}]`);
+    }
+
+    private get clearGraphBtn(): Locator {
+        return this.page.locator("//button[p[text()='Clear Graph']]");
+    }
+
     /* NavBar functionality */
     async clickOnFalkorDbLogo(): Promise<Page> {
         await this.page.waitForLoadState('networkidle'); 
@@ -266,7 +274,6 @@ export default class CodeGraph extends BasePage {
         return await this.searchBarInput.inputValue();
     }
     
-
     async scrollToBottomInSearchBarList(): Promise<void> {
         await this.searchBarList.evaluate((element) => {
           element.scrollTop = element.scrollHeight;
@@ -279,7 +286,7 @@ export default class CodeGraph extends BasePage {
     }
 
     /* Canvas functionality */
-    
+
     async getCanvasAnalysis(): Promise<CanvasAnalysisResult> {
         await delay(2000);
         return await analyzeCanvasWithLocator(this.canvasElement);
@@ -307,5 +314,12 @@ export default class CodeGraph extends BasePage {
         const adjustedY = boundingBox.y + Math.round(y);
         await this.page.mouse.click(adjustedX, adjustedY, { button: 'right' });
     }
-    
+
+    async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
+        await this.codeGraphCheckbox(checkbox).click();
+    }
+
+    async clickOnClearGraphBtn(): Promise<void> {
+        await this.clearGraphBtn.click();
+    } 
 }

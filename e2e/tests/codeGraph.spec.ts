@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
-import { GRAPH_ID } from "../config/constants";
+import { GRAPH_ID, Node_Add_Edge, Node_Import_Data } from "../config/constants";
 import { delay } from "../logic/utils";
 import { searchData, specialCharacters } from "../config/testData";
 import { CanvasAnalysisResult } from "../logic/canvasAnalysis";
@@ -124,6 +124,32 @@ test.describe("Code graph tests", () => {
     await codeGraph.clickOnRemoveNodeViaElementMenu();
     const updatedNodeAnalysis = await codeGraph.getCanvasAnalysis();
     expect(initialNodeAnalysis.red.length).toBeGreaterThan(updatedNodeAnalysis.red.length);
+  });
+
+  colors.forEach((color, index) => {
+    const checkboxIndex = index + 1;
+    test(`Verify that unchecking the ${color} checkbox hides ${color} nodes on the canvas`, async () => {
+      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await codeGraph.selectGraph(GRAPH_ID);
+      await codeGraph.selectCodeGraphCheckbox(checkboxIndex.toString());
+      const result = await codeGraph.getCanvasAnalysis();
+      expect(result[color].length).toBe(0);
+    });
+  })
+
+  test(`Verify "Clear graph" button resets canvas view`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await codeGraph.selectGraph(GRAPH_ID);
+    const initialAnalysis = await codeGraph.getCanvasAnalysis();
+    const initialNodeCount = initialAnalysis.green.length + initialAnalysis.yellow.length + initialAnalysis.red.length;
+    await codeGraph.clickOnshowPathBtn();
+    await codeGraph.insertInputForShowPath("1", Node_Import_Data);
+    await codeGraph.insertInputForShowPath("2", Node_Add_Edge);
+    await codeGraph.clickOnClearGraphBtn();
+    const finalAnalysis = await codeGraph.getCanvasAnalysis();
+    const finalNodeCount = finalAnalysis.green.length + finalAnalysis.yellow.length + finalAnalysis.red.length;
+    expect(initialNodeCount).toBe(finalNodeCount);
+    
   });
 
 });
