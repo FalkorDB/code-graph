@@ -69,6 +69,7 @@ interface Message {
     type: MessageTypes;
     text?: string;
     paths?: { nodes: any[], edges: any[] }[];
+    graphName?: string;
 }
 
 interface Props {
@@ -124,6 +125,11 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
 
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
+
+    useEffect(() => {
+        setSelectedPath(undefined)
+        setIsPathResponse(false)
+    }, [graph.Id])
 
     useEffect(() => {
         const p = paths.find((path) => [...path.edges, ...path.nodes].some((e: any) => e.id === selectedPathId))
@@ -202,14 +208,29 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             })
             chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).layout(LAYOUT).run();
         } else {
-            chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).forEach(el => {
-                if (el.id() == p.nodes[0].id || el.id() == p.nodes[p.nodes.length - 1].id) {
-                    el.removeStyle().style(SELECTED_PATH_NODE_STYLE);
-                } else if (el.isNode()) {
-                    el.removeStyle().style(PATH_NODE_STYLE);
+            const elements: any = { nodes: [], edges: [] };
+
+            [...p.nodes, ...p.edges].forEach(e => {
+                let element = chart.elements(`#${e.id}`)
+                if (element.length === 0) {
+                    debugger
+                    const type = "src_node" in e
+                    e = type ? { ...e, id: e.id.slice(1) } : e
+                    type
+                        ? elements.edges.push(e)
+                        : elements.nodes.push(e)
                 }
-                if (el.isEdge()) {
-                    el.removeStyle().style(SELECTED_PATH_EDGE_STYLE);
+            })
+
+            chart.add(graph.extend(elements))
+            chart.elements().filter((e) => [...p.nodes, ...p.edges].some((el) => el.id == e.id())).forEach((e) => {
+                if (e.id() == p.nodes[0].id || e.id() == p.nodes[p.nodes.length - 1].id) {
+                    e.removeStyle().style(SELECTED_PATH_NODE_STYLE);
+                } else if (e.isNode()) {
+                    e.removeStyle().style(PATH_NODE_STYLE);
+                }
+                if (e.isEdge()) {
+                    e.removeStyle().style(SELECTED_PATH_EDGE_STYLE);
                 }
             }).layout(LAYOUT).run();
         }
@@ -329,7 +350,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         });
         elements.layout(LAYOUT).run()
         setPaths(formattedPaths)
-        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths }]);
+        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
         setPath(undefined)
         setIsPathResponse(true)
     }
@@ -433,22 +454,35 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         message.paths.map((p, i: number) => (
                             <button
                                 key={i}
-                                className={cn("flex text-wrap border p-2 gap-2 rounded-md", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
+                                className={cn(
+                                    "flex text-wrap border p-2 gap-2 rounded-md",
+                                    p.nodes.length === selectedPath?.nodes.length &&
+                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]",
+                                    message.graphName !== graph.Id && "opacity-50 bg-gray-200"
+                                )}
+                                title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
+                                disabled={message.graphName !== graph.Id}
                                 onClick={() => {
-                                    if (p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return
-                                    handleSetSelectedPath(p)
-                                    setIsPath(true)
+                                    if (message.graphName !== graph.Id) {
+                                        toast({
+                                            title: "Path Disabled",
+                                            description: "The path is disabled because it is not from this graph.",
+                                        });
+                                        return;
+                                    }
+                                    if (p.nodes.length === selectedPath?.nodes.length &&
+                                        selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return;
+                                    handleSetSelectedPath(p);
+                                    setIsPath(true);
                                 }}
                             >
-                                <p className="font-bold">#{i}</p>
+                                <p className="font-bold">#{i + 1}</p>
                                 <div className="flex flex-wrap">
-                                    {
-                                        p.nodes.map((node: any, j: number) => (
-                                            <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
-                                                {` - ${node.properties.name}`}
-                                            </span>
-                                        ))
-                                    }
+                                    {p.nodes.map((node: any, j: number) => (
+                                        <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
+                                            {` - ${node.properties.name}`}
+                                        </span>
+                                    ))}
                                 </div>
                             </button>
                         ))
