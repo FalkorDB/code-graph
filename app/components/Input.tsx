@@ -145,6 +145,14 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 value={value || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
+                    const invalidChars = /[%*()\-\[\]{};:"|~]/;
+
+                    if (invalidChars.test(newVal)) {
+                        e.target.setCustomValidity(`The character "${newVal.match(invalidChars)?.[0]}" is not allowed in this field.`);
+                        e.target.reportValidity();
+                        return;
+                    }
+                    e.target.setCustomValidity('');
                     onValueChange({ name: newVal })
                 }}
                 {...props}
