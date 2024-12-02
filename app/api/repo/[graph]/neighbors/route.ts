@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEnvVariables } from "@/app/api/utils";
 
-export async function POST(request: NextRequest, { params }: { params: { graph: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
-    const repo = params.graph;
+    const repo = (await params).graph;
     const node_ids = (await request.json()).nodeIds.map((id: string) => Number(id));
 
     try {
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: { graph: 
         if (node_ids.length === 0) {
             throw new Error("nodeIds is required");
         }
-        
+
         const result = await fetch(`${url}/get_neighbors`, {
             method: 'POST',
             body: JSON.stringify({ node_ids, repo }),
