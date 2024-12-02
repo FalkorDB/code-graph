@@ -1,24 +1,39 @@
-import twcolors from 'tailwindcss/colors'
 import { Path } from '../page'
 
+export interface GraphData {
+  nodes: Node[],
+  links: Link[],
+}
 export interface Category {
   name: string,
   index: number,
   show: boolean,
 }
 
-export interface Node {
+export type Node = {
   id: string,
   name: string,
   category: string,
   color: string,
+  collapsed: boolean,
+  expand: boolean,
+  visibility: boolean,
+  isPathSelected: boolean,
+  isPath: boolean,
   [key: string]: any,
 }
 
-export interface Edge {
-  source: number,
-  target: number,
+export type Link = {
+  id: string,
+  source: Node,
+  target: Node,
   label: string,
+  visibility: boolean,
+  expand: boolean,
+  collapsed: boolean,
+  isPathSelected: boolean,
+  isPath: boolean,
+
   [key: string]: any,
 }
 
@@ -46,20 +61,20 @@ export class Graph {
 
   private id: string;
   private categories: Category[];
-  private elements: any[];
+  private elements: GraphData;
 
   private categoriesMap: Map<string, Category>;
   private nodesMap: Map<number, Node>;
-  private edgesMap: Map<number, Edge>;
+  private linksMap: Map<number, Link>;
 
-  private constructor(id: string, categories: Category[], elements: any[],
-    categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Edge>) {
+  private constructor(id: string, categories: Category[], elements: GraphData,
+    categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Link>) {
     this.id = id;
     this.categories = categories;
     this.elements = elements;
     this.categoriesMap = categoriesMap;
     this.nodesMap = nodesMap;
-    this.edgesMap = edgesMap;
+    this.linksMap = edgesMap;
   }
 
   get Id(): string {
@@ -74,20 +89,28 @@ export class Graph {
     return this.categoriesMap;
   }
 
-  get Elements(): any[] {
+  get Elements(): GraphData {
     return this.elements;
   }
 
-  get EdgesMap(): Map<number, Edge> {
-    return this.edgesMap;
+  set Elements(elements: GraphData) {
+    this.elements = elements;
+  }
+
+  get EdgesMap(): Map<number, Link> {
+    return this.linksMap;
   }
 
   get NodesMap(): Map<number, Node> {
     return this.nodesMap;
   }
 
+  public getElements(): (Node | Link)[] {
+    return [...this.elements.nodes, ...this.elements.links]
+  }
+
   public static empty(): Graph {
-    return new Graph("", [], [], new Map<string, Category>(), new Map<number, Node>(), new Map<number, Edge>())
+    return new Graph("", [], { nodes: [], links: [] }, new Map<string, Category>(), new Map<number, Node>(), new Map<number, Link>())
   }
 
   public static create(results: any, graphName: string): Graph {
@@ -97,8 +120,8 @@ export class Graph {
     return graph
   }
 
-  public extend(results: any, collapsed = false, path?: Path): any[] {
-    let newElements: any[] = []
+  public extend(results: any, collapsed = false, path?: Path): GraphData {
+    let newElements: GraphData = { nodes: [], links: [] }
 
     results.nodes.forEach((nodeData: any) => {
       let label = nodeData.labels[0];
@@ -114,10 +137,9 @@ export class Graph {
       let node = this.nodesMap.get(nodeData.id)
       if (node) {
         node.isPath = !!path
-        if (path?.start?.id == nodeData.id || path?.end?.id == nodeData.id) {
-          node.isPathStartEnd = true
+        if (path?.start?.id === nodeData.id || path?.end?.id === nodeData.id) {
+          node.isPathSelected = true
         }
-        node.isPath = !!path
         return
       }
 
@@ -127,44 +149,73 @@ export class Graph {
         color: getCategoryColorValue(category.index),
         category: category.name,
         expand: false,
+        visibility: true,
         collapsed,
         isPath: !!path,
-      }
-      if (path?.start?.id == nodeData.id || path?.end?.id == nodeData.id) {
-        node.isPathStartEnd = true
+        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id
       }
       Object.entries(nodeData.properties).forEach(([key, value]) => {
         node[key] = value
       })
       this.nodesMap.set(nodeData.id, node)
-      this.elements.push({ data: node })
-      newElements.push({ data: node })
+      this.elements.nodes.push(node)
+      newElements.nodes.push(node)
     })
 
     results.edges.forEach((edgeData: any) => {
-      let edge = this.edgesMap.get(edgeData.id)
-      if (edge) {
-        edge.isPath = !!path
+      let link = this.linksMap.get(edgeData.id)
+      if (link) {
+        link.isPath = !!path
         return
       }
 
       let sourceId = edgeData.src_node.toString();
       let destinationId = edgeData.dest_node.toString()
 
-      edge = {
-        id: `_${edgeData.id}`,
+      link = {
+        id: edgeData.id,
         source: sourceId,
         target: destinationId,
         label: edgeData.relation,
+        visibility: true,
         expand: false,
         collapsed,
+        isPathSelected: false,
         isPath: !!path,
       }
-      this.edgesMap.set(edgeData.id, edge)
-      this.elements.push({ data: edge })
-      newElements.push({ data: edge })
+      this.linksMap.set(edgeData.id, link)
+      this.elements.links.push(link)
+      newElements.links.push(link)
     })
 
     return newElements
+  }
+
+  public removeLinks() {
+    this.elements = {
+      nodes: this.elements.nodes,
+      links: this.elements.links.map(link => {
+        if (this.elements.nodes.map(n => n.id).includes(link.source.id) && this.elements.nodes.map(n => n.id).includes(link.target.id)) {
+          return link
+        }
+        this.linksMap.delete(Number(link.id))
+      }).filter(link => link !== undefined)
+    }
+  }
+
+  public visibleLinks(ids?: string[], visibility?: boolean) {
+    this.elements.links.forEach(link => {
+      if (ids && visibility !== undefined) {
+        if (ids.includes(link.source.id) || ids.includes(link.target.id)) {
+          link.visibility = visibility
+        }
+      } else {
+        if (this.categories.find(category => category.name === link.source.category)?.show && this.categories.find(category => category.name === link.target.category)?.show) {
+          link.visibility = true
+        } else {
+          link.visibility = false
+        }
+      }
+    })
   }
 }

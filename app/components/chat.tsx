@@ -1,12 +1,11 @@
 import { toast } from "@/components/ui/use-toast";
-import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
-import { Graph } from "./model";
+import { Graph, GraphData, Link } from "./model";
 import { cn } from "@/lib/utils";
-import { LAYOUT } from "./code-graph";
 import { TypeAnimation } from "react-type-animation";
 
 enum MessageTypes {
@@ -29,10 +28,10 @@ interface Props {
     path: Path | undefined
     setPath: Dispatch<SetStateAction<Path | undefined>>
     graph: Graph
-    chartRef: MutableRefObject<cytoscape.Core | null>
     selectedPathId: string | undefined
-    isPath: boolean
-    setIsPath: (isPathResponse: boolean) => void
+    isPathResponse: boolean | undefined
+    setIsPathResponse: (isPathResponse: boolean | undefined) => void
+    setData: Dispatch<SetStateAction<GraphData>>
 }
 
 const RemoveLastPath = (messages: Message[]) => {
@@ -46,7 +45,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isPath, setIsPath }: Props) {
+export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData }: Props) {
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
@@ -58,8 +57,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     // Holds the user input while typing
     const [query, setQuery] = useState('');
-
-    const [isPathResponse, setIsPathResponse] = useState(false);
 
     const [tipOpen, setTipOpen] = useState(false);
 
@@ -89,58 +86,29 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     }, [path])
 
     useEffect(() => {
-        if (isPath) return
+        if (isPathResponse || isPathResponse === undefined) return
         setIsPathResponse(false)
         setSelectedPath(undefined)
         setPaths([])
-    }, [isPath])
-
-    useEffect(() => {
-        setIsPath(isPathResponse)
     }, [isPathResponse])
 
     const handelSetSelectedPath = (p: { nodes: any[], edges: any[] }) => {
-        const chart = chartRef.current
-
-        if (!chart) return
-
         setSelectedPath(prev => {
             if (prev) {
                 if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...prev.nodes, ...prev.edges].some((el: any) => el.id === e.id)))) {
-                    chart.edges().forEach(e => {
-                        const id = e.id()
+                    graph.getElements().forEach(edge => {
+                        const id = Number(edge.id)
 
-                        if (prev.edges.some(el => el.id == id) && !p.edges.some(el => el.id == id)) {
-                            e.style({
-                                width: 0.5,
-                                "line-style": "dashed",
-                                "line-color": "#FF66B3",
-                                "arrow-scale": 0.3,
-                                "target-arrow-color": "#FF66B3",
-                            })
+                        if (prev.edges.some(el => el.id === id) && !p.edges.some(el => el.id === id)) {
+                            edge.isPathSelected = false
                         }
                     })
                 } else {
-                    const elements = chart.elements().filter(e => [...prev.edges, ...prev.nodes].some(el => el.id == e.id() && ![...p.nodes, ...p.edges].some(ele => ele.id == e.id()))).removeStyle()
-                    if (isPathResponse) {
+                    const elements = graph.getElements().filter(e => [...prev.edges, ...prev.nodes].some(el => el.id === Number(e.id) && ![...p.nodes, ...p.edges].some(ele => ele.id === Number(e.id))))
+                    if (isPathResponse || isPathResponse === undefined) {
                         elements.forEach(e => {
-                            if (e.isNode()) {
-                                e.style({
-                                    "border-width": 0.5,
-                                    "color": "gray",
-                                    "border-color": "black",
-                                    "background-color": "gray",
-                                    "opacity": 0.5
-                                });
-                            }
-
-                            if (e.isEdge()) {
-                                e.style({
-                                    "line-color": "gray",
-                                    "target-arrow-color": "gray",
-                                    "opacity": 0.5,
-                                });
-                            }
+                            e.isPath = false
+                            e.isPathSelected = false
                         })
                     }
                 }
@@ -149,46 +117,21 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         })
 
         if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...p.nodes, ...p.edges].some((el: any) => el.id === e.id)))) {
-            chart.edges().forEach(e => {
-                const id = e.id()
-
-                if (p.edges.some(el => el.id == id)) {
-                    e.style({
-                        width: 1,
-                        "line-style": "solid",
-                        "line-color": "#FF66B3",
-                        "arrow-scale": 0.6,
-                        "target-arrow-color": "#FF66B3",
-                    })
+            graph.Elements.links.forEach(e => {
+                if (p.edges.some(el => el.id === e.id)) {
+                    e.isPathSelected = true
                 }
             })
-            chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).layout(LAYOUT).run();
         } else {
-            chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).forEach(el => {
-                if (el.id() == p.nodes[0].id || el.id() == p.nodes[p.nodes.length - 1].id) {
-                    el.removeStyle().style({
-                        "border-width": 1,
-                        "border-color": "#FF66B3",
-                        "border-opacity": 1,
-                    });
-                } else if (el.isNode()) {
-                    el.removeStyle().style({
-                        "border-width": 0.5,
-                        "border-color": "#FF66B3",
-                        "border-opacity": 1,
-                    });
+            graph.getElements().filter(el => [...p.nodes, ...p.edges].some(e => e.id === Number(el.id))).forEach(el => {
+                if ((Number(el.id) === p.nodes[0].id || Number(el.id) === p.nodes[p.nodes.length - 1].id) || "source" in el) {
+                    el.isPathSelected = true
+                } else {
+                    el.isPath = true
                 }
-                if (el.isEdge()) {
-                    el.removeStyle().style({
-                        width: 1,
-                        "line-style": "solid",
-                        "line-color": "#FF66B3",
-                        "arrow-scale": 0.6,
-                        "target-arrow-color": "#FF66B3",
-                    })
-                }
-            }).layout(LAYOUT).run();
+            });
         }
+        setData({ ...graph.Elements })
     }
 
     // A function that handles the change event of the url input box
@@ -252,9 +195,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const handelSubmit = async () => {
         setSelectedPath(undefined)
 
-        const chart = chartRef?.current
-
-        if (!chart || !path?.start?.id || !path.end?.id) return
+        if (!path?.start?.id || !path.end?.id) return
 
         const result = await fetch(`/api/repo/${repo}/${path.start.id}/?targetId=${path.end.id}`, {
             method: 'POST'
@@ -280,62 +221,13 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         }
 
         const formattedPaths: { nodes: any[], edges: any[] }[] = json.result.paths.map((p: any) => ({ nodes: p.filter((node: any, i: number) => i % 2 === 0), edges: p.filter((edge: any, i: number) => i % 2 !== 0) }))
-        chart.add(formattedPaths.flatMap((p: any) => graph.extend(p, false, path)))
-        formattedPaths.forEach(p => p.edges.forEach(e => e.id = `_${e.id}`))
-        graph.Elements.forEach((element: any) => {
-            const { id } = element.data
-            const e = chart.elements().filter(el => el.id() == id)
-            if (id == path.start?.id || id == path.end?.id) {
-                e.style({
-                    'border-width': 1,
-                    'border-color': '#FF66B3',
-                    'border-opacity': 1,
-                });
-            } else if (formattedPaths.some((p: any) => [...p.nodes, ...p.edges].some((el: any) => el.id == id))) {
-                if (e.isNode()) {
-                    e.style({
-                        'border-width': 0.5,
-                        'border-color': '#FF66B3',
-                        'border-opacity': 1,
-                    });
-                }
+        formattedPaths.forEach((p: any) => graph.extend(p, false, path))
 
-                if (e.isEdge()) {
-                    e.style({
-                        "line-style": "dashed",
-                        "line-color": "#FF66B3",
-                        "target-arrow-color": "#FF66B3",
-                        "opacity": 1
-                    });
-                }
-            } else {
-                if (e.isNode()) {
-                    e.style({
-                        "border-width": 0.5,
-                        "color": "gray",
-                        "border-color": "black",
-                        "background-color": "gray",
-                        "opacity": 0.5
-                    });
-                }
-
-                if (e.isEdge()) {
-                    e.style({
-                        "line-color": "gray",
-                        "target-arrow-color": "gray",
-                        "opacity": 0.5,
-                    });
-                }
-            }
-        })
-        const elements = chart.elements().filter((element) => {
-            return formattedPaths.some(p => [...p.nodes, ...p.edges].some((node) => node.id == element.id()))
-        });
-        elements.layout(LAYOUT).run()
         setPaths(formattedPaths)
-        setMessages(prev => [...prev.slice(0, -2), { type: MessageTypes.PathResponse, paths: formattedPaths }])
+        setMessages(prev => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths }])
         setPath(undefined)
         setIsPathResponse(true)
+        setData({ ...graph.Elements })
     }
 
     const getTip = () =>
@@ -344,14 +236,13 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 className="Tip"
                 onClick={() => {
                     setTipOpen(false)
-                    setPath({})
                     setMessages(prev => [
                         ...RemoveLastPath(prev),
                         { type: MessageTypes.Query, text: "Create a path" },
                     ])
 
                     if (isPathResponse) {
-                        chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
+                        // chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
                         setIsPathResponse(false)
                     }
 
@@ -359,7 +250,10 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         type: MessageTypes.Response,
                         text: "Please select a starting point and the end point. Select or press relevant item on the graph"
                     }]), 300)
-                    setTimeout(() => setMessages(prev => [...prev, { type: MessageTypes.Path }]), 4000)
+                    setTimeout(() => {
+                        setMessages(prev => [...prev, { type: MessageTypes.Path }])
+                        setPath({})
+                    }, 4000)
                 }}
             >
                 <Lightbulb />
@@ -436,9 +330,12 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 key={i}
                                 className={cn("flex text-wrap border p-2 gap-2 rounded-md", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
                                 onClick={() => {
-                                    if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return
+                                    debugger
+                                    if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
+                                    if (!isPathResponse) {
+                                        setIsPathResponse(undefined)
+                                    }
                                     handelSetSelectedPath(p)
-                                    setIsPath(true)
                                 }}
                             >
                                 <p className="font-bold">#{i}</p>

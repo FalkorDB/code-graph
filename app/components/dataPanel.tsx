@@ -16,7 +16,16 @@ const excludedProperties = [
     "expand",
     "collapsed",
     "isPath",
-    "isPathStartEnd"
+    "isPathStartEnd",
+    "visibility",
+    "index",
+    "__indexColor",
+    "x",
+    "y",
+    "vx",
+    "vy",
+    "fx",
+    "fy",
 ]
 
 export default function DataPanel({ obj, setObj, url }: Props) {
@@ -36,7 +45,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
     const object = Object.entries(obj).filter(([k]) => !excludedProperties.includes(k))
 
     return (
-        <div className="z-20 absolute -top-10 left-20 text-white shadow-lg rounded-lg flex flex-col min-h-[65%] max-h-[88%] max-w-[56%] overflow-hidden" >
+        <div className="z-20 absolute -top-10 left-20 text-white shadow-lg rounded-lg flex flex-col max-h-[88%] max-w-[56%] overflow-hidden" >
             <header className="bg-[#191919] flex items-center gap-8 justify-between p-8">
                 <p title={label} className="truncate font-bold">{label.toUpperCase()}</p>
                 <button onClick={() => setObj(undefined)}>

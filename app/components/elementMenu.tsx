@@ -1,6 +1,6 @@
 "use client"
 
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react";
 import { Node } from "./model";
 import { ChevronLeft, ChevronRight, ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
@@ -11,15 +11,15 @@ interface Props {
     obj: Node | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
-    handelRemove: (nodes: number[]) => void;
+    handelRemove: (nodes: string[]) => void;
     position: Position | undefined;
     url: string;
-    handelExpand: (nodes?: Node[], expand?: boolean) => void;
-    parentWidth: number;
+    handelExpand: (nodes: Node[], expand: boolean) => void;
+    parentRef: RefObject<HTMLDivElement>;
 }
 
 
-export default function ElementMenu({ obj, objects, setPath, handelRemove, position, url, handelExpand, parentWidth }: Props) {
+export default function ElementMenu({ obj, objects, setPath, handelRemove, position, url, handelExpand, parentRef }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
 
@@ -42,8 +42,8 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                 }}
                 className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
                 style={{
-                    left: Math.max(-34, Math.min(position.x - containerWidth / 2, parentWidth + 34 - containerWidth)),
-                    top: position.y + 5,
+                    left: Math.max(-34, Math.min(position.x - 33 - containerWidth / 2, (parentRef?.current?.clientWidth || 0) + 32 - containerWidth)),
+                    top: Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - 9),
                 }}
             >
                 {
@@ -62,7 +62,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove(objects.map(o => Number(o.id)))}
+                                onClick={() => handelRemove(objects.map(o => o.id))}
                             >
                                 <EyeOff color="white" />
                             </button>
@@ -90,7 +90,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove([Number(obj.id)])}
+                                onClick={() => handelRemove([obj.id])}
                             >
                                 <EyeOff color="white" />
                             </button>
@@ -114,13 +114,15 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand()}
+                                onClick={() => handelExpand([obj], true)}
                             >
-                                {
-                                    obj.expand ?
-                                        <Minimize2 color="white" />
-                                        : <Maximize2 color="white" />
-                                }
+                                <Maximize2 color="white" />
+                            </button>
+                            <button
+                                className="p-2"
+                                onClick={() => handelExpand([obj], false)}
+                            >
+                                <Minimize2 color="white" />
                             </button>
                         </>
                 }

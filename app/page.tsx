@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, Node } from './components/model';
+import { Graph, GraphData, Node } from './components/model';
 import { BookOpen, Github, HomeIcon, X } from 'lucide-react';
 import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -52,17 +52,18 @@ const TIPS: Tip[] = [
 
 export default function Home() {
 
+  const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
   const [graph, setGraph] = useState(Graph.empty());
   const [selectedValue, setSelectedValue] = useState("");
   const [selectedPathId, setSelectedPathId] = useState<string>();
-  const [isPathResponse, setIsPathResponse] = useState<boolean>(false);
+  const [isPathResponse, setIsPathResponse] = useState<boolean | undefined>(false);
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [tipOpen, setTipOpen] = useState(false)
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
-  const chartRef = useRef<cytoscape.Core | null>(null)
+  const chartRef = useRef<any>()
 
   useEffect(() => {
     const run = async () => {
@@ -165,7 +166,7 @@ export default function Home() {
         title: "Uh oh! Something went wrong.",
         description: await result.text(),
       })
-      return []
+      return { nodes: [], links: [] }
     }
 
     const json = await result.json()
@@ -276,6 +277,8 @@ export default function Home() {
         <Panel defaultSize={70} className="flex flex-col" minSize={50}>
           <GraphContext.Provider value={graph}>
             <CodeGraph
+              data={data}
+              setData={setData}
               chartRef={chartRef}
               options={options}
               onFetchGraph={onFetchGraph}
@@ -293,14 +296,14 @@ export default function Home() {
         <PanelResizeHandle />
         <Panel className="border-l min-w-[420px]" defaultSize={30} >
           <Chat
-            chartRef={chartRef}
             setPath={setPath}
             path={path}
             repo={graph.Id}
             graph={graph}
             selectedPathId={selectedPathId}
-            isPath={isPathResponse}
-            setIsPath={setIsPathResponse}
+            isPathResponse={isPathResponse}
+            setIsPathResponse={setIsPathResponse}
+            setData={setData}
           />
         </Panel>
       </PanelGroup>
