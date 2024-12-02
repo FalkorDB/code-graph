@@ -33,6 +33,8 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
     }, [open])
 
     useEffect(() => {
+        if (!graph.Id) return
+
         let isLastRequest = true
         const timeout = setTimeout(async () => {
 
@@ -75,7 +77,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
             clearTimeout(timeout)
             isLastRequest = false
         }
-    }, [value])
+    }, [value, graph.Id])
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         const container = containerRef.current
