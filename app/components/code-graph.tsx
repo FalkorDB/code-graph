@@ -1,19 +1,35 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import CytoscapeComponent from 'react-cytoscapejs'
-import { useContext, useEffect, useRef, useState } from "react";
-import { Category, Node } from "./model";
-import { RESPOSITORIES } from "../api/repo/repositories";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dispatch, MutableRefObject, SetStateAction, useContext, useEffect, useRef, useState } from "react";
+import { Node } from "./model";
 import { GraphContext } from "./provider";
-
-import cytoscape from 'cytoscape';
+import cytoscape, { ElementDefinition, EventObject, Position } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
-import { Skeleton } from "@/components/ui/skeleton";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
+import { GitFork, Search, X } from "lucide-react";
+import ElementMenu from "./elementMenu";
+import ElementTooltip from "./elementTooltip";
+import Combobox from "./combobox";
+import { toast } from '@/components/ui/use-toast';
+import { Path, PathNode } from '../page';
+import Input from './Input';
+// import CommitList from './commitList';
+import { Checkbox } from '@/components/ui/checkbox';
+import { prepareArg } from '../utils';
 
-const LIMITED_MODE = process.env.NEXT_PUBLIC_MODE?.toLowerCase() === 'limited';
+interface Props {
+    onFetchGraph: (graphName: string) => void,
+    onFetchNode: (nodeIds: string[]) => Promise<any[]>,
+    options: string[]
+    isShowPath: boolean
+    setPath: Dispatch<SetStateAction<Path | undefined>>
+    chartRef: MutableRefObject<cytoscape.Core | null>
+    selectedValue: string
+    selectedPathId: string | undefined
+    setSelectedPathId: (selectedPathId: string) => void
+    isPathResponse: boolean
+    setIsPathResponse: Dispatch<SetStateAction<boolean>>
+}
 
 // The stylesheet for the graph
 const STYLESHEET: cytoscape.Stylesheet[] = [
@@ -25,10 +41,10 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
             // to satisfy the linter...
             'active-bg-color': 'blue',
             'active-bg-opacity': 0.3,
-            "selection-box-border-color": 'blue',
-            "selection-box-border-width": 0,
-            "selection-box-opacity": 1,
-            "selection-box-color": 'blue',
+            "selection-box-border-color": 'gray',
+            "selection-box-border-width": 3,
+            "selection-box-opacity": 0.5,
+            "selection-box-color": 'gray',
             "outside-texture-bg-color": 'blue',
             "outside-texture-bg-opacity": 1,
         },
@@ -37,16 +53,19 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         selector: "node",
         style: {
             label: "data(name)",
+            "color": "black",
             "text-valign": "center",
-            "text-halign": "center",
+            "text-wrap": "ellipsis",
+            "text-max-width": "10rem",
             shape: "ellipse",
-            height: 10,
-            width: 10,
-            "border-width": 0.15,
+            height: "15rem",
+            width: "15rem",
+            "border-width": 0.3,
+            "border-color": "black",
             "border-opacity": 0.5,
             "background-color": "data(color)",
-            "font-size": "3",
-            "overlay-padding": "1px",
+            "font-size": "3rem",
+            "overlay-padding": "1rem",
         },
     },
     {
@@ -56,12 +75,21 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
         },
     },
     {
+        selector: "node:selected",
+        style: {
+            'border-width': 0.5,
+            'border-color': 'black',
+            'border-opacity': 1,
+        },
+    },
+    {
         selector: "edge",
         style: {
             width: 0.5,
             "line-color": "#ccc",
             "arrow-scale": 0.3,
             "target-arrow-shape": "triangle",
+            "target-arrow-color": "#ccc",
             label: "data(label)",
             'curve-style': 'straight',
             "text-background-color": "#ffffff",
@@ -70,67 +98,152 @@ const STYLESHEET: cytoscape.Stylesheet[] = [
             "overlay-padding": "2px",
         },
     },
+    {
+        selector: "edge:active",
+        style: {
+            "overlay-opacity": 0,  // hide gray box around active node
+        },
+    }
 ]
-
 
 cytoscape.use(fcose);
 
-const LAYOUT = {
+export const LAYOUT = {
     name: "fcose",
     fit: true,
-    padding: 30,
+    padding: 80,
     avoidOverlap: true,
 }
 
-export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetchNode: (node: Node) => Promise<any[]> }) {
+export function CodeGraph({
+    onFetchGraph,
+    onFetchNode,
+    options,
+    isShowPath,
+    setPath,
+    chartRef,
+    selectedValue,
+    setSelectedPathId,
+    isPathResponse,
+    setIsPathResponse,
+    selectedPathId
+}: Props) {
 
     let graph = useContext(GraphContext)
 
-    // Holds the user input while typing
-    const [url, setURL] = useState('');
+    const [url, setURL] = useState("");
+    const [selectedObj, setSelectedObj] = useState<Node>();
+    const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
+    const [isSelectedObj, setIsSelectedObj] = useState<string>("");
+    const [tooltipLabel, setTooltipLabel] = useState<string>();
+    const [position, setPosition] = useState<Position>();
+    const [tooltipPosition, setTooltipPosition] = useState<Position>();
+    const [graphName, setGraphName] = useState<string>("");
+    const [searchNode, setSearchNode] = useState<PathNode>({});
+    const [commits, setCommits] = useState<any[]>([]);
+    const [nodesCount, setNodesCount] = useState<number>(0);
+    const [edgesCount, setEdgesCount] = useState<number>(0);
+    const [commitIndex, setCommitIndex] = useState<number>(0);
+    const [currentCommit, setCurrentCommit] = useState(0);
+    const [containerWidth, setContainerWidth] = useState(0);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    // A reference to the chart container to allowing zooming and editing
-    const chartRef = useRef<cytoscape.Core | null>(null)
+    useEffect(() => {
+        setContainerWidth(containerRef.current?.clientWidth || 0)
+    }, [containerRef.current?.clientWidth])
 
-    // A function that handles the change event of the url input box
-    async function handleRepoInputChange(event: any) {
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (!isSelectedObj && selectedObj && selectedObjects.length === 0) return
 
-        // If the user pressed enter, submit the URL
-        if (event.key === "Enter") {
-            await handleSubmit(event);
+            if (event.key === 'Delete') {
+                handleRemove(selectedObjects.length > 0 ? selectedObjects.map(obj => Number(obj.id)) : [Number(isSelectedObj || selectedObj?.id)]);
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [selectedObjects, selectedObj, isSelectedObj]);
+
+    async function fetchCount() {
+        const result = await fetch(`/api/repo/${prepareArg(graphName)}/info`, {
+            method: 'GET'
+        })
+
+        if (!result.ok) {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: await result.text(),
+            })
+            return
         }
 
-        // Get the new value of the input box
-        let value: string = event.target.value;
+        const json = await result.json()
 
-        // Update the url state
-        setURL(value);
+        setNodesCount(json.result.info.node_count)
+        setEdgesCount(json.result.info.edge_count)
+        setURL(json.result.info.repo_url)
     }
 
-    // A function that handles the click event
-    async function handleSubmit(event: any) {
-        event.preventDefault();
-        parmas.onFetchGraph(url);
-    }
-
-    function onRepoSelected(value: string): void {
-        setURL(value)
-        parmas.onFetchGraph(value)
-    }
-
-    const defaultRepo = RESPOSITORIES[0];
-    // Fetch the default graph on first render
     useEffect(() => {
-        onRepoSelected(defaultRepo)
-    }, []);
+        if (!selectedValue) return
+        handleSelectedValue(selectedValue)
+    }, [selectedValue])
 
-    function onCategoryClick(category: Category) {
+    useEffect(() => {
+        if (!graphName) return
+
+        const run = async () => {
+            fetchCount()
+            /*
+            const result = await fetch(`/api/repo/${prepareArg(graphName)}/commit`, {
+                method: 'GET'
+            })
+
+            if (!result.ok) {
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description: await result.text(),
+                })
+                return
+            }
+
+            const json = await result.json()
+            const commitsArr = json.result.commits
+            setCommits(commitsArr)
+
+            if (commitsArr.length > 0) {
+                setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+                setCommitIndex(commitsArr.length)
+            }
+            */
+        }
+
+        run()
+    }, [graphName])
+
+    function handleSelectedValue(value: string) {
+        setGraphName(value)
+        onFetchGraph(value)
+    }
+
+    function onCategoryClick(name: string, show: boolean) {
         let chart = chartRef.current
         if (chart) {
-            let elements = chart.elements(`node[category = "${category.name}"]`)
-            category.show = !category.show
+            let elements = chart.elements(`node[category = "${name}"]`)
 
-            if (category.show) {
+            graph.Categories.forEach((category) => {
+                if (category.name === name) {
+                    category.show = show
+                }
+            })
+
+            if (show) {
                 elements.style({ display: 'element' })
             } else {
                 elements.style({ display: 'none' })
@@ -139,83 +252,369 @@ export function CodeGraph(parmas: { onFetchGraph: (url: string) => void, onFetch
         }
     }
 
-    return (
-        <>
-            <header className="border p-4">
-                <form className="flex flex-row gap-2" onSubmit={handleSubmit}>
-                    <Select onValueChange={onRepoSelected} defaultValue={defaultRepo}>
-                        <SelectTrigger className={LIMITED_MODE ? "border" : "border w-2/3"}>
-                            <SelectValue placeholder="Suggested repositories" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {
-                                RESPOSITORIES.map((repo, index) => {
-                                    return <SelectItem key={index} value={repo}>{repo}</SelectItem>
-                                })
-                            }
-                        </SelectContent>
-                    </Select>
-                    {
-                        !LIMITED_MODE &&
-                        <>
-                            <Input placeholder="Github repo URL" className="border" type="url" onChange={handleRepoInputChange} />
-                            <Button type="submit">Send</Button>
-                        </>
+    const deleteNeighbors = (nodes: Node[], chart: cytoscape.Core) => {
+        if (nodes.length === 0) return
+
+        const neighbors = chart.elements(nodes.map(node => `#${node.id}`).join(',')).outgoers()
+
+        neighbors.forEach((n) => {
+            const id = n.id()
+            graph.Elements.forEach((e, i) => {
+                if (e.data.id === id) {
+                    const type = "category" in e.data
+
+                    if (e.data.expand) {
+                        deleteNeighbors([e.data] as Node[], chart)
                     }
-                </form>
-            </header>
-            <main className="h-full w-full">
-                {graph.Id ?
-                    (
-                        <>
-                            <div className="grid grid-cols-6 gap-4 p-2">
-                                <Toolbar className="col-start-1" chartRef={chartRef} />
-                                <Labels className="col-start-3 col-end-4" categories={graph.Categories} onClick={onCategoryClick}/>
-                            </div>
 
-                            <CytoscapeComponent
-                                cy={(cy) => {
-                                    chartRef.current = cy
+                    graph.Elements.splice(i, 1);
 
-                                    // Make sure no previous listeners are attached
-                                    cy.removeAllListeners();
+                    if (type) {
+                        graph.NodesMap.delete(Number(id))
+                    } else {
+                        graph.EdgesMap.delete(Number(id.split('_')[1]))
+                    }
 
-                                    // Listen to the click event on nodes for expanding the node
-                                    cy.on('dbltap', 'node', async function (evt) {
-                                        var node: Node = evt.target.json().data;
-                                        let elements = await parmas.onFetchNode(node);
-                                        //cy.add(elements).layout(LAYOUT).run()
-
-                                        // adjust entire graph.
-                                        if (elements.length > 0) {
-                                            cy.add(elements);
-                                            cy.elements().layout(LAYOUT).run();
-                                        }
-                                    });
-                                }}
-                                stylesheet={STYLESHEET}
-                                elements={graph.Elements}
-                                layout={LAYOUT}
-                                className="w-full h-full"
-                            />
-                        </>
-                    ) :
-                    (
-                        <div className="flex flex-col items-center justify-center h-full space-y-4">
-                            <div className="text-gray-600 text-4xl ">
-                                Loading Repository Graph...
-                            </div>
-                            <div className="flex items-center justify-center space-x-4">
-                                <Skeleton className="h-12 w-12 rounded-full bg-gray-600" />
-                                <div className="space-y-2">
-                                    <Skeleton className="h-4 w-[250px] bg-gray-600" />
-                                    <Skeleton className="h-4 w-[200px] bg-gray-600" />
-                                </div>
-                            </div>
-                        </div>
-                    )
+                    chart.remove(`#${id}`)
                 }
-            </main>
-        </>
+            });
+        })
+    }
+
+    const handleDoubleTap = async (evt?: EventObject) => {
+
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        let node: Node
+        if (evt) {
+            const { target } = evt
+            target.unselect()
+            node = target.json().data
+        } else {
+            node = selectedObj!
+        }
+
+        const graphNode = graph.Elements.find(e => e.data.id === node.id)
+
+        if (!graphNode) return
+
+        const expand = !graphNode.data.expand
+
+        if (expand) {
+            const elements = await onFetchNode([node.id])
+
+            if (elements.length === 0) {
+                toast({
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
+                })
+                return
+            }
+
+            chart.add(elements);
+        } else {
+            deleteNeighbors([node], chart);
+        }
+
+        graphNode.data.expand = expand
+
+        setSelectedObj(undefined)
+        chart.elements().layout(LAYOUT).run();
+    }
+
+    const handleExpand = async (nodes: Node[], expand: boolean) => {
+
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        if (expand) {
+            const elements = await onFetchNode(nodes.map(n => n.id))
+
+            if (elements.length === 0) {
+                toast({
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
+                })
+                return
+            }
+
+            chart.add(elements);
+            chart.elements().layout(LAYOUT).run();
+        } else {
+            const deleteNodes = graph.Elements.filter(n => n.data.expand === true && nodes.some(e => e.id === n.data.id))
+
+            if (deleteNodes.length > 0) {
+                deleteNeighbors(deleteNodes.map(n => n.data) as Node[], chart);
+                chart.elements().layout(LAYOUT).run();
+            }
+        }
+
+        nodes.forEach((node) => {
+            const graphNode = graph.Elements.find(e => e.data.id === node.id)
+
+            if (!graphNode) return
+
+            graphNode.data.expand = expand
+        })
+
+        setSelectedObj(undefined)
+    }
+
+    const handleSearchSubmit = (node: any) => {
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        const n = { name: node.properties.name, id: node.id }
+
+        let chartNode = chart.elements(`node[id = "${n.id}"]`)
+
+        if (chartNode.length === 0) {
+            const [newNode] = graph.extend({ nodes: [node], edges: [] })
+            chartNode = chart.add(newNode)
+        }
+
+        chartNode.select()
+        chartNode.style({ display: "element" })
+        setIsSelectedObj(String(n.id))
+        const layout = { ...LAYOUT, padding: 250 }
+        chartNode.layout(layout).run()
+        setSearchNode(n)
+    }
+
+    const handleRemove = (ids: number[]) => {
+        chartRef.current?.elements(`#${ids.join(',#')}`).style({ display: 'none' })
+        if (ids.some(id => Number(selectedObj?.id) === id)) {
+            setSelectedObj(undefined)
+        }
+    }
+
+    return (
+        <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
+            <header className="flex flex-col gap-4">
+                <Combobox
+                    options={options}
+                    selectedValue={graphName}
+                    onSelectedValue={handleSelectedValue}
+                />
+            </header>
+            <div className='h-1 grow flex flex-col'>
+                <main ref={containerRef} className="bg-white h-1 grow">
+                    {
+                        graph.Id ?
+                            <div className="h-full relative border">
+                                <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
+                                    <div className='flex gap-4'>
+                                        <Input
+                                            graph={graph}
+                                            value={searchNode.name}
+                                            onValueChange={({ name }) => setSearchNode({ name })}
+                                            icon={<Search />}
+                                            handleSubmit={handleSearchSubmit}
+                                            node={searchNode}
+                                        />
+                                        <Labels categories={graph.Categories} onClick={onCategoryClick} />
+                                    </div>
+                                    {
+                                        isPathResponse &&
+                                        <button
+                                            className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
+                                            onClick={() => {
+                                                chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
+                                                setIsPathResponse(false)
+                                            }}
+                                        >
+                                            <X size={15} />
+                                            <p>Clear Graph</p>
+                                        </button>
+                                    }
+                                </div>
+                                <div className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
+                                    <div className="flex gap-4 text-gray-500">
+                                        <p>{nodesCount} Nodes</p>
+                                        <p>{edgesCount} Edges</p>
+                                    </div>
+                                    <div className='flex gap-4'>
+                                        {
+                                            commitIndex !== commits.length &&
+                                            <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
+                                                <div className='flex gap-2 items-center'>
+                                                    <Checkbox
+                                                        className='h-5 w-5 bg-gray-500 data-[state true]'
+                                                    />
+                                                    <p className='text-bold'>Display Changes</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full' />
+                                                    <p className='text-pink-500'>Were added</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full' />
+                                                    <p className='text-blue-500'>Were edited</p>
+                                                </div>
+                                            </div>
+                                        }
+                                        <Toolbar
+                                            className="pointer-events-auto"
+                                            chartRef={chartRef}
+                                            setSelectedObj={setSelectedObj}
+                                        />
+                                    </div>
+                                </div>
+                                <ElementTooltip
+                                    label={tooltipLabel}
+                                    position={tooltipPosition}
+                                    parentWidth={containerWidth}
+                                />
+                                <ElementMenu
+                                    obj={selectedObj}
+                                    objects={selectedObjects}
+                                    setPath={(path) => {
+                                        setPath(path)
+                                        setSelectedObj(undefined)
+                                    }}
+                                    handleRemove={handleRemove}
+                                    position={position}
+                                    url={url}
+                                    handleExpand={(nodes, expand) => {
+                                        handleExpand(nodes, expand)
+                                    }}
+                                    parentWidth={containerWidth}
+                                />
+                                <CytoscapeComponent
+                                    cy={(cy) => {
+                                        chartRef.current = cy
+
+                                        // Make sure no previous listeners are attached
+                                        cy.removeAllListeners();
+
+                                        // Listen to the click event on nodes for expanding the node
+                                        cy.on('dbltap', 'node', handleDoubleTap);
+
+                                        cy.on('mousedown', () => {
+                                            setTooltipLabel(undefined)
+                                            setSelectedObj(undefined)
+                                            setIsSelectedObj("")
+                                        })
+
+                                        cy.on('mouseout', 'node', (evt) => {
+                                            const { target } = evt
+
+                                            setTooltipLabel(undefined)
+
+                                            const { id } = target.json().data
+
+                                            if (selectedObj?.id === id || isSelectedObj === id || selectedObjects.some(e => e.id === id)) return
+
+                                            target.unselect()
+                                        })
+
+                                        cy.on('scrollzoom', () => {
+                                            setSelectedObj(undefined)
+                                            setTooltipLabel(undefined)
+                                        });
+
+                                        cy.on('mouseover', 'node', (evt) => {
+                                            const { target } = evt
+
+                                            target.select()
+
+                                            if (selectedObj && target.id() === selectedObj.id) return
+
+                                            const position = target.renderedPosition()
+
+                                            setTooltipPosition(() => ({ x: position.x, y: position.y + cy.zoom() * 8 }));
+                                            setTooltipLabel(() => target.json().data.name);
+                                        })
+
+                                        cy.on('tap', () => {
+                                            setSelectedObjects([])
+                                        })
+
+                                        cy.on('tap', 'node', (evt) => {
+                                            const { target } = evt
+
+                                            target.select()
+
+                                            setIsSelectedObj(target.json().data.id)
+
+                                            if (isShowPath) {
+                                                setPath(prev => {
+                                                    if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
+                                                        return ({ start: { id: Number(target.id()), name: target.data().name as string } })
+                                                    } else {
+                                                        return ({ end: { id: Number(target.id()), name: target.data().name as string }, start: prev.start })
+                                                    }
+                                                })
+                                                return
+                                            }
+                                        });
+
+                                        cy.on('cxttap', 'node', (evt) => {
+                                            const chart = chartRef.current
+
+                                            if (!chart) return
+
+                                            setTooltipLabel(undefined)
+
+                                            if (isSelectedObj && isSelectedObj !== evt.target.id()) {
+                                                chart.elements(`#${isSelectedObj}`).unselect()
+                                                setIsSelectedObj("")
+                                            }
+
+                                            if (selectedObj && selectedObj !== evt.target.id()) {
+                                                chart.elements(`#${selectedObj.id}`).unselect()
+                                            }
+
+                                            const { target } = evt
+                                            const { x, y } = target.renderedPosition()
+
+                                            setPosition(() => (x && y) ? { x, y: y + chart.zoom() * 8 } : { x: 0, y: 0 });
+                                            setSelectedObj(target.json().data)
+                                        });
+
+                                        cy.on('tap', 'edge', (evt) => {
+                                            const { target } = evt
+
+                                            if (!isPathResponse || selectedPathId === target.id()) return
+
+                                            setSelectedPathId(target.id())
+                                        });
+
+                                        cy.on('boxselect', 'node', (evt) => {
+                                            const { target } = evt
+
+                                            selectedObjects.push(target.json().data)
+                                        });
+                                    }}
+                                    stylesheet={STYLESHEET}
+                                    elements={graph.Elements}
+                                    layout={LAYOUT}
+                                    className="h-full w-full"
+                                />
+                            </div>
+                            : <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                                <GitFork size={100} color="gray" />
+                                <h1 className="text-4xl">Select a repo to show its graph here</h1>
+                            </div>
+                    }
+                </main>
+                {/* {
+                    graph.Id && commits.length > 0 &&
+                    <CommitList
+                        commitIndex={commitIndex}
+                        commits={commits}
+                        currentCommit={currentCommit}
+                        setCommitIndex={setCommitIndex}
+                        setCurrentCommit={setCurrentCommit}
+                        graph={graph}
+                        chartRef={chartRef}
+                    />
+                } */}
+            </div>
+        </div>
     )
 }
