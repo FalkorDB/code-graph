@@ -76,12 +76,24 @@ test.describe("Chat tests", () => {
     expect(await chat.isNotificationError()).toBe(true);
   });
 
-  test("Validate error notification when sending an empty question in chat", async () => {
+  test("Validate error notification and its closure when sending an empty question in chat", async () => {
     const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await chat.selectGraph(GRAPH_ID);
     await chat.clickAskquestionBtn();
-    await delay(500);
     expect(await chat.isNotificationError()).toBe(true);
+    await chat.clickOnNotificationErrorCloseBtn();
+    expect(await chat.isNotificationError()).toBe(false);
   });
+
+  for (let index = 0; index < 5; index++) {
+    const questionNumber = index + 1;
+    test(`Validate displaying question ${index} in chat after selection from options menu`, async () => {
+      const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await chat.selectGraph(GRAPH_ID);
+      await chat.clickOnQuestionOptionsMenu();
+      const selectedQuestion = await chat.selectAndGetQuestionInOptionsMenu(questionNumber.toString());  
+      expect(selectedQuestion).toEqual(await chat.getLastQuestionInChat())
+    });
+  }
   
 });

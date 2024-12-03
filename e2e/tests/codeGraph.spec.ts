@@ -149,7 +149,29 @@ test.describe("Code graph tests", () => {
     const finalAnalysis = await codeGraph.getCanvasAnalysis();
     const finalNodeCount = finalAnalysis.green.length + finalAnalysis.yellow.length + finalAnalysis.red.length;
     expect(initialNodeCount).toBe(finalNodeCount);
-    
   });
+
+  for (let index = 0; index < 3; index++) {
+    const checkboxIndex = index + 1;
+    test(`Verify selecting different graphs displays nodes in canvas - Iteration ${index + 1}`, async () => {
+      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await codeGraph.selectGraph(checkboxIndex.toString());
+      const result = await codeGraph.getCanvasAnalysis();
+      const nodesLength = result.green.length + result.yellow.length + result.red.length;
+      expect(nodesLength).toBeGreaterThan(1);
+    });
+  }
+  
+  colors.forEach((color) => {
+    test(`Validate canvas node dragging for color: ${color}`, async () => {
+      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await codeGraph.selectGraph(GRAPH_ID);
+      const initialAnalysis = await codeGraph.getCanvasAnalysis();
+      await codeGraph.changeNodePosition(initialAnalysis[color][0].x, initialAnalysis[color][0].y);
+      const finalAnalysis = await codeGraph.getCanvasAnalysis();
+      expect(finalAnalysis[color][0].x).not.toBe(initialAnalysis.green[0].x);
+      expect(finalAnalysis[color][0].y).not.toBe(initialAnalysis.green[0].y);
+    });
+  })
 
 });
