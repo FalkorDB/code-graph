@@ -457,19 +457,12 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 className={cn(
                                     "flex text-wrap border p-2 gap-2 rounded-md",
                                     p.nodes.length === selectedPath?.nodes.length &&
-                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]",
+                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length && "border-[#FF66B3] bg-[#FFF0F7]",
                                     message.graphName !== graph.Id && "opacity-50 bg-gray-200"
                                 )}
                                 title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
                                 disabled={message.graphName !== graph.Id}
                                 onClick={() => {
-                                    if (message.graphName !== graph.Id) {
-                                        toast({
-                                            title: "Path Disabled",
-                                            description: "The path is disabled because it is not from this graph.",
-                                        });
-                                        return;
-                                    }
                                     if (p.nodes.length === selectedPath?.nodes.length &&
                                         selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return;
                                     handleSetSelectedPath(p);
@@ -478,11 +471,13 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                             >
                                 <p className="font-bold">#{i + 1}</p>
                                 <div className="flex flex-wrap">
-                                    {p.nodes.map((node: any, j: number) => (
-                                        <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
-                                            {` - ${node.properties.name}`}
-                                        </span>
-                                    ))}
+                                    {
+                                        p.nodes.map((node: any, j: number) => (
+                                            <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
+                                                {` - ${node.properties.name}`}
+                                            </span>
+                                        ))
+                                    }
                                 </div>
                             </button>
                         ))
