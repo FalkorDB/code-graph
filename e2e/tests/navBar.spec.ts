@@ -38,4 +38,12 @@ test.describe(' Navbar tests', () => {
     await navBar.clickCreateNewProjectBtn();
     expect(await navBar.isCreateNewProjectDialog()).toBe(true)
   })
+
+  test("Validate Tip popup visibility and closure functionality", async () => {
+    const navBar = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await navBar.clickonTipBtn();
+    expect(await navBar.isTipMenuVisible()).toBe(true);
+    await navBar.clickonTipMenuCloseBtn();
+    expect(await navBar.isTipMenuVisible()).toBe(false);
+  });
 });
