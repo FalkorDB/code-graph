@@ -205,6 +205,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async isTipMenuVisible(): Promise<boolean> {
+        await delay(500);
         return await this.genericMenu.isVisible();
     }
 

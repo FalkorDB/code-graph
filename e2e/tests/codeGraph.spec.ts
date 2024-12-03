@@ -169,8 +169,8 @@ test.describe("Code graph tests", () => {
       const initialAnalysis = await codeGraph.getCanvasAnalysis();
       await codeGraph.changeNodePosition(initialAnalysis[color][0].x, initialAnalysis[color][0].y);
       const finalAnalysis = await codeGraph.getCanvasAnalysis();
-      expect(finalAnalysis[color][0].x).not.toBe(initialAnalysis.green[0].x);
-      expect(finalAnalysis[color][0].y).not.toBe(initialAnalysis.green[0].y);
+      expect(finalAnalysis[color][0].x).not.toBe(initialAnalysis[color][0].x);
+      expect(finalAnalysis[color][0].y).not.toBe(initialAnalysis[color][0].y);
     });
   })
 
