@@ -3,27 +3,25 @@ import { getCategoryColorName, getCategoryColorValue, Graph } from "./model"
 import { useEffect, useRef, useState } from "react"
 import { PathNode } from "../page"
 import { cn } from "@/lib/utils"
-import twcolors from 'tailwindcss/colors'
-
-let colors = twcolors as any
+import { prepareArg } from "../utils"
 
 interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
     value?: string
     graph: Graph
     onValueChange: (node: PathNode) => void
-    handelSubmit?: (node: any) => void
+    handleSubmit?: (node: any) => void
     icon?: React.ReactNode
     node?: PathNode
     parentClassName?: string
     scrollToBottom?: () => void
 }
 
-export default function Input({ value, onValueChange, handelSubmit, graph, icon, node, className, parentClassName, scrollToBottom, ...props }: Props) {
+export default function Input({ value, onValueChange, handleSubmit, graph, icon, node, className, parentClassName, scrollToBottom, ...props }: Props) {
 
     const [open, setOpen] = useState(false)
     const [options, setOptions] = useState<any[]>([])
     const [selectedOption, setSelectedOption] = useState<number>(0)
-    const inputRef = useRef<HTMLInputElement>(null)
+    const [inputHeight, setInputHeight] = useState(0)
     const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -35,6 +33,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     }, [open])
 
     useEffect(() => {
+        let isLastRequest = true
         const timeout = setTimeout(async () => {
 
             if (!value || node?.id) {
@@ -45,7 +44,7 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 return
             }
 
-            const result = await fetch(`/api/repo/${graph.Id}/?prefix=${value}&type=autoComplete`, {
+            const result = await fetch(`/api/repo/${prepareArg(graph.Id)}/?prefix=${prepareArg(value)}`, {
                 method: 'POST'
             })
 
@@ -57,6 +56,8 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 })
                 return
             }
+
+            if (!isLastRequest) return
 
             const json = await result.json()
             const { completions } = json.result
@@ -70,17 +71,21 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             }
         }, 500)
 
-        return () => clearTimeout(timeout)
+        return () => {
+            clearTimeout(timeout)
+            isLastRequest = false
+        }
     }, [value])
 
-    const handelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        const container = containerRef.current
         switch (e.code) {
             case "Enter": {
                 e.preventDefault()
                 const option = options.find((o, i) => i === selectedOption)
                 if (!option) return
-                if (handelSubmit) {
-                    handelSubmit(option)
+                if (handleSubmit) {
+                    handleSubmit(option)
                 } else {
                     if (!open) return
                     onValueChange({ name: option.properties.name, id: option.id })
@@ -91,16 +96,22 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
             case "ArrowUp": {
                 e.preventDefault()
                 setSelectedOption(prev => {
-                    containerRef.current?.scrollTo({ behavior: 'smooth', top: (prev <= 0 ? options.length - 1 : prev - 1) * 64 })
-                    return prev <= 0 ? options.length - 1 : prev - 1
+                    const newIndex = prev <= 0 ? options.length - 1 : prev - 1
+                    if (container) {
+                        container.scrollTo({ behavior: 'smooth', top: 64 * newIndex })
+                    }
+                    return newIndex
                 })
                 return
             }
             case "ArrowDown": {
                 e.preventDefault()
                 setSelectedOption(prev => {
-                    containerRef.current?.scrollTo({ behavior: 'smooth', top: ((prev + 1) % options.length) * 64 })
-                    return (prev + 1) % options.length
+                    const newIndex = (prev + 1) % options.length
+                    if (container) {
+                        container.scrollTo({ behavior: 'smooth', top: Math.min(64 * newIndex, container.scrollHeight) })
+                    }
+                    return newIndex
                 })
                 return
             }
@@ -121,14 +132,27 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
     return (
         <div
             className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            data-name='search-bar'
         >
             <input
-                ref={inputRef}
-                onKeyDown={handelKeyDown}
+                ref={ref => {
+                    if (ref) {
+                        setInputHeight(ref.scrollHeight)
+                    }
+                }}
+                onKeyDown={handleKeyDown}
                 className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
                 value={value || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
+                    const invalidChars = /[%*()\-\[\]{};:"|~]/;
+
+                    if (invalidChars.test(newVal)) {
+                        e.target.setCustomValidity(`The character "${newVal.match(invalidChars)?.[0]}" is not allowed in this field.`);
+                        e.target.reportValidity();
+                        return;
+                    }
+                    e.target.setCustomValidity('');
                     onValueChange({ name: newVal })
                 }}
                 {...props}
@@ -143,17 +167,27 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                 <div
                     ref={containerRef}
                     className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    data-name='search-bar-list'
                     style={{
-                        top: (inputRef.current?.clientHeight || 0) + 16
+                        top: inputHeight + 16
                     }}
                 >
                     {
+                        options.length > 0 &&
                         options.map((option, index) => {
                             const label = option.labels[0]
                             const name = option.properties.name
                             const path = option.properties.path
-                            const colorName = getCategoryColorName(graph.CategoriesMap.get(label)!.index)
-                            const color = getCategoryColorValue(graph.CategoriesMap.get(label)!.index)
+                            let category = graph.CategoriesMap.get(label)
+
+                            if (!category) {
+                                category = { name: label, index: graph.CategoriesMap.size, show: true }
+                                graph.CategoriesMap.set(label, category)
+                                graph.Categories.push(category)
+                            }
+
+                            const colorName = getCategoryColorName(category.index)
+                            const color = getCategoryColorValue(category.index)
                             return (
                                 <button
                                     className={cn(
@@ -161,10 +195,9 @@ export default function Input({ value, onValueChange, handelSubmit, graph, icon,
                                         selectedOption === index && "bg-gray-100"
                                     )}
                                     onMouseEnter={() => setSelectedOption(index)}
-                                    onMouseLeave={() => setSelectedOption(-1)}
                                     onClick={() => {
                                         onValueChange({ name: option.properties.name, id: option.id })
-                                        handelSubmit && handelSubmit(option)
+                                        handleSubmit && handleSubmit(option)
                                         setOpen(false)
                                     }}
                                     key={option.id}

@@ -1,23 +1,17 @@
-import { NextRequest, NextResponse } from "next/server"
-import { getEnvVariables } from "../../utils"
+import { NextRequest, NextResponse } from "next/server";
+import { getEnvVariables } from "@/app/api/utils";
 
-
-export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
     const repo = (await params).graph
-    const msg = request.nextUrl.searchParams.get('msg')
 
     try {
 
-        if (!msg) {
-            throw new Error("Message parameter is required")
-        }
+        const { url, token } = getEnvVariables();
 
-        const { url, token } = getEnvVariables()
-
-        const result = await fetch(`${url}/chat`, {
+        const result = await fetch(`${url}/repo_info`, {
             method: 'POST',
-            body: JSON.stringify({ repo, msg }),
+            body: JSON.stringify({ repo }),
             headers: {
                 "Authorization": token,
                 "Content-Type": 'application/json'

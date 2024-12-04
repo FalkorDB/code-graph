@@ -13,12 +13,13 @@ import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
 import { Path, PathNode } from '../page';
 import Input from './Input';
-import CommitList from './commitList';
+// import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
+import { prepareArg } from '../utils';
 
 interface Props {
     onFetchGraph: (graphName: string) => void,
-    onFetchNode: (node: Node) => Promise<any[]>,
+    onFetchNode: (nodeIds: string[]) => Promise<any[]>,
     options: string[]
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
@@ -132,6 +133,8 @@ export function CodeGraph({
 
     const [url, setURL] = useState("");
     const [selectedObj, setSelectedObj] = useState<Node>();
+    const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
+    const [isSelectedObj, setIsSelectedObj] = useState<string>("");
     const [tooltipLabel, setTooltipLabel] = useState<string>();
     const [position, setPosition] = useState<Position>();
     const [tooltipPosition, setTooltipPosition] = useState<Position>();
@@ -142,11 +145,32 @@ export function CodeGraph({
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
+    const [containerWidth, setContainerWidth] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
 
+    useEffect(() => {
+        setContainerWidth(containerRef.current?.clientWidth || 0)
+    }, [containerRef.current?.clientWidth])
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (!isSelectedObj && selectedObj && selectedObjects.length === 0) return
+
+            if (event.key === 'Delete') {
+                handleRemove(selectedObjects.length > 0 ? selectedObjects.map(obj => Number(obj.id)) : [Number(isSelectedObj || selectedObj?.id)]);
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [selectedObjects, selectedObj, isSelectedObj]);
+
     async function fetchCount() {
-        const result = await fetch(`/api/repo/${graphName}`, {
-            method: 'POST'
+        const result = await fetch(`/api/repo/${prepareArg(graphName)}/info`, {
+            method: 'GET'
         })
 
         if (!result.ok) {
@@ -167,7 +191,7 @@ export function CodeGraph({
 
     useEffect(() => {
         if (!selectedValue) return
-        handelSelectedValue(selectedValue)
+        handleSelectedValue(selectedValue)
     }, [selectedValue])
 
     useEffect(() => {
@@ -176,8 +200,8 @@ export function CodeGraph({
         const run = async () => {
             fetchCount()
             /*
-            const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
-                method: 'POST'
+            const result = await fetch(`/api/repo/${prepareArg(graphName)}/commit`, {
+                method: 'GET'
             })
 
             if (!result.ok) {
@@ -203,7 +227,7 @@ export function CodeGraph({
         run()
     }, [graphName])
 
-    function handelSelectedValue(value: string) {
+    function handleSelectedValue(value: string) {
         setGraphName(value)
         onFetchGraph(value)
     }
@@ -228,32 +252,33 @@ export function CodeGraph({
         }
     }
 
-    const deleteNeighbors = (node: Node, chart: cytoscape.Core) => {
-        const neighbors = chart.elements(`#${node.id}`).outgoers()
+    const deleteNeighbors = (nodes: Node[], chart: cytoscape.Core) => {
+        if (nodes.length === 0) return
+
+        const neighbors = chart.elements(nodes.map(node => `#${node.id}`).join(',')).outgoers()
+
         neighbors.forEach((n) => {
             const id = n.id()
-            const index = graph.Elements.findIndex(e => e.data.id === id);
-            const element = graph.Elements[index]
+            graph.Elements.forEach((e, i) => {
+                if (e.data.id === id) {
+                    const type = "category" in e.data
 
-            if (index === -1 || !element.data.collapsed) return
+                    if (e.data.expand) {
+                        deleteNeighbors([e.data] as Node[], chart)
+                    }
 
-            const type = "category" in element.data
+                    graph.Elements.splice(i, 1);
 
-            if (element.data.expand) {
-                deleteNeighbors(element.data, chart)
-            }
+                    if (type) {
+                        graph.NodesMap.delete(Number(id))
+                    } else {
+                        graph.EdgesMap.delete(Number(id.split('_')[1]))
+                    }
 
-            graph.Elements.splice(index, 1);
-
-            if (type) {
-                graph.NodesMap.delete(Number(id))
-            } else {
-                graph.EdgesMap.delete(Number(id.split('_')[1]))
-            }
-
-            chart.remove(`#${id}`)
+                    chart.remove(`#${id}`)
+                }
+            });
         })
-
     }
 
     const handleDoubleTap = async (evt?: EventObject) => {
@@ -263,65 +288,82 @@ export function CodeGraph({
         if (!chart) return
 
         let node: Node
-        let elements: ElementDefinition[]
-
         if (evt) {
             const { target } = evt
             target.unselect()
-            node = target.json().data;
+            node = target.json().data
         } else {
             node = selectedObj!
         }
 
-        const graphNode = graph.Elements.find(e => e.data.id === node.id);
+        const graphNode = graph.Elements.find(e => e.data.id === node.id)
 
         if (!graphNode) return
 
-        if (!graphNode.data.expand) {
-            elements = await onFetchNode(node)
+        const expand = !graphNode.data.expand
+
+        if (expand) {
+            const elements = await onFetchNode([node.id])
 
             if (elements.length === 0) {
                 toast({
-                    title: "No neighbors found",
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
                 })
                 return
             }
 
             chart.add(elements);
         } else {
-            deleteNeighbors(node, chart)
+            deleteNeighbors([node], chart);
         }
 
-        graphNode.data.expand = !graphNode.data.expand;
+        graphNode.data.expand = expand
+
         setSelectedObj(undefined)
         chart.elements().layout(LAYOUT).run();
     }
 
-    const handelTap = (evt: EventObject) => {
+    const handleExpand = async (nodes: Node[], expand: boolean) => {
+
         const chart = chartRef.current
 
         if (!chart) return
 
-        const { target } = evt
-        setTooltipLabel(undefined)
+        if (expand) {
+            const elements = await onFetchNode(nodes.map(n => n.id))
 
-        if (isShowPath) {
-            setPath(prev => {
-                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
-                    return ({ start: { id: Number(target.id()), name: target.data().name as string } })
-                } else {
-                    return ({ end: { id: Number(target.id()), name: target.data().name as string }, start: prev.start })
-                }
-            })
-            return
+            if (elements.length === 0) {
+                toast({
+                    title: `No neighbors found`,
+                    description: `No neighbors found`,
+                })
+                return
+            }
+
+            chart.add(elements);
+            chart.elements().layout(LAYOUT).run();
+        } else {
+            const deleteNodes = graph.Elements.filter(n => n.data.expand === true && nodes.some(e => e.id === n.data.id))
+
+            if (deleteNodes.length > 0) {
+                deleteNeighbors(deleteNodes.map(n => n.data) as Node[], chart);
+                chart.elements().layout(LAYOUT).run();
+            }
         }
 
-        const position = target.renderedPosition()
-        setPosition(() => position ? { x: position.x, y: position.y + chart.zoom() * 8 } : { x: 0, y: 0 });
-        setSelectedObj(target.json().data)
+        nodes.forEach((node) => {
+            const graphNode = graph.Elements.find(e => e.data.id === node.id)
+
+            if (!graphNode) return
+
+            graphNode.data.expand = expand
+        })
+
+        setSelectedObj(undefined)
     }
 
-    const handelSearchSubmit = (node: any) => {
+    const handleSearchSubmit = (node: any) => {
         const chart = chartRef.current
 
         if (!chart) return
@@ -336,34 +378,42 @@ export function CodeGraph({
         }
 
         chartNode.select()
+        chartNode.style({ display: "element" })
+        setIsSelectedObj(String(n.id))
         const layout = { ...LAYOUT, padding: chart.width() / 5 }
         chartNode.layout(layout).run()
         setSearchNode(n)
     }
 
+    const handleRemove = (ids: number[]) => {
+        chartRef.current?.elements(`#${ids.join(',#')}`).style({ display: 'none' })
+        if (ids.some(id => Number(selectedObj?.id) === id)) {
+            setSelectedObj(undefined)
+        }
+    }
+
     return (
-        <div ref={containerRef} className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
+        <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
             <header className="flex flex-col gap-4">
                 <Combobox
                     options={options}
                     selectedValue={graphName}
-                    onSelectedValue={handelSelectedValue}
+                    onSelectedValue={handleSelectedValue}
                 />
             </header>
             <div className='h-1 grow flex flex-col'>
-
-                <main className="bg-white h-1 grow">
+                <main ref={containerRef} className="bg-white h-1 grow">
                     {
                         graph.Id ?
                             <div className="h-full relative border">
                                 <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
-                                    <div className='flex gap-4 pointer-events-auto'>
+                                    <div className='flex gap-4'>
                                         <Input
                                             graph={graph}
                                             value={searchNode.name}
                                             onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
-                                            handelSubmit={handelSearchSubmit}
+                                            handleSubmit={handleSearchSubmit}
                                             node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
@@ -407,20 +457,32 @@ export function CodeGraph({
                                                 </div>
                                             </div>
                                         }
-                                        <Toolbar className="pointer-events-auto" chartRef={chartRef} />
+                                        <Toolbar
+                                            className="pointer-events-auto"
+                                            chartRef={chartRef}
+                                            setSelectedObj={setSelectedObj}
+                                        />
                                     </div>
                                 </div>
                                 <ElementTooltip
                                     label={tooltipLabel}
                                     position={tooltipPosition}
-                                    parentWidth={containerRef.current?.clientWidth || 0}
+                                    parentWidth={containerWidth}
                                 />
                                 <ElementMenu
                                     obj={selectedObj}
+                                    objects={selectedObjects}
+                                    setPath={(path) => {
+                                        setPath(path)
+                                        setSelectedObj(undefined)
+                                    }}
+                                    handleRemove={handleRemove}
                                     position={position}
                                     url={url}
-                                    handelMaximize={handleDoubleTap}
-                                    parentWidth={containerRef.current?.clientWidth || 0}
+                                    handleExpand={(nodes, expand) => {
+                                        handleExpand(nodes, expand)
+                                    }}
+                                    parentWidth={containerWidth}
                                 />
                                 <CytoscapeComponent
                                     cy={(cy) => {
@@ -432,26 +494,20 @@ export function CodeGraph({
                                         // Listen to the click event on nodes for expanding the node
                                         cy.on('dbltap', 'node', handleDoubleTap);
 
-                                        cy.on('mousedown', (evt) => {
+                                        cy.on('mousedown', () => {
                                             setTooltipLabel(undefined)
-                                            const { target } = evt
-
-                                            if (target !== cy && !target.isEdge()) return;
-
                                             setSelectedObj(undefined)
+                                            setIsSelectedObj("")
                                         })
 
-                                        cy.on('mouseout', (evt) => {
+                                        cy.on('mouseout', 'node', (evt) => {
                                             const { target } = evt
-
-                                            if (target === cy || target.isEdge()) {
-                                                setTooltipLabel(undefined)
-                                                return
-                                            }
 
                                             setTooltipLabel(undefined)
 
-                                            if (selectedObj) return
+                                            const { id } = target.json().data
+
+                                            if (selectedObj?.id === id || isSelectedObj === id || selectedObjects.some(e => e.id === id)) return
 
                                             target.unselect()
                                         })
@@ -463,9 +519,10 @@ export function CodeGraph({
 
                                         cy.on('mouseover', 'node', (evt) => {
                                             const { target } = evt
+
                                             target.select()
 
-                                            if (selectedObj) return
+                                            if (selectedObj && target.id() === selectedObj.id) return
 
                                             const position = target.renderedPosition()
 
@@ -473,11 +530,50 @@ export function CodeGraph({
                                             setTooltipLabel(() => target.json().data.name);
                                         })
 
-                                        cy.on('tap', 'node', handelTap);
+                                        cy.on('tap', () => {
+                                            setSelectedObjects([])
+                                        })
 
-                                        cy.on('drag', 'node', () => {
+                                        cy.on('tap', 'node', (evt) => {
+                                            const { target } = evt
+
+                                            target.select()
+
+                                            setIsSelectedObj(target.json().data.id)
+
+                                            if (isShowPath) {
+                                                setPath(prev => {
+                                                    if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
+                                                        return ({ start: { id: Number(target.id()), name: target.data().name as string } })
+                                                    } else {
+                                                        return ({ end: { id: Number(target.id()), name: target.data().name as string }, start: prev.start })
+                                                    }
+                                                })
+                                                return
+                                            }
+                                        });
+
+                                        cy.on('cxttap', 'node', (evt) => {
+                                            const chart = chartRef.current
+
+                                            if (!chart) return
+
                                             setTooltipLabel(undefined)
-                                            setSelectedObj(undefined)
+
+                                            if (isSelectedObj && isSelectedObj !== evt.target.id()) {
+                                                chart.elements(`#${isSelectedObj}`).unselect()
+                                                setIsSelectedObj("")
+                                            }
+
+                                            if (selectedObj && selectedObj !== evt.target.id()) {
+                                                chart.elements(`#${selectedObj.id}`).unselect()
+                                            }
+
+                                            const { target } = evt
+                                            const { x, y } = target.renderedPosition()
+
+                                            setPosition(() => (x && y) ? { x, y: y + chart.zoom() * 8 } : { x: 0, y: 0 });
+                                            setSelectedObj(target.json().data)
                                         });
 
                                         cy.on('tap', 'edge', (evt) => {
@@ -486,6 +582,12 @@ export function CodeGraph({
                                             if (!isPathResponse || selectedPathId === target.id()) return
 
                                             setSelectedPathId(target.id())
+                                        });
+
+                                        cy.on('boxselect', 'node', (evt) => {
+                                            const { target } = evt
+
+                                            selectedObjects.push(target.json().data)
                                         });
                                     }}
                                     stylesheet={STYLESHEET}

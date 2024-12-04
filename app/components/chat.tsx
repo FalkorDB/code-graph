@@ -1,13 +1,16 @@
 import { toast } from "@/components/ui/use-toast";
 import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
+import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
 import { Graph } from "./model";
 import { cn } from "@/lib/utils";
 import { LAYOUT } from "./code-graph";
 import { TypeAnimation } from "react-type-animation";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import cytoscape from "cytoscape";
+import { prepareArg } from "../utils";
 
 enum MessageTypes {
     Query,
@@ -17,6 +20,50 @@ enum MessageTypes {
     Pending,
     Text,
 }
+
+const EDGE_STYLE = {
+    "line-color": "gray",
+    "target-arrow-color": "gray",
+    "opacity": 0.5,
+}
+
+
+const PATH_EDGE_STYLE = {
+    width: 0.5,
+    "line-style": "dashed",
+    "line-color": "#FF66B3",
+    "arrow-scale": 0.3,
+    "target-arrow-color": "#FF66B3",
+    "opacity": 1
+}
+
+const SELECTED_PATH_EDGE_STYLE = {
+    width: 1,
+    "line-style": "solid",
+    "line-color": "#FF66B3",
+    "arrow-scale": 0.6,
+    "target-arrow-color": "#FF66B3",
+};
+
+const NODE_STYLE = {
+    "border-width": 0.5,
+    "color": "gray",
+    "border-color": "black",
+    "background-color": "gray",
+    "opacity": 0.5
+}
+
+const PATH_NODE_STYLE = {
+    "border-width": 0.5,
+    "border-color": "#FF66B3",
+    "border-opacity": 1,
+}
+
+const SELECTED_PATH_NODE_STYLE = {
+    "border-width": 1,
+    "border-color": "#FF66B3",
+    "border-opacity": 1,
+};
 
 interface Message {
     type: MessageTypes;
@@ -35,57 +82,66 @@ interface Props {
     setIsPath: (isPathResponse: boolean) => void
 }
 
+const SUGGESTIONS = [
+    "List a few recursive functions",
+    "What is the name of the most used method?",
+    "Who is calling the most used method?",
+    "Which function has the largest number of arguments? List a few arguments",
+    "Show a calling path between the drop_edge_range_index function and _query, only return function(s) names",
+]
+
 const RemoveLastPath = (messages: Message[]) => {
     const index = messages.findIndex((m) => m.type === MessageTypes.Path)
-
+    
     if (index !== -1) {
         messages = [...messages.slice(0, index - 2), ...messages.slice(index + 1)];
         messages = RemoveLastPath(messages)
     }
-
+    
     return messages
 }
 
 export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isPath, setIsPath }: Props) {
-
+    
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
-
+    
     // Holds the messages in the chat
     const [paths, setPaths] = useState<{ nodes: any[], edges: any[] }[]>([]);
-
+    
     const [selectedPath, setSelectedPath] = useState<{ nodes: any[], edges: any[] }>();
-
+    
     // Holds the user input while typing
     const [query, setQuery] = useState('');
-
+    
     const [isPathResponse, setIsPathResponse] = useState(false);
-
+    
     const [tipOpen, setTipOpen] = useState(false);
-
+    
+    const [sugOpen, setSugOpen] = useState(false);
+    
     // A reference to the chat container to allow scrolling to the bottom
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
-
-    const tipRef: React.RefObject<HTMLDivElement> = useRef(null);
-
+    
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
-
-    useEffect(() => {
-        if (tipOpen) {
-            tipRef.current?.focus()
-        }
-    }, [tipOpen])
-
+    
     useEffect(() => {
         const p = paths.find((path) => [...path.edges, ...path.nodes].some((e: any) => e.id === selectedPathId))
-
+        
         if (!p) return
-
-        handelSetSelectedPath(p)
+        
+        handleSetSelectedPath(p)
     }, [selectedPathId])
+    
+    // Scroll to the bottom of the chat on new message
+    useEffect(() => {
+        setTimeout(() => {
+            containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
+        }, 300)
+    }, [messages]);
 
     useEffect(() => {
-        handelSubmit()
+        handleSubmit()
     }, [path])
 
     useEffect(() => {
@@ -99,11 +155,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         setIsPath(isPathResponse)
     }, [isPathResponse])
 
-    const handelSetSelectedPath = (p: { nodes: any[], edges: any[] }) => {
-        const chart = chartRef.current
-
-        if (!chart) return
-
+    const updatePreviousPath = (chart: cytoscape.Core, p: { nodes: any[], edges: any[] }) => {
         setSelectedPath(prev => {
             if (prev) {
                 if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...prev.nodes, ...prev.edges].some((el: any) => el.id === e.id)))) {
@@ -111,13 +163,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         const id = e.id()
 
                         if (prev.edges.some(el => el.id == id) && !p.edges.some(el => el.id == id)) {
-                            e.style({
-                                width: 0.5,
-                                "line-style": "dashed",
-                                "line-color": "#FF66B3",
-                                "arrow-scale": 0.3,
-                                "target-arrow-color": "#FF66B3",
-                            })
+                            e.style(PATH_EDGE_STYLE)
                         }
                     })
                 } else {
@@ -125,21 +171,11 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                     if (isPathResponse) {
                         elements.forEach(e => {
                             if (e.isNode()) {
-                                e.style({
-                                    "border-width": 0.5,
-                                    "color": "gray",
-                                    "border-color": "black",
-                                    "background-color": "gray",
-                                    "opacity": 0.5
-                                });
+                                e.style(NODE_STYLE);
                             }
 
                             if (e.isEdge()) {
-                                e.style({
-                                    "line-color": "gray",
-                                    "target-arrow-color": "gray",
-                                    "opacity": 0.5,
-                                });
+                                e.style(EDGE_STYLE);
                             }
                         })
                     }
@@ -147,45 +183,33 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             }
             return p
         })
+    }
+
+    const handleSetSelectedPath = (p: { nodes: any[], edges: any[] }) => {
+        const chart = chartRef.current
+
+        if (!chart) return
+
+        updatePreviousPath(chart, p)
 
         if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...p.nodes, ...p.edges].some((el: any) => el.id === e.id)))) {
             chart.edges().forEach(e => {
                 const id = e.id()
 
                 if (p.edges.some(el => el.id == id)) {
-                    e.style({
-                        width: 1,
-                        "line-style": "solid",
-                        "line-color": "#FF66B3",
-                        "arrow-scale": 0.6,
-                        "target-arrow-color": "#FF66B3",
-                    })
+                    e.style(SELECTED_PATH_EDGE_STYLE)
                 }
             })
             chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).layout(LAYOUT).run();
         } else {
             chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).forEach(el => {
                 if (el.id() == p.nodes[0].id || el.id() == p.nodes[p.nodes.length - 1].id) {
-                    el.removeStyle().style({
-                        "border-width": 1,
-                        "border-color": "#FF66B3",
-                        "border-opacity": 1,
-                    });
+                    el.removeStyle().style(SELECTED_PATH_NODE_STYLE);
                 } else if (el.isNode()) {
-                    el.removeStyle().style({
-                        "border-width": 0.5,
-                        "border-color": "#FF66B3",
-                        "border-opacity": 1,
-                    });
+                    el.removeStyle().style(PATH_NODE_STYLE);
                 }
                 if (el.isEdge()) {
-                    el.removeStyle().style({
-                        width: 1,
-                        "line-style": "solid",
-                        "line-color": "#FF66B3",
-                        "arrow-scale": 0.6,
-                        "target-arrow-color": "#FF66B3",
-                    })
+                    el.removeStyle().style(SELECTED_PATH_EDGE_STYLE);
                 }
             }).layout(LAYOUT).run();
         }
@@ -202,11 +226,13 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     }
 
     // Send the user query to the server
-    async function sendQuery(event: FormEvent) {
+    async function sendQuery(event?: FormEvent, sugQuery?: string) {
 
-        event.preventDefault();
+        event?.preventDefault();
 
-        const q = query.trim()
+        if (isSendMessage) return
+
+        const q = query?.trim() || sugQuery!
 
         if (!q) {
             toast({
@@ -221,7 +247,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
         setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { type: MessageTypes.Pending }]);
 
-        const result = await fetch(`/api/chat/${repo}?msg=${encodeURIComponent(q)}`, {
+        const result = await fetch(`/api/chat/${prepareArg(repo)}?msg=${prepareArg(q)}`, {
             method: 'POST'
         })
 
@@ -242,21 +268,14 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
 
     }
 
-    // Scroll to the bottom of the chat on new message
-    useEffect(() => {
-        setTimeout(() => {
-            containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
-        }, 300)
-    }, [messages]);
-
-    const handelSubmit = async () => {
+    const handleSubmit = async () => {
         setSelectedPath(undefined)
 
         const chart = chartRef?.current
 
         if (!chart || !path?.start?.id || !path.end?.id) return
 
-        const result = await fetch(`/api/repo/${repo}/${path.start.id}/?targetId=${path.end.id}`, {
+        const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
         })
 
@@ -286,45 +305,22 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             const { id } = element.data
             const e = chart.elements().filter(el => el.id() == id)
             if (id == path.start?.id || id == path.end?.id) {
-                e.style({
-                    'border-width': 1,
-                    'border-color': '#FF66B3',
-                    'border-opacity': 1,
-                });
+                e.style(SELECTED_PATH_NODE_STYLE);
             } else if (formattedPaths.some((p: any) => [...p.nodes, ...p.edges].some((el: any) => el.id == id))) {
                 if (e.isNode()) {
-                    e.style({
-                        'border-width': 0.5,
-                        'border-color': '#FF66B3',
-                        'border-opacity': 1,
-                    });
+                    e.style(PATH_NODE_STYLE);
                 }
 
                 if (e.isEdge()) {
-                    e.style({
-                        "line-style": "dashed",
-                        "line-color": "#FF66B3",
-                        "target-arrow-color": "#FF66B3",
-                        "opacity": 1
-                    });
+                    e.style(PATH_EDGE_STYLE);
                 }
             } else {
                 if (e.isNode()) {
-                    e.style({
-                        "border-width": 0.5,
-                        "color": "gray",
-                        "border-color": "black",
-                        "background-color": "gray",
-                        "opacity": 0.5
-                    });
+                    e.style(NODE_STYLE);
                 }
 
                 if (e.isEdge()) {
-                    e.style({
-                        "line-color": "gray",
-                        "target-arrow-color": "gray",
-                        "opacity": 0.5,
-                    });
+                    e.style(EDGE_STYLE);
                 }
             }
         })
@@ -333,14 +329,15 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
         });
         elements.layout(LAYOUT).run()
         setPaths(formattedPaths)
-        setMessages(prev => [...prev.slice(0, -2), { type: MessageTypes.PathResponse, paths: formattedPaths }])
+        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths }]);
         setPath(undefined)
         setIsPathResponse(true)
     }
 
-    const getTip = () =>
+    const getTip = (disabled = false) =>
         <>
             <button
+                disabled={disabled}
                 className="Tip"
                 onClick={() => {
                     setTipOpen(false)
@@ -436,8 +433,8 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 key={i}
                                 className={cn("flex text-wrap border p-2 gap-2 rounded-md", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
                                 onClick={() => {
-                                    if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return
-                                    handelSetSelectedPath(p)
+                                    if (p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return
+                                    handleSetSelectedPath(p)
                                     setIsPath(true)
                                 }}
                             >
@@ -465,8 +462,8 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     }
 
     return (
-        <div className="h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
-            <main ref={containerRef} className="relative grow flex flex-col overflow-y-auto gap-6 px-4">
+        <div className="relative h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
+            <main data-name="main-chat" ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
                 {
                     messages.length === 0 &&
                     <>
@@ -486,27 +483,52 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 }
                 {
                     tipOpen &&
-                    <div ref={tipRef} className="bg-white fixed bottom-[85px] border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" onBlur={() => setTipOpen(false)}>
-                        {getTip()}
+                    <div ref={ref => ref?.focus()} className="bg-white absolute bottom-24 border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onBlur={() => setTipOpen(false)}>
+                        {getTip(isSendMessage)}
                     </div>
                 }
             </main>
-            <footer>
-                {
-                    repo &&
-                    <div className="flex gap-4 px-4">
-                        <button disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setTipOpen(prev => !prev)}>
-                            <Lightbulb />
-                        </button>
-                        <form className="grow flex items-center border rounded-md pr-2" onSubmit={sendQuery}>
-                            <input disabled={isSendMessage} className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                            <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
-                                <ArrowRight color="white" />
+            <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
+                <footer>
+                    {
+                        repo &&
+                        <div className="flex gap-4 px-4">
+                            <button data-name="lightbulb" onClick={() => setTipOpen(true)} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                                <Lightbulb />
                             </button>
-                        </form>
-                    </div>
-                }
-            </footer>
+                            <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
+                                        <ArrowDown color="white" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <input className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                                <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                                    <ArrowRight color="white" />
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </footer>
+                <DropdownMenuContent className="flex flex-col mb-4 w-[20dvw]" side="top">
+                    {
+                        SUGGESTIONS.map((s, i) => (
+                            <button
+                                disabled={isSendMessage}
+                                type="submit"
+                                key={i}
+                                className="p-2 text-left hover:bg-gray-200"
+                                onClick={() => {
+                                    sendQuery(undefined, s)
+                                    setSugOpen(false)
+                                }}
+                            >
+                                {s}
+                            </button>
+                        ))
+                    }
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 }
