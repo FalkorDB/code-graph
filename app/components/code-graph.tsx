@@ -20,14 +20,14 @@ interface Props {
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
     onFetchGraph: (graphName: string) => void,
-    onFetchNode: (nodeIds: string[]) => Promise<GraphData>,
+    onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
     options: string[]
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     chartRef: RefObject<any>
     selectedValue: string
-    selectedPathId: string | undefined
-    setSelectedPathId: (selectedPathId: string) => void
+    selectedPathId: number | undefined
+    setSelectedPathId: (selectedPathId: number) => void
     isPathResponse: boolean | undefined
     setIsPathResponse: Dispatch<SetStateAction<boolean | undefined>>
 }
@@ -84,7 +84,7 @@ export function CodeGraph({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Delete') {
                 if (selectedObj && selectedObjects.length === 0) return
-                handelRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id || ""]);
+                handelRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined));
             }
         };
 
@@ -249,7 +249,7 @@ export function CodeGraph({
         }
     }
 
-    const handelRemove = (ids: string[]) => {
+    const handelRemove = (ids: number[]) => {
         graph.Elements = {
             nodes: graph.Elements.nodes.map(node => ids.includes(node.id) ? { ...node, visibility: false } : node),
             links: graph.Elements.links

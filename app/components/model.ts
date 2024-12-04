@@ -11,7 +11,7 @@ export interface Category {
 }
 
 export type Node = {
-  id: string,
+  id: number,
   name: string,
   category: string,
   color: string,
@@ -24,7 +24,7 @@ export type Node = {
 }
 
 export type Link = {
-  id: string,
+  id: number,
   source: Node,
   target: Node,
   label: string,
@@ -144,7 +144,7 @@ export class Graph {
       }
 
       node = {
-        id: nodeData.id.toString(),
+        id: nodeData.id,
         name: nodeData.name,
         color: getCategoryColorValue(category.index),
         category: category.name,
@@ -162,6 +162,10 @@ export class Graph {
       newElements.nodes.push(node)
     })
 
+    if (!results.edges) {
+      results.edges = results.links 
+    }
+
     results.edges.forEach((edgeData: any) => {
       let link = this.linksMap.get(edgeData.id)
       if (link) {
@@ -169,8 +173,8 @@ export class Graph {
         return
       }
 
-      let sourceId = edgeData.src_node.toString();
-      let destinationId = edgeData.dest_node.toString()
+      let sourceId = edgeData.src_node;
+      let destinationId = edgeData.dest_node
 
       link = {
         id: edgeData.id,
@@ -198,12 +202,12 @@ export class Graph {
         if (this.elements.nodes.map(n => n.id).includes(link.source.id) && this.elements.nodes.map(n => n.id).includes(link.target.id)) {
           return link
         }
-        this.linksMap.delete(Number(link.id))
+        this.linksMap.delete(link.id)
       }).filter(link => link !== undefined)
     }
   }
 
-  public visibleLinks(ids?: string[], visibility?: boolean) {
+  public visibleLinks(ids?: number[], visibility?: boolean) {
     this.elements.links.forEach(link => {
       if (ids && visibility !== undefined) {
         if (ids.includes(link.source.id) || ids.includes(link.target.id)) {

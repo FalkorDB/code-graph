@@ -11,7 +11,7 @@ interface Props {
     obj: Node | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
-    handelRemove: (nodes: string[]) => void;
+    handelRemove: (nodes: number[]) => void;
     position: Position | undefined;
     url: string;
     handelExpand: (nodes: Node[], expand: boolean) => void;

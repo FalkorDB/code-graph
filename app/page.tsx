@@ -55,7 +55,7 @@ export default function Home() {
   const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
   const [graph, setGraph] = useState(Graph.empty());
   const [selectedValue, setSelectedValue] = useState("");
-  const [selectedPathId, setSelectedPathId] = useState<string>();
+  const [selectedPathId, setSelectedPathId] = useState<number>();
   const [isPathResponse, setIsPathResponse] = useState<boolean | undefined>(false);
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
@@ -150,7 +150,7 @@ export default function Home() {
   }
 
   // Send the user query to the server to expand a node
-  async function onFetchNode(nodeIds: string[]) {
+  async function onFetchNode(nodeIds: number[]) {
 
     const result = await fetch(`/api/repo/${graph.Id}/neighbors`, {
       method: 'POST',

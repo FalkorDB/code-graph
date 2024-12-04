@@ -8,6 +8,11 @@ import { Graph, GraphData, Link } from "./model";
 import { cn } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 
+type PathData = {
+    nodes: any[]
+    links: any[]
+}
+
 enum MessageTypes {
     Query,
     Response,
@@ -20,7 +25,7 @@ enum MessageTypes {
 interface Message {
     type: MessageTypes;
     text?: string;
-    paths?: { nodes: any[], edges: any[] }[];
+    paths?: PathData[];
 }
 
 interface Props {
@@ -28,7 +33,7 @@ interface Props {
     path: Path | undefined
     setPath: Dispatch<SetStateAction<Path | undefined>>
     graph: Graph
-    selectedPathId: string | undefined
+    selectedPathId: number | undefined
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
@@ -51,9 +56,9 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     const [messages, setMessages] = useState<Message[]>([]);
 
     // Holds the messages in the chat
-    const [paths, setPaths] = useState<{ nodes: any[], edges: any[] }[]>([]);
+    const [paths, setPaths] = useState<PathData[]>([]);
 
-    const [selectedPath, setSelectedPath] = useState<{ nodes: any[], edges: any[] }>();
+    const [selectedPath, setSelectedPath] = useState<PathData>();
 
     // Holds the user input while typing
     const [query, setQuery] = useState('');
@@ -74,7 +79,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }, [tipOpen])
 
     useEffect(() => {
-        const p = paths.find((path) => [...path.edges, ...path.nodes].some((e: any) => e.id === selectedPathId))
+        const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
 
@@ -92,19 +97,19 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setPaths([])
     }, [isPathResponse])
 
-    const handelSetSelectedPath = (p: { nodes: any[], edges: any[] }) => {
+    const handelSetSelectedPath = (p: PathData) => {
         setSelectedPath(prev => {
             if (prev) {
-                if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...prev.nodes, ...prev.edges].some((el: any) => el.id === e.id)))) {
-                    graph.getElements().forEach(edge => {
-                        const id = Number(edge.id)
+                if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
+                    graph.getElements().forEach(link => {
+                        const { id } = link
 
-                        if (prev.edges.some(el => el.id === id) && !p.edges.some(el => el.id === id)) {
-                            edge.isPathSelected = false
+                        if (prev.links.some(e => e.id === id) && !p.links.some(e => e.id === id)) {
+                            link.isPathSelected = false
                         }
                     })
                 } else {
-                    const elements = graph.getElements().filter(e => [...prev.edges, ...prev.nodes].some(el => el.id === Number(e.id) && ![...p.nodes, ...p.edges].some(ele => ele.id === Number(e.id))))
+                    const elements = graph.getElements().filter(e => [...prev.links, ...prev.nodes].some(el => el.id === e.id && ![...p.nodes, ...p.links].some(ele => ele.id === el.id)))
                     if (isPathResponse || isPathResponse === undefined) {
                         elements.forEach(e => {
                             e.isPath = false
@@ -115,19 +120,23 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             }
             return p
         })
-
-        if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...p.nodes, ...p.edges].some((el: any) => el.id === e.id)))) {
+        debugger
+        if (isPathResponse && paths.length > 0 && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...p.nodes, ...p.links].some((el: any) => el.id === e.id)))) {
             graph.Elements.links.forEach(e => {
-                if (p.edges.some(el => el.id === e.id)) {
+                if (p.links.some(el => el.id === e.id)) {
                     e.isPathSelected = true
                 }
             })
         } else {
-            graph.getElements().filter(el => [...p.nodes, ...p.edges].some(e => e.id === Number(el.id))).forEach(el => {
-                if ((Number(el.id) === p.nodes[0].id || Number(el.id) === p.nodes[p.nodes.length - 1].id) || "source" in el) {
-                    el.isPathSelected = true
+            console.log(p.nodes[p.nodes.length - 1].id, p.nodes[0].id);
+            console.log(graph.Elements.nodes.map(e => e.id));
+            console.log(p.links.map(l => l.id));
+            console.log(graph.Elements.links.map(e => e.id));
+            graph.getElements().filter(e => "source" in e ? p.links.some(l => l.id === e.id) : p.nodes.some(n => n.id === e.id)).forEach(e => {
+                if ((e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id) || "source" in e) {
+                    e.isPathSelected = true
                 } else {
-                    el.isPath = true
+                    e.isPath = true
                 }
             });
         }
@@ -220,7 +229,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             return
         }
 
-        const formattedPaths: { nodes: any[], edges: any[] }[] = json.result.paths.map((p: any) => ({ nodes: p.filter((node: any, i: number) => i % 2 === 0), edges: p.filter((edge: any, i: number) => i % 2 !== 0) }))
+        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((node: any, i: number) => i % 2 === 0), links: p.filter((edge: any, i: number) => i % 2 !== 0) }))
         formattedPaths.forEach((p: any) => graph.extend(p, false, path))
 
         setPaths(formattedPaths)
@@ -330,7 +339,6 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                 key={i}
                                 className={cn("flex text-wrap border p-2 gap-2 rounded-md", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
                                 onClick={() => {
-                                    debugger
                                     if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
                                     if (!isPathResponse) {
                                         setIsPathResponse(undefined)

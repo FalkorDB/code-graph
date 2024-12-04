@@ -18,14 +18,14 @@ interface Props {
     selectedObj: Node | undefined
     setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
-    onFetchNode: (nodeIds: string[]) => Promise<GraphData>
+    onFetchNode: (nodeIds: number[]) => Promise<GraphData>
     deleteNeighbors: (nodes: Node[]) => void
     parentRef: RefObject<HTMLDivElement>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     isPathResponse: boolean | undefined
-    selectedPathId: string | undefined
-    setSelectedPathId: (selectedPathId: string) => void
+    selectedPathId: number | undefined
+    setSelectedPathId: (selectedPathId: number) => void
 }
 
 const NODE_SIZE = 6;
