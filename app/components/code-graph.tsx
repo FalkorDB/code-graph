@@ -21,6 +21,7 @@ interface Props {
     onFetchGraph: (graphName: string) => void,
     onFetchNode: (nodeIds: string[]) => Promise<any[]>,
     options: string[]
+    setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     chartRef: MutableRefObject<cytoscape.Core | null>
@@ -119,6 +120,7 @@ export function CodeGraph({
     onFetchGraph,
     onFetchNode,
     options,
+    setOptions,
     isShowPath,
     setPath,
     chartRef,
@@ -397,6 +399,7 @@ export function CodeGraph({
             <header className="flex flex-col gap-4">
                 <Combobox
                     options={options}
+                    setOptions={setOptions}
                     selectedValue={graphName}
                     onSelectedValue={handleSelectedValue}
                 />
