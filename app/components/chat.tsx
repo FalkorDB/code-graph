@@ -213,7 +213,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             [...p.nodes, ...p.edges].forEach(e => {
                 let element = chart.elements(`#${e.id}`)
                 if (element.length === 0) {
-                    debugger
                     const type = "src_node" in e
                     e = type ? { ...e, id: e.id.slice(1) } : e
                     type
