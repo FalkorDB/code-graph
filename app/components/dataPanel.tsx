@@ -74,7 +74,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                 <button
                     className="flex items-center gap-2 p-2"
                     title="Copy src to clipboard"
-                    onClick={() => navigator.clipboard.writeText(obj.src)}
+                    onClick={() => navigator.clipboard.writeText(obj.src || "")}
                 >
                     <Copy color="white" />
                     Copy
