@@ -528,7 +528,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
                                 <DropdownMenuTrigger asChild>
-                                    <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
+                                    <button data-name="questionOptionsMenu" className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
                                         <ArrowDown color="white" />
                                     </button>
                                 </DropdownMenuTrigger>

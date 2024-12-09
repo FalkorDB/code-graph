@@ -8,7 +8,7 @@ export interface CanvasAnalysisResult {
     green: Array<{ x: number; y: number; radius: number }>;
 }
 
-export async function analyzeCanvasWithLocator(locator: Locator) {
+export async function analyzeCanvasNodes(locator: Locator): Promise<CanvasAnalysisResult> {
     const canvasHandle = await locator.evaluateHandle((canvas) => canvas as HTMLCanvasElement);
     const canvasElement = await canvasHandle.asElement();
     if (!canvasElement) {
@@ -58,64 +58,70 @@ export async function analyzeCanvasWithLocator(locator: Locator) {
             const clusterNodes = (pixels: Pixel[], radius: number): Pixel[][] => {
                 const visited = new Set<string>();
                 const clusters: Pixel[][] = [];
-
+            
                 pixels.forEach((pixel) => {
                     const key = `${pixel.x},${pixel.y}`;
                     if (visited.has(key)) return;
-
+            
                     const cluster: Pixel[] = [];
                     const stack: Pixel[] = [pixel];
-
+            
                     while (stack.length > 0) {
                         const current = stack.pop()!;
                         const currentKey = `${current.x},${current.y}`;
                         if (visited.has(currentKey)) continue;
-
+            
                         visited.add(currentKey);
                         cluster.push(current);
-
+            
                         pixels.forEach((neighbor) => {
                             const dist = Math.sqrt(
                                 (current.x - neighbor.x) ** 2 + (current.y - neighbor.y) ** 2
                             );
-                            if (dist <= radius) stack.push(neighbor);
+                            if (dist <= radius && !visited.has(`${neighbor.x},${neighbor.y}`)) {
+                                stack.push(neighbor);
+                            }
                         });
                     }
-
+            
                     clusters.push(cluster);
                 });
-
+            
                 return clusters;
             };
+            
+            
 
             const mergeCloseClusters = (clusters: Pixel[][], mergeRadius: number): Pixel[][] => {
                 const mergedClusters: Pixel[][] = [];
-                const used = new Set<number>();
-
+                const usedClusters = new Set<number>();
+            
                 for (let i = 0; i < clusters.length; i++) {
-                    if (used.has(i)) continue;
-
+                    if (usedClusters.has(i)) continue;
+            
                     let merged = [...clusters[i]];
+            
                     for (let j = i + 1; j < clusters.length; j++) {
-                        if (used.has(j)) continue;
-
+                        if (usedClusters.has(j)) continue;
+            
                         const dist = Math.sqrt(
                             (merged[0].x - clusters[j][0].x) ** 2 +
                             (merged[0].y - clusters[j][0].y) ** 2
                         );
-
+            
                         if (dist <= mergeRadius) {
-                            merged = merged.concat(clusters[j]);
-                            used.add(j);
+                            merged = [...new Set([...merged, ...clusters[j]])]; // Deduplicate pixels
+                            usedClusters.add(j);
                         }
                     }
-
+            
                     mergedClusters.push(merged);
-                    used.add(i);
+                    usedClusters.add(i);
                 }
-
+            
                 return mergedClusters;
             };
+            
 
             const redClusters = clusterNodes(redPixels, adjustedRadius);
             const yellowClusters = clusterNodes(yellowPixels, adjustedRadius);
