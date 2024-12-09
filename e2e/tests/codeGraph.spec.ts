@@ -4,7 +4,7 @@ import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPH_ID, Node_Add_Edge, Node_Import_Data, PROJECT_NAME } from "../config/constants";
 import { delay } from "../logic/utils";
-import { searchData, specialCharacters } from "../config/testData";
+import { searchData, specialCharacters, nodesPath } from "../config/testData";
 import { CanvasAnalysisResult } from "../logic/canvasAnalysis";
 import { ApiCalls } from "../logic/api/apiCalls";
 
@@ -39,7 +39,6 @@ test.describe("Code graph tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       await codeGraph.fillSearchBar(searchInput);
-      await delay(1000);
       await codeGraph.selectSearchBarOptionBtn("1");
       expect(await codeGraph.getSearchBarInputValue()).toBe(
         completedSearchInput
@@ -208,12 +207,100 @@ test.describe("Code graph tests", () => {
           return await codeGraph.getNodeDetailsHeader();
         })
     );
+    await codeGraph.clickOnNodeDetailsCloseBtn();
     const api = new ApiCalls();
     const response = await api.getProject(PROJECT_NAME);
     const nodeExists = response.result.entities.nodes.some((node) =>
       result.some((resItem) => resItem.includes(node.properties.name.toUpperCase()))
     );
     expect(nodeExists).toBe(true)
+  });
+
+
+  test(`Validate copy to clipboard functionality for node and verify with api`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPH_ID);
+    await codeGraph.fillSearchBar(Node_Import_Data);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    const analysis = await codeGraph.getCanvasAnalysis();
+    await codeGraph.rightClickOnNode(analysis.green[0].x, analysis.green[0].y);
+    const result = await codeGraph.clickOnCopySrcOnNode();
+    const api = new ApiCalls();
+    const response = await api.getProject(PROJECT_NAME);
+    const foundNode = response.result.entities.nodes.find(node => node.properties?.name === Node_Import_Data);
+    expect(foundNode?.properties.src).toBe(result);
+  });
+
+  test(`Verify searching for node focus on correct node in canvas`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPH_ID);
+    await codeGraph.fillSearchBar(Node_Import_Data);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    const result = await codeGraph.getCanvasAnalysis();
+    await codeGraph.rightClickOnNode(result.green[0].x, result.green[0].y);
+    const header = await codeGraph.getNodeDetailsHeader();
+    await codeGraph.clickOnNodeDetailsCloseBtn();
+    expect(header).toContain(Node_Import_Data.toUpperCase())
+});
+
+  nodesPath.forEach(({firstNode, secondNode}) => {
+    test(`Verify successful node path connection in canvas between ${firstNode} and ${secondNode} via UI`, async () => {
+      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await codeGraph.selectGraph(GRAPH_ID);
+      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.insertInputForShowPath("1", firstNode);
+      await codeGraph.insertInputForShowPath("2", secondNode);
+      const result = await codeGraph.getCanvasAnalysis();
+      console.log(result);
+      
+      const res = [];
+      for (const node of result.green) {
+          await codeGraph.rightClickOnNode(node.x, node.y);
+          const details = await codeGraph.getNodeDetailsHeader();
+          await codeGraph.clickOnNodeDetailsCloseBtn();
+          res.push(details);
+      }
+      console.log(res);
+      
+      expect(res.some((item) => item.includes(firstNode.toUpperCase()))).toBe(true);
+      expect(res.some((item) => item.includes(secondNode.toUpperCase()))).toBe(true);
+    });
+  })
+
+  test(`Validate node path connection in canvas ui and confirm via api`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await codeGraph.selectGraph(GRAPH_ID);
+    await codeGraph.clickOnshowPathBtn();
+    await codeGraph.insertInputForShowPath("1", Node_Import_Data);
+    await codeGraph.insertInputForShowPath("2", Node_Add_Edge);
+    const result = await codeGraph.getCanvasAnalysis();
+      
+    const res = [];
+    for (const node of result.green) {
+      await codeGraph.rightClickOnNode(node.x, node.y);
+      const details = await codeGraph.getNodeDetailsHeader();
+      const nodeID = await codeGraph.getNodedetailsPanelID();
+      await codeGraph.clickOnNodeDetailsCloseBtn();
+      res.push({details, nodeID});
+    }
+    const ids: Set<string> = new Set(
+      res.filter(item => item.details.includes(Node_Import_Data.toUpperCase()) || item.details.includes(Node_Add_Edge.toUpperCase())).map(item => item.nodeID)
+    );
+    const sortedIds = Array.from(ids).map(id => parseInt(id, 10)).sort((a, b) => a - b);
+    const api = new ApiCalls();
+    const response = await api.showPath(PROJECT_NAME ,sortedIds[0].toString(),sortedIds[1].toString());
+    const containsDetails = res.some(resItem =>
+      response.result.paths.some(path =>
+        path.some(item =>
+            item.properties?.name
+                ? resItem.details.toUpperCase().includes(item.properties.name.toUpperCase())
+                : false
+        )
+      )
+    );
+    expect(containsDetails).toBe(true);
   });
  
 });

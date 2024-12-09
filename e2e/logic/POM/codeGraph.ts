@@ -1,7 +1,7 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
 import { delay, waitToBeEnabled } from "../utils";
-import { analyzeCanvasWithLocator, CanvasAnalysisResult } from "../canvasAnalysis";
+import { analyzeCanvasNodes, CanvasAnalysisResult } from "../canvasAnalysis";
 
 export default class CodeGraph extends BasePage {
     /* NavBar Locators*/
@@ -188,6 +188,10 @@ export default class CodeGraph extends BasePage {
         return (itemId: string) => this.page.locator(`//div[@data-name='metrics-panel']/p[${itemId}]`);
     }
 
+    private get nodedetailsPanelID(): Locator {
+        return this.page.locator("//div[@data-name='node-details-panel']/main/div[1]/p[2]");
+    }
+
     /* NavBar functionality */
     async clickOnFalkorDbLogo(): Promise<Page> {
         await this.page.waitForLoadState('networkidle'); 
@@ -348,6 +352,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async selectSearchBarOptionBtn(buttonNum: string): Promise<void> {
+        await delay(1000);
         await this.searchBarOptionBtn(buttonNum).click();
     }
 
@@ -370,7 +375,7 @@ export default class CodeGraph extends BasePage {
 
     async getCanvasAnalysis(): Promise<CanvasAnalysisResult> {
         await delay(2000);
-        return await analyzeCanvasWithLocator(this.canvasElement);
+        return await analyzeCanvasNodes(this.canvasElement);
     }
 
     async clickZoomIn(): Promise<void> {
@@ -389,12 +394,14 @@ export default class CodeGraph extends BasePage {
         await this.elementMenuButton("Remove").click();
     }
 
-    async rightClickOnNode(x : number, y: number): Promise<void> {
+    async rightClickOnNode(x: number, y: number): Promise<void> {
         const boundingBox = (await this.canvasElement.boundingBox())!;
-        const adjustedX = boundingBox.x + Math.round(x);
-        const adjustedY = boundingBox.y + Math.round(y);
+        const devicePixelRatio = await this.page.evaluate(() => window.devicePixelRatio || 1);
+        const adjustedX = boundingBox.x + Math.round(x * devicePixelRatio);
+        const adjustedY = boundingBox.y + Math.round(y * devicePixelRatio);
         await this.page.mouse.click(adjustedX, adjustedY, { button: 'right' });
     }
+    
 
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await this.codeGraphCheckbox(checkbox).click();
@@ -421,8 +428,11 @@ export default class CodeGraph extends BasePage {
     async getNodeDetailsHeader(): Promise<string> {
         await this.elementMenuButton("View Node").click();
         const text = await this.nodedetailsPanelHeader.innerHTML();
-        await this.nodedetailsPanelcloseBtn.click();
         return text;
+    }
+
+    async clickOnNodeDetailsCloseBtn(): Promise<void>{
+        await this.nodedetailsPanelcloseBtn.click();
     }
 
     async getMetricsPanelInfo(): Promise<{nodes: string, edges: string}> {
@@ -430,4 +440,15 @@ export default class CodeGraph extends BasePage {
         const edges = await this.canvasMetricsPanel("2").innerHTML();
         return { nodes, edges }
     }
+
+    async clickOnCopySrcOnNode(): Promise<string> {
+        await this.elementMenuButton("Copy src to clipboard").click();
+        await delay(1000)
+        return await this.page.evaluate(() => navigator.clipboard.readText());
+    }
+
+    async getNodedetailsPanelID(): Promise<string> {
+        return await this.nodedetailsPanelID.innerHTML();
+    }
+
 }
