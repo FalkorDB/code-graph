@@ -95,5 +95,31 @@ test.describe("Chat tests", () => {
       expect(selectedQuestion).toEqual(await chat.getLastQuestionInChat())
     });
   }
+
+  test(`Validate consistent UI responses for repeated questions in chat`, async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+    const responses: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      await chat.sendMessage(Node_Question);
+      const result = await chat.getTextInLastChatElement();
+      const number = result.match(/\d+/g)?.[0]!;
+      responses.push(number);
+    }
+    const identicalResponses = responses.every((value) => value === responses[0]);
+    expect(identicalResponses).toBe(true);
+  });
+
+  test(`Validate UI response matches API response for a given question in chat`, async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
   
+    await chat.sendMessage(Node_Question);
+    const uiResponse = await chat.getTextInLastChatElement();
+    const number = uiResponse.match(/\d+/g)?.[0]!;
+    
+    const api = new ApiCalls();
+    const apiResponse = await api.askQuestion(PROJECT_NAME, Node_Question);
+    expect(number).toEqual(apiResponse.result.response.match(/\d+/g)?.[0]);
+  });
 });

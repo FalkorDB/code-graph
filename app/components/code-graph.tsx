@@ -432,8 +432,8 @@ export function CodeGraph({
                                         </button>
                                     }
                                 </div>
-                                <div className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
-                                    <div className="flex gap-4 text-gray-500">
+                                <div data-name="canvas-info-panel" className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
+                                    <div data-name="metrics-panel" className="flex gap-4 text-gray-500">
                                         <p>{nodesCount} Nodes</p>
                                         <p>{edgesCount} Edges</p>
                                     </div>
