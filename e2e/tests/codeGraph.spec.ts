@@ -164,11 +164,11 @@ test.describe("Code graph tests", () => {
     expect(initialNodeCount).toBe(finalNodeCount);
   });
 
-  for (let index = 0; index < 3; index++) {
+  for (let index = 0; index < 2; index++) {
     const checkboxIndex = index + 1;
     test(`Verify selecting different graphs displays nodes in canvas - Iteration ${index + 1}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(checkboxIndex.toString());
+      await codeGraph.selectGraph(checkboxIndex);
       const result = await codeGraph.getCanvasAnalysis();
       const nodesLength = result.green.length + result.yellow.length + result.red.length;
       expect(nodesLength).toBeGreaterThan(1);

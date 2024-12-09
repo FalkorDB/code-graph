@@ -38,8 +38,12 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//button[@role='combobox']")
     }
 
-    private get selectGraphInComboBox(): (graph: string) => Locator {
+    private get selectGraphInComboBoxByName(): (graph: string) => Locator {
         return (graph: string) => this.page.locator(`//div[@role='presentation']//div//span[contains(text(), '${graph}')]`);
+    }
+
+    private get selectGraphInComboBoxById(): (graph: string) => Locator {
+        return (graph: string) => this.page.locator(`//div[@role='presentation']//div[${graph}]`);
     }
 
     private get lastElementInChat(): Locator {
@@ -307,10 +311,15 @@ export default class CodeGraph extends BasePage {
     }
 
     /* CodeGraph functionality */
-    async selectGraph(graph: string): Promise<void> {
+    async selectGraph(graph: string | number): Promise<void> {
         await this.comboBoxbtn.click();
-        await this.selectGraphInComboBox(graph).waitFor({ state : 'visible'})
-        await this.selectGraphInComboBox(graph).click();
+        if(typeof graph === 'number'){
+            await this.selectGraphInComboBoxById(graph.toString()).waitFor({ state : 'visible'})
+            await this.selectGraphInComboBoxById(graph.toString()).click();
+        } else {
+            await this.selectGraphInComboBoxByName(graph).waitFor({ state : 'visible'})
+            await this.selectGraphInComboBoxByName(graph).click();
+        }
     }
 
     async createProject(url : string): Promise<void> {
