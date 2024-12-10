@@ -74,7 +74,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand(objects, false)}
+                                onClick={() => handelExpand(objects, false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
