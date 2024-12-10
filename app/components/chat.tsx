@@ -4,7 +4,7 @@ import Image from "next/image";
 import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
-import { Graph, GraphData, Link } from "./model";
+import { Graph, GraphData } from "./model";
 import { cn } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -80,8 +80,8 @@ interface Props {
     setPath: Dispatch<SetStateAction<Path | undefined>>
     graph: Graph
     selectedPathId: number | undefined
-    isPathResponse: boolean | undefined
-    setIsPathResponse: (isPathResponse: boolean | undefined) => void
+    isPathResponse: boolean
+    setIsPathResponse: (isPathResponse: boolean) => void
     setData: Dispatch<SetStateAction<GraphData>>
 }
 
@@ -95,12 +95,12 @@ const SUGGESTIONS = [
 
 const RemoveLastPath = (messages: Message[]) => {
     const index = messages.findIndex((m) => m.type === MessageTypes.Path)
-    
+
     if (index !== -1) {
         messages = [...messages.slice(0, index - 2), ...messages.slice(index + 1)];
         messages = RemoveLastPath(messages)
     }
-    
+
     return messages
 }
 
@@ -108,7 +108,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
-    
+
     // Holds the messages in the chat
     const [paths, setPaths] = useState<PathData[]>([]);
 
@@ -118,22 +118,22 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     const [query, setQuery] = useState('');
 
     const [tipOpen, setTipOpen] = useState(false);
-    
+
     const [sugOpen, setSugOpen] = useState(false);
-    
+
     // A reference to the chat container to allow scrolling to the bottom
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
-    
+
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
-    
+
     useEffect(() => {
         const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
-        
+
         handelSetSelectedPath(p)
     }, [selectedPathId])
-    
+
     // Scroll to the bottom of the chat on new message
     useEffect(() => {
         setTimeout(() => {
@@ -279,7 +279,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             return
         }
 
-        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((n: any, i: number) => i % 2 === 0), links: p.filter((l: any , i: number) => i % 2 !== 0) }))
+        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
         formattedPaths.forEach((p: any) => graph.extend(p, false, path))
 
         setPaths(formattedPaths)
@@ -392,7 +392,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                 onClick={() => {
                                     if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
                                     if (!isPathResponse) {
-                                        setIsPathResponse(undefined)
+                                        setIsPathResponse(true)
                                     }
                                     handelSetSelectedPath(p)
                                 }}

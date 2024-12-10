@@ -51,7 +51,6 @@ export function CodeGraph({
 
     let graph = useContext(GraphContext)
 
-
     const [url, setURL] = useState("");
     const [selectedObj, setSelectedObj] = useState<Node>();
     const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
@@ -64,6 +63,8 @@ export function CodeGraph({
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
     const [containerWidth, setContainerWidth] = useState(0);
+    const [cooldownTicks, setCooldownTicks] = useState<number>()
+    const [cooldownTime, setCooldownTime] = useState<number>(2000)
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -169,6 +170,9 @@ export function CodeGraph({
 
         graph.visibleLinks()
 
+        setCooldownTicks(undefined)
+        setCooldownTime(1000)
+
         setData({ ...graph.Elements })
     }
 
@@ -237,6 +241,8 @@ export function CodeGraph({
                 chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
             } else {
                 chartNode.visibility = true
+                setCooldownTicks(undefined)
+                setCooldownTime(1000)
             }
             graph.visibleLinks([chartNode.id], true)
         }
@@ -258,6 +264,9 @@ export function CodeGraph({
         }
 
         graph.visibleLinks(ids, false)
+
+        setCooldownTicks(undefined)
+        setCooldownTime(1000)
 
         setData({ ...graph.Elements })
     }
@@ -355,7 +364,9 @@ export function CodeGraph({
                                     graph={graph}
                                     chartRef={chartRef}
                                     selectedObj={selectedObj}
+                                    selectedObjects={selectedObjects}
                                     setSelectedObj={setSelectedObj}
+                                    setSelectedObjects={setSelectedObjects}
                                     setPosition={setPosition}
                                     onFetchNode={onFetchNode}
                                     deleteNeighbors={deleteNeighbors}
@@ -365,6 +376,10 @@ export function CodeGraph({
                                     isPathResponse={isPathResponse}
                                     selectedPathId={selectedPathId}
                                     setSelectedPathId={setSelectedPathId}
+                                    cooldownTicks={cooldownTicks}
+                                    setCooldownTicks={setCooldownTicks}
+                                    cooldownTime={cooldownTime}
+                                    setCooldownTime={setCooldownTime}
                                 />
                             </div>
                             : <div className="flex flex-col items-center justify-center h-full text-gray-400">

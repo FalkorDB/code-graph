@@ -2,9 +2,9 @@
 
 import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react";
 import { Node } from "./model";
-import { ChevronLeft, ChevronRight, ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
+import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
-import { EventObject, Position } from "cytoscape";
+import { Position } from "cytoscape";
 import { Path } from "../page";
 
 interface Props {

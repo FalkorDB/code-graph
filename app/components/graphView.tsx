@@ -1,7 +1,7 @@
 
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, Ref, RefObject, SetStateAction, useCallback } from 'react';
+import { Dispatch, Ref, RefObject, SetStateAction, useCallback, useEffect, useState } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { Path } from '../page';
 
@@ -17,6 +17,8 @@ interface Props {
     chartRef: RefObject<any>
     selectedObj: Node | undefined
     setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
+    selectedObjects: Node[]
+    setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>
     deleteNeighbors: (nodes: Node[]) => void
@@ -26,9 +28,14 @@ interface Props {
     isPathResponse: boolean | undefined
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
+    cooldownTicks: number | undefined
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
+    cooldownTime: number | undefined
+    setCooldownTime: Dispatch<SetStateAction<number>>
 }
 
 const NODE_SIZE = 6;
+const PADDING = 2;
 
 export default function GraphView({
     data,
@@ -37,6 +44,8 @@ export default function GraphView({
     chartRef,
     selectedObj,
     setSelectedObj,
+    selectedObjects,
+    setSelectedObjects,
     setPosition,
     onFetchNode,
     deleteNeighbors,
@@ -45,10 +54,26 @@ export default function GraphView({
     setPath,
     isPathResponse,
     selectedPathId,
-    setSelectedPathId
+    setSelectedPathId,
+    cooldownTicks,
+    cooldownTime,
+    setCooldownTicks,
+    setCooldownTime
 }: Props) {
-    const unsetSelectedObj = () => {
+
+    useEffect(() => {
+        setCooldownTicks(undefined)
+        setCooldownTime(2000)
+    }, [graph.Id])
+
+    useEffect(() => {
+        setCooldownTicks(undefined)
+        setCooldownTime(1000)
+    }, [graph.getElements().length])
+
+    const unsetSelectedObjects = () => {
         setSelectedObj(undefined)
+        setSelectedObjects([])
     }
 
     const handelNodeClick = (node: Node, evt: MouseEvent) => {
@@ -62,11 +87,23 @@ export default function GraphView({
             })
             return
         }
+
+        if (evt.ctrlKey) {
+            if (selectedObjects.some(obj => obj.id === node.id)) {
+                setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
+            } else {
+                setSelectedObjects([...selectedObjects, node])
+            }
+        } else { 
+            setSelectedObjects([])
+        }
+        
         setSelectedObj(node)
         setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
     const handelLinkClick = (link: Link) => {
+        unsetSelectedObjects()
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
     }
@@ -125,7 +162,7 @@ export default function GraphView({
                             ctx.lineWidth = 0.5
                         } else {
                             ctx.fillStyle = '#E5E5E5';
-                            ctx.strokeStyle = 'black';
+                            ctx.strokeStyle = 'gray';
                             ctx.lineWidth = 0.5
                         }
                     } else if (isPathResponse === undefined) {
@@ -140,18 +177,38 @@ export default function GraphView({
                         } else {
                             ctx.fillStyle = node.color;
                             ctx.strokeStyle = 'black';
-                            ctx.lineWidth = selectedObj?.id === node.id ? 1 : 0.5
+                            ctx.lineWidth = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id ? 1 : 0.5
                         }
                     } else {
                         ctx.fillStyle = node.color;
                         ctx.strokeStyle = 'black';
-                        ctx.lineWidth = selectedObj?.id === node.id ? 1 : 0.5
+                        ctx.lineWidth = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id ? 1 : 0.5
+                    }
+
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = '4px Arial';
+                    const textWidth = ctx.measureText(node.name).width;
+                    const ellipsis = '...';
+                    const ellipsisWidth = ctx.measureText(ellipsis).width;
+                    const nodeSize = NODE_SIZE * 2 - PADDING;
+
+                    let { name } = { ...node }
+
+                    if (textWidth > nodeSize) {
+                        name = node.name;
+                        while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
+                            name = name.slice(0, -1);
+                        }
+                        name += ellipsis;
                     }
 
                     ctx.beginPath();
                     ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
                     ctx.stroke();
                     ctx.fill();
+                    ctx.fillStyle = 'black';
+                    ctx.fillText(name, node.x, node.y);
                 }}
                 linkCanvasObject={(link, ctx) => {
                     if (!link.source.x || !link.source.y || !link.target.x || !link.target.y) return
@@ -175,19 +232,33 @@ export default function GraphView({
                         ctx.lineWidth = 0.5
                         ctx.setLineDash([]);
                     }
+
                     ctx.beginPath();
                     ctx.moveTo(link.source.x, link.source.y);
                     ctx.lineTo(link.target.x, link.target.y);
                     ctx.stroke();
-                    ctx.fill();
+                    const midX = (link.source.x + link.target.x) / 2;
+                    const midY = (link.source.y + link.target.y) / 2;
+                    ctx.fillStyle = 'white';
+                    const labelWidth = ctx.measureText(link.label).width
+                    ctx.fillRect(midX - (labelWidth + 1) / 2, midY - 2.184, labelWidth + 1, 3.833);
+                    ctx.fillStyle = 'black';
+                    ctx.font = '4px Arial';
+                    ctx.fillText(link.label, midX, midY);
                 }}
                 onNodeClick={handelNodeClick}
-                onNodeDrag={unsetSelectedObj}
+                onNodeDrag={unsetSelectedObjects}
                 onNodeRightClick={handelNodeRightClick}
                 onLinkClick={handelLinkClick}
-                onBackgroundRightClick={unsetSelectedObj}
-                onBackgroundClick={unsetSelectedObj}
-                onZoom={unsetSelectedObj}
+                onBackgroundRightClick={unsetSelectedObjects}
+                onBackgroundClick={unsetSelectedObjects}
+                onZoom={unsetSelectedObjects}
+                onEngineStop={() => {
+                    setCooldownTicks(0)
+                    setCooldownTime(500)
+                }}
+                cooldownTicks={cooldownTicks}
+                cooldownTime={cooldownTime}
             />
         </div>
     )
