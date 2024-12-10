@@ -192,6 +192,10 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//div[@data-name='node-details-panel']/main/div[1]/p[2]");
     }
 
+    private get nodedetailsPanelElements(): Locator {
+        return this.page.locator("//div[@data-name='node-details-panel']/main/div/p[1]");
+    }
+
     /* NavBar functionality */
     async clickOnFalkorDbLogo(): Promise<Page> {
         await this.page.waitForLoadState('networkidle'); 
@@ -451,4 +455,10 @@ export default class CodeGraph extends BasePage {
         return await this.nodedetailsPanelID.innerHTML();
     }
 
+    async getNodeDetailsPanelElements(): Promise<string[]> {
+        await this.elementMenuButton("View Node").click();
+        await delay(500)
+        const elements = await this.nodedetailsPanelElements.all();
+        return Promise.all(elements.map(element => element.innerHTML()));
+    }
 }

@@ -252,9 +252,7 @@ test.describe("Code graph tests", () => {
       await codeGraph.clickOnshowPathBtn();
       await codeGraph.insertInputForShowPath("1", firstNode);
       await codeGraph.insertInputForShowPath("2", secondNode);
-      const result = await codeGraph.getCanvasAnalysis();
-      console.log(result);
-      
+      const result = await codeGraph.getCanvasAnalysis();  
       const res = [];
       for (const node of result.green) {
           await codeGraph.rightClickOnNode(node.x, node.y);
@@ -262,7 +260,6 @@ test.describe("Code graph tests", () => {
           await codeGraph.clickOnNodeDetailsCloseBtn();
           res.push(details);
       }
-      console.log(res);
       
       expect(res.some((item) => item.includes(firstNode.toUpperCase()))).toBe(true);
       expect(res.some((item) => item.includes(secondNode.toUpperCase()))).toBe(true);
@@ -302,5 +299,30 @@ test.describe("Code graph tests", () => {
     );
     expect(containsDetails).toBe(true);
   });
- 
-});
+
+  test(`Validate view node panel keys for required and optional fields`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await codeGraph.selectGraph(GRAPH_ID);
+    const analysis = await codeGraph.getCanvasAnalysis();
+    const requiredKeys: string[] = ['id', 'name', 'args', 'path', 'src_end', 'src_start'];
+    const optionalKeys: string[] = ['src']; 
+    await Promise.all(
+        analysis.green.slice(0, 2).map(async (node) => {
+            await codeGraph.rightClickOnNode(node.x, node.y);
+            const elements = await codeGraph.getNodeDetailsPanelElements();
+            
+            requiredKeys.forEach((key) => {
+                const isKeyPresent = elements.some((element) => element.includes(key));
+                expect(isKeyPresent).toBe(true); 
+            });
+            optionalKeys.forEach((key) => {
+                const isKeyPresent = elements.some((element) => element.includes(key));
+                if (isKeyPresent) {
+                  expect(isKeyPresent).toBe(true); 
+                }
+            });
+        })
+    );
+  });
+
+ });
