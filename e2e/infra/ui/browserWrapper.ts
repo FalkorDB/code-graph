@@ -13,9 +13,9 @@ export default class BrowserWrapper {
         if (!this.browser) {
             this.browser = await chromium.launch();
         }
-        if (!this.context) {
-            this.context = await this.browser.newContext();
-        }
+        this.context = await this.browser.newContext({
+            permissions: ['clipboard-read', 'clipboard-write'],
+        });
         if (!this.page) {
             this.page = await this.context.newPage();
         }
