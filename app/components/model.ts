@@ -162,7 +162,7 @@ export class Graph {
       newElements.nodes.push(node)
     })
 
-    if (!results.edges) {
+    if (!("edges" in results)) {
       results.edges = results.links 
     }
 

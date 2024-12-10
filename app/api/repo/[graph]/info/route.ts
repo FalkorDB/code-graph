@@ -1,28 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEnvVariables } from "@/app/api/utils";
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
-    const repo = (await params).graph;
-    const node_ids = (await request.json()).nodeIds.map((id: string) => Number(id));
+    const repo = (await params).graph
 
     try {
 
         const { url, token } = getEnvVariables();
 
-        if (node_ids.length === 0) {
-            throw new Error("nodeIds is required");
-        }
-
-        const result = await fetch(`${url}/get_neighbors`, {
+        const result = await fetch(`${url}/repo_info`, {
             method: 'POST',
-            body: JSON.stringify({ node_ids, repo }),
+            body: JSON.stringify({ repo }),
             headers: {
-                "Content-Type": 'application/json',
                 "Authorization": token,
+                "Content-Type": 'application/json'
             },
             cache: 'no-store'
         })
+
+        if (!result.ok) {
+            throw new Error(await result.text())
+        }
 
         const json = await result.json()
 

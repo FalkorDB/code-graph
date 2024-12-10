@@ -11,7 +11,7 @@ interface Props {
     obj: Node | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
-    handelRemove: (nodes: number[]) => void;
+    handleRemove: (nodes: number[]) => void;
     position: Position | undefined;
     url: string;
     handelExpand: (nodes: Node[], expand: boolean) => void;
@@ -19,7 +19,7 @@ interface Props {
 }
 
 
-export default function ElementMenu({ obj, objects, setPath, handelRemove, position, url, handelExpand, parentRef }: Props) {
+export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handelExpand, parentRef }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
 
@@ -62,7 +62,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove(objects.map(o => o.id))}
+                                onClick={() => handleRemove(objects.map(o => o.id))}
                             >
                                 <EyeOff color="white" />
                             </button>
@@ -74,7 +74,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand(objects, false)}
+                                onClick={() => handleExpand(objects, false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
@@ -90,7 +90,7 @@ export default function ElementMenu({ obj, objects, setPath, handelRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handelRemove([obj.id])}
+                                onClick={() => handleRemove([obj.id])}
                             >
                                 <EyeOff color="white" />
                             </button>

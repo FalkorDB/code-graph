@@ -13,6 +13,7 @@ import Input from './Input';
 import { Checkbox } from '@/components/ui/checkbox';
 import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
+import { prepareArg } from '../utils';
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -77,7 +78,7 @@ export function CodeGraph({
 
     useEffect(() => {
         if (!selectedValue) return
-        handelSelectedValue(selectedValue)
+        handleSelectedValue(selectedValue)
     }, [selectedValue])
 
     useEffect(() => {
@@ -96,8 +97,8 @@ export function CodeGraph({
     }, [selectedObjects, selectedObj]);
 
     async function fetchCount() {
-        const result = await fetch(`/api/repo/${graphName}`, {
-            method: 'POST'
+        const result = await fetch(`/api/repo/${prepareArg(graphName)}/info`, {
+            method: 'GET'
         })
 
         if (!result.ok) {
@@ -116,39 +117,40 @@ export function CodeGraph({
         setURL(json.result.info.repo_url)
     }
 
-
     useEffect(() => {
         if (!graphName) return
 
         const run = async () => {
             fetchCount()
-            // const result = await fetch(`/api/repo/${graphName}/?type=commit`, {
-            //     method: 'POST'
-            // })
+            /*
+            const result = await fetch(`/api/repo/${prepareArg(graphName)}/commit`, {
+                method: 'GET'
+            })
 
-            // if (!result.ok) {
-            //     toast({
-            //         variant: "destructive",
-            //         title: "Uh oh! Something went wrong.",
-            //         description: await result.text(),
-            //     })
-            //     return
-            // }
+            if (!result.ok) {
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description: await result.text(),
+                })
+                return
+            }
 
-            // const json = await result.json()
-            // const commitsArr = json.result.commits
-            // setCommits(commitsArr)
+            const json = await result.json()
+            const commitsArr = json.result.commits
+            setCommits(commitsArr)
 
-            // if (commitsArr.length > 0) {
-            //     setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
-            //     setCommitIndex(commitsArr.length)
-            // }
+            if (commitsArr.length > 0) {
+                setCurrentCommit(commitsArr[commitsArr.length - 1].hash)
+                setCommitIndex(commitsArr.length)
+            }
+            */
         }
 
         run()
     }, [graphName])
 
-    function handelSelectedValue(value: string) {
+    function handleSelectedValue(value: string) {
         setGraphName(value)
         onFetchGraph(value)
     }
@@ -266,7 +268,7 @@ export function CodeGraph({
                 <Combobox
                     options={options}
                     selectedValue={graphName}
-                    onSelectedValue={handelSelectedValue}
+                    onSelectedValue={handleSelectedValue}
                 />
             </header>
             <div className='h-1 grow flex flex-col'>
@@ -281,7 +283,7 @@ export function CodeGraph({
                                             value={searchNode.name}
                                             onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
-                                            handelSubmit={handelSearchSubmit}
+                                            handleSubmit={handelSearchSubmit}
                                             node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
@@ -341,7 +343,7 @@ export function CodeGraph({
                                         setPath(path)
                                         setSelectedObj(undefined)
                                     }}
-                                    handelRemove={handelRemove}
+                                    handleRemove={handelRemove}
                                     position={position}
                                     url={url}
                                     handelExpand={handleExpand}

@@ -1,33 +1,21 @@
 import { getEnvVariables } from "@/app/api/utils";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string, node: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
 
-    const p = await params;
-
-    const repo = p.graph;
-    const src = Number(p.node);
-    const dest = Number(request.nextUrl.searchParams.get('targetId'))
+    const repo = (await params).graph
 
     try {
 
-        if (!dest) {
-            throw new Error("targetId is required");
-        }
-
         const { url, token } = getEnvVariables()
 
-        const result = await fetch(`${url}/find_paths`, {
+        const result = await fetch(`${url}/list_commits`, {
             method: 'POST',
+            body: JSON.stringify({ repo }),
             headers: {
                 "Authorization": token,
-                'Content-Type': 'application/json'
+                "Content-Type": 'application/json'
             },
-            body: JSON.stringify({
-                repo,
-                src,
-                dest
-            }),
             cache: 'no-store'
         })
 
@@ -42,4 +30,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         console.error(err)
         return NextResponse.json((err as Error).message, { status: 400 })
     }
+}
+
+export async function POST(request: NextRequest, { params }: { params: Promise<{ graph: string }> }) {
+
 }

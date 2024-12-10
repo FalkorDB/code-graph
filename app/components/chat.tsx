@@ -1,12 +1,14 @@
 import { toast } from "@/components/ui/use-toast";
 import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
+import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
 import { Graph, GraphData, Link } from "./model";
 import { cn } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { prepareArg } from "../utils";
 
 type PathData = {
     nodes: any[]
@@ -21,6 +23,50 @@ enum MessageTypes {
     Pending,
     Text,
 }
+
+const EDGE_STYLE = {
+    "line-color": "gray",
+    "target-arrow-color": "gray",
+    "opacity": 0.5,
+}
+
+
+const PATH_EDGE_STYLE = {
+    width: 0.5,
+    "line-style": "dashed",
+    "line-color": "#FF66B3",
+    "arrow-scale": 0.3,
+    "target-arrow-color": "#FF66B3",
+    "opacity": 1
+}
+
+const SELECTED_PATH_EDGE_STYLE = {
+    width: 1,
+    "line-style": "solid",
+    "line-color": "#FF66B3",
+    "arrow-scale": 0.6,
+    "target-arrow-color": "#FF66B3",
+};
+
+const NODE_STYLE = {
+    "border-width": 0.5,
+    "color": "gray",
+    "border-color": "black",
+    "background-color": "gray",
+    "opacity": 0.5
+}
+
+const PATH_NODE_STYLE = {
+    "border-width": 0.5,
+    "border-color": "#FF66B3",
+    "border-opacity": 1,
+}
+
+const SELECTED_PATH_NODE_STYLE = {
+    "border-width": 1,
+    "border-color": "#FF66B3",
+    "border-opacity": 1,
+};
 
 interface Message {
     type: MessageTypes;
@@ -39,14 +85,22 @@ interface Props {
     setData: Dispatch<SetStateAction<GraphData>>
 }
 
+const SUGGESTIONS = [
+    "List a few recursive functions",
+    "What is the name of the most used method?",
+    "Who is calling the most used method?",
+    "Which function has the largest number of arguments? List a few arguments",
+    "Show a calling path between the drop_edge_range_index function and _query, only return function(s) names",
+]
+
 const RemoveLastPath = (messages: Message[]) => {
     const index = messages.findIndex((m) => m.type === MessageTypes.Path)
-
+    
     if (index !== -1) {
         messages = [...messages.slice(0, index - 2), ...messages.slice(index + 1)];
         messages = RemoveLastPath(messages)
     }
-
+    
     return messages
 }
 
@@ -54,7 +108,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
-
+    
     // Holds the messages in the chat
     const [paths, setPaths] = useState<PathData[]>([]);
 
@@ -64,30 +118,31 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     const [query, setQuery] = useState('');
 
     const [tipOpen, setTipOpen] = useState(false);
-
+    
+    const [sugOpen, setSugOpen] = useState(false);
+    
     // A reference to the chat container to allow scrolling to the bottom
     const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
-
-    const tipRef: React.RefObject<HTMLDivElement> = useRef(null);
-
+    
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
-
-    useEffect(() => {
-        if (tipOpen) {
-            tipRef.current?.focus()
-        }
-    }, [tipOpen])
-
+    
     useEffect(() => {
         const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
-
+        
         handelSetSelectedPath(p)
     }, [selectedPathId])
+    
+    // Scroll to the bottom of the chat on new message
+    useEffect(() => {
+        setTimeout(() => {
+            containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
+        }, 300)
+    }, [messages]);
 
     useEffect(() => {
-        handelSubmit()
+        handleSubmit()
     }, [path])
 
     useEffect(() => {
@@ -154,11 +209,13 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }
 
     // Send the user query to the server
-    async function sendQuery(event: FormEvent) {
+    async function sendQuery(event?: FormEvent, sugQuery?: string) {
 
-        event.preventDefault();
+        event?.preventDefault();
 
-        const q = query.trim()
+        if (isSendMessage) return
+
+        const q = query?.trim() || sugQuery!
 
         if (!q) {
             toast({
@@ -173,7 +230,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
         setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { type: MessageTypes.Pending }]);
 
-        const result = await fetch(`/api/chat/${repo}?msg=${encodeURIComponent(q)}`, {
+        const result = await fetch(`/api/chat/${prepareArg(repo)}?msg=${prepareArg(q)}`, {
             method: 'POST'
         })
 
@@ -194,19 +251,12 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
     }
 
-    // Scroll to the bottom of the chat on new message
-    useEffect(() => {
-        setTimeout(() => {
-            containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
-        }, 300)
-    }, [messages]);
-
-    const handelSubmit = async () => {
+    const handleSubmit = async () => {
         setSelectedPath(undefined)
 
         if (!path?.start?.id || !path.end?.id) return
 
-        const result = await fetch(`/api/repo/${repo}/${path.start.id}/?targetId=${path.end.id}`, {
+        const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
         })
 
@@ -229,7 +279,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             return
         }
 
-        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((node: any, i: number) => i % 2 === 0), links: p.filter((edge: any, i: number) => i % 2 !== 0) }))
+        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((n: any, i: number) => i % 2 === 0), links: p.filter((l: any , i: number) => i % 2 !== 0) }))
         formattedPaths.forEach((p: any) => graph.extend(p, false, path))
 
         setPaths(formattedPaths)
@@ -239,9 +289,10 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setData({ ...graph.Elements })
     }
 
-    const getTip = () =>
+    const getTip = (disabled = false) =>
         <>
             <button
+                disabled={disabled}
                 className="Tip"
                 onClick={() => {
                     setTipOpen(false)
@@ -370,8 +421,8 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }
 
     return (
-        <div className="h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
-            <main data-name="main-chat" ref={containerRef} className="relative grow flex flex-col overflow-y-auto gap-6 px-4">
+        <div className="relative h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
+            <main data-name="main-chat" ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
                 {
                     messages.length === 0 &&
                     <>
@@ -391,27 +442,52 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                 }
                 {
                     tipOpen &&
-                    <div ref={tipRef} className="bg-white fixed bottom-[85px] border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" onBlur={() => setTipOpen(false)}>
-                        {getTip()}
+                    <div ref={ref => ref?.focus()} className="bg-white absolute bottom-24 border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onBlur={() => setTipOpen(false)}>
+                        {getTip(isSendMessage)}
                     </div>
                 }
             </main>
-            <footer>
-                {
-                    repo &&
-                    <div className="flex gap-4 px-4">
-                        <button data-name="lightbulb" disabled={isSendMessage} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]" onClick={() => setTipOpen(prev => !prev)}>
-                            <Lightbulb />
-                        </button>
-                        <form className="grow flex items-center border rounded-md pr-2" onSubmit={sendQuery}>
-                            <input disabled={isSendMessage} className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                            <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
-                                <ArrowRight color="white" />
+            <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
+                <footer>
+                    {
+                        repo &&
+                        <div className="flex gap-4 px-4">
+                            <button data-name="lightbulb" onClick={() => setTipOpen(true)} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                                <Lightbulb />
                             </button>
-                        </form>
-                    </div>
-                }
-            </footer>
+                            <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
+                                        <ArrowDown color="white" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <input className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                                <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                                    <ArrowRight color="white" />
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </footer>
+                <DropdownMenuContent className="flex flex-col mb-4 w-[20dvw]" side="top">
+                    {
+                        SUGGESTIONS.map((s, i) => (
+                            <button
+                                disabled={isSendMessage}
+                                type="submit"
+                                key={i}
+                                className="p-2 text-left hover:bg-gray-200"
+                                onClick={() => {
+                                    sendQuery(undefined, s)
+                                    setSugOpen(false)
+                                }}
+                            >
+                                {s}
+                            </button>
+                        ))
+                    }
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 }
