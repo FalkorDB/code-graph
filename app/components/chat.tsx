@@ -219,7 +219,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         : elements.nodes.push(e)
                 }
             })
-            console.log(chart.add(graph.extend(elements)).map((e) => e.id()));
 
             chart.elements().filter((e) => {
                 console.log(e.id());
@@ -230,6 +229,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 } else if (e.isNode()) {
                     e.removeStyle().style(PATH_NODE_STYLE);
                 }
+
                 if (e.isEdge()) {
                     e.removeStyle().style(SELECTED_PATH_EDGE_STYLE);
                 }
@@ -363,7 +363,6 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 className="Tip"
                 onClick={() => {
                     setTipOpen(false)
-                    setPath({})
                     setMessages(prev => [
                         ...RemoveLastPath(prev),
                         { type: MessageTypes.Query, text: "Create a path" },
@@ -378,7 +377,10 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         type: MessageTypes.Response,
                         text: "Please select a starting point and the end point. Select or press relevant item on the graph"
                     }]), 300)
-                    setTimeout(() => setMessages(prev => [...prev, { type: MessageTypes.Path }]), 4000)
+                    setTimeout(() => {
+                        setPath({})
+                        setMessages(prev => [...prev, { type: MessageTypes.Path }])
+                    }, 4000)
                 }}
             >
                 <Lightbulb />
@@ -455,8 +457,9 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 key={i}
                                 className={cn(
                                     "flex text-wrap border p-2 gap-2 rounded-md",
-                                    p.nodes.length === selectedPath?.nodes.length &&
-                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]",
+                                    p.nodes.length === selectedPath?.nodes.length 
+                                      && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) 
+                                      && "border-[#FF66B3] bg-[#FFF0F7]",
                                     message.graphName !== graph.Id && "opacity-50 bg-gray-200"
                                 )}
                                 title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
@@ -469,13 +472,14 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                         });
                                         return;
                                     }
+
                                     if (p.nodes.length === selectedPath?.nodes.length &&
                                         selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return;
                                     handleSetSelectedPath(p);
                                     setIsPath(true);
                                 }}
                             >
-                                <p className="font-bold">#{i}</p>
+                                <p className="font-bold">#{i + 1}</p>
                                 <div className="flex flex-wrap">
                                     {p.nodes.map((node: any, j: number) => (
                                         <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
@@ -533,7 +537,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
                                 <DropdownMenuTrigger asChild>
-                                    <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
+                                    <button data-name="questionOptionsMenu" className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
                                         <ArrowDown color="white" />
                                     </button>
                                 </DropdownMenuTrigger>

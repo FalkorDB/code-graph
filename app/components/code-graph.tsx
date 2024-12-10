@@ -21,6 +21,7 @@ interface Props {
     onFetchGraph: (graphName: string) => void,
     onFetchNode: (nodeIds: string[]) => Promise<any[]>,
     options: string[]
+    setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     chartRef: MutableRefObject<cytoscape.Core | null>
@@ -119,6 +120,7 @@ export function CodeGraph({
     onFetchGraph,
     onFetchNode,
     options,
+    setOptions,
     isShowPath,
     setPath,
     chartRef,
@@ -380,7 +382,7 @@ export function CodeGraph({
         chartNode.select()
         chartNode.style({ display: "element" })
         setIsSelectedObj(String(n.id))
-        const layout = { ...LAYOUT, padding: 250 }
+        const layout = { ...LAYOUT, padding: chart.width() / 5 }
         chartNode.layout(layout).run()
         setSearchNode(n)
     }
@@ -397,6 +399,7 @@ export function CodeGraph({
             <header className="flex flex-col gap-4">
                 <Combobox
                     options={options}
+                    setOptions={setOptions}
                     selectedValue={graphName}
                     onSelectedValue={handleSelectedValue}
                 />
@@ -432,8 +435,8 @@ export function CodeGraph({
                                         </button>
                                     }
                                 </div>
-                                <div className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
-                                    <div className="flex gap-4 text-gray-500">
+                                <div data-name="canvas-info-panel" className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
+                                    <div data-name="metrics-panel" className="flex gap-4 text-gray-500">
                                         <p>{nodesCount} Nodes</p>
                                         <p>{edgesCount} Edges</p>
                                     </div>
