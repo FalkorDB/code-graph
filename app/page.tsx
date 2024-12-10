@@ -66,28 +66,6 @@ export default function Home() {
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const chartRef = useRef<any>()
 
-  useEffect(() => {
-    const run = async () => {
-      const result = await fetch(`/api/repo`, {
-        method: 'GET',
-      })
-
-      if (!result.ok) {
-        toast({
-          variant: "destructive",
-          title: "Uh oh! Something went wrong.",
-          description: await result.text(),
-        })
-        return
-      }
-
-      const json = await result.json()
-      setOptions(json.result)
-    }
-
-    run()
-  }, [])
-
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
@@ -282,6 +260,7 @@ export default function Home() {
               setData={setData}
               chartRef={chartRef}
               options={options}
+              setOptions={setOptions}
               onFetchGraph={onFetchGraph}
               onFetchNode={onFetchNode}
               setPath={setPath}

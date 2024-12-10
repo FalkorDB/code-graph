@@ -71,7 +71,8 @@ const SELECTED_PATH_NODE_STYLE = {
 interface Message {
     type: MessageTypes;
     text?: string;
-    paths?: PathData[];
+    paths?: { nodes: any[], links: any[] }[];
+    graphName?: string;
 }
 
 interface Props {
@@ -187,6 +188,17 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             console.log(graph.Elements.nodes.map(e => e.id));
             console.log(p.links.map(l => l.id));
             console.log(graph.Elements.links.map(e => e.id));
+            const elements: any = { nodes: [], edges: [] };
+            [...p.nodes, ...p.links].forEach(e => {
+                let element = graph.getElements().find(el => el.id === e.id)
+                if (!element) {
+                    const type = "src_node" in e
+                    e = type ? { ...e, id: e.id } : e
+                    type
+                        ? elements.edges.push(e)
+                        : elements.nodes.push(e)
+                }
+            })
             graph.getElements().filter(e => "source" in e ? p.links.some(l => l.id === e.id) : p.nodes.some(n => n.id === e.id)).forEach(e => {
                 if ((e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id) || "source" in e) {
                     e.isPathSelected = true
@@ -283,7 +295,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         formattedPaths.forEach((p: any) => graph.extend(p, false, path))
 
         setPaths(formattedPaths)
-        setMessages(prev => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths }])
+        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
         setPath(undefined)
         setIsPathResponse(true)
         setData({ ...graph.Elements })
@@ -388,8 +400,24 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                         message.paths.map((p, i: number) => (
                             <button
                                 key={i}
-                                className={cn("flex text-wrap border p-2 gap-2 rounded-md", p.nodes.length === selectedPath?.nodes.length && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && "border-[#FF66B3] bg-[#FFF0F7]")}
+                                className={cn(
+                                    "flex text-wrap border p-2 gap-2 rounded-md",
+                                    p.nodes.length === selectedPath?.nodes.length 
+                                      && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) 
+                                      && "border-[#FF66B3] bg-[#FFF0F7]",
+                                    message.graphName !== graph.Id && "opacity-50 bg-gray-200"
+                                )}
+                                title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
+                                disabled={message.graphName !== graph.Id}
                                 onClick={() => {
+                                    if (message.graphName !== graph.Id) {
+                                        toast({
+                                            title: "Path Disabled",
+                                            description: "The path is disabled because it is not from this graph.",
+                                        });
+                                        return;
+                                    }
+                                    
                                     if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
                                     if (!isPathResponse) {
                                         setIsPathResponse(true)
@@ -397,15 +425,13 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                     handelSetSelectedPath(p)
                                 }}
                             >
-                                <p className="font-bold">#{i}</p>
+                                <p className="font-bold">#{i + 1}</p>
                                 <div className="flex flex-wrap">
-                                    {
-                                        p.nodes.map((node: any, j: number) => (
-                                            <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
-                                                {` - ${node.properties.name}`}
-                                            </span>
-                                        ))
-                                    }
+                                    {p.nodes.map((node: any, j: number) => (
+                                        <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
+                                            {` - ${node.properties.name}`}
+                                        </span>
+                                    ))}
                                 </div>
                             </button>
                         ))
@@ -457,7 +483,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
                                 <DropdownMenuTrigger asChild>
-                                    <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
+                                    <button data-name="questionOptionsMenu" className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
                                         <ArrowDown color="white" />
                                     </button>
                                 </DropdownMenuTrigger>
