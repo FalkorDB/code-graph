@@ -71,7 +71,8 @@ export default function GraphView({
         setCooldownTime(1000)
     }, [graph.getElements().length])
 
-    const unsetSelectedObjects = () => {
+    const unsetSelectedObjects = (evt?: MouseEvent) => {
+        if (evt?.ctrlKey) return
         setSelectedObj(undefined)
         setSelectedObjects([])
     }
@@ -91,19 +92,20 @@ export default function GraphView({
         if (evt.ctrlKey) {
             if (selectedObjects.some(obj => obj.id === node.id)) {
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
+                return
             } else {
                 setSelectedObjects([...selectedObjects, node])
             }
-        } else { 
+        } else {
             setSelectedObjects([])
         }
-        
+
         setSelectedObj(node)
         setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
-    const handelLinkClick = (link: Link) => {
-        unsetSelectedObjects()
+    const handelLinkClick = (link: Link, evt: MouseEvent) => {
+        unsetSelectedObjects(evt)
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
     }
@@ -185,6 +187,12 @@ export default function GraphView({
                         ctx.lineWidth = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id ? 1 : 0.5
                     }
 
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
+                    ctx.stroke();
+                    ctx.fill();
+
+                    ctx.fillStyle = 'black';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.font = '4px Arial';
@@ -192,9 +200,9 @@ export default function GraphView({
                     const ellipsis = '...';
                     const ellipsisWidth = ctx.measureText(ellipsis).width;
                     const nodeSize = NODE_SIZE * 2 - PADDING;
-
                     let { name } = { ...node }
 
+                    // truncate text if it's too long
                     if (textWidth > nodeSize) {
                         name = node.name;
                         while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
@@ -203,16 +211,13 @@ export default function GraphView({
                         name += ellipsis;
                     }
 
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
-                    ctx.stroke();
-                    ctx.fill();
-                    ctx.fillStyle = 'black';
+                    // add label
                     ctx.fillText(name, node.x, node.y);
                 }}
                 linkCanvasObject={(link, ctx) => {
                     if (!link.source.x || !link.source.y || !link.target.x || !link.target.y) return
 
+                    //give path links a different color
                     if (isPathResponse || isPathResponse === undefined) {
                         if (link.isPathSelected) {
                             ctx.strokeStyle = '#FF66B3';
@@ -234,28 +239,57 @@ export default function GraphView({
                     }
 
                     ctx.beginPath();
-                    ctx.moveTo(link.source.x, link.source.y);
-                    ctx.lineTo(link.target.x, link.target.y);
+
+                    if (link.source.id === link.target.id) {
+                        // handel self closing link
+                        ctx.lineWidth = ctx.lineWidth * 2
+                        ctx.moveTo(link.source.x, link.source.y);
+                        ctx.arcTo(link.target.x + 20, link.target.y + 35, link.target.x - 20, link.target.y + 20, 10);
+                        ctx.arcTo(link.target.x - 20, link.target.y + 20, link.target.x, link.target.y, 10);
+                        ctx.closePath();
+                    } else {
+                        if (link.source.id === 4) {   
+                            console.log(link.source.x, link.source.y);
+                        }
+                        
+                        // handel multiple links between same nodes
+                        const sameNodeLinks = data.links.filter(l =>
+                            (l.source.id === link.source.id && l.target.id === link.target.id) ||
+                            (l.source.id === link.target.id && l.target.id === link.source.id)
+                        );
+
+                        const linkIndex = sameNodeLinks.findIndex(l => l.id === link.id);
+                        const offset = (linkIndex - (sameNodeLinks.length - 1) / 2) * 5;
+
+                        // add link
+                        ctx.moveTo(link.source.x, link.source.y);
+                        ctx.lineTo(link.target.x + offset, link.target.y + offset);
+                    }
                     ctx.stroke();
+
+                    // add label box
                     const midX = (link.source.x + link.target.x) / 2;
                     const midY = (link.source.y + link.target.y) / 2;
                     ctx.fillStyle = 'white';
+                    ctx.fill();
                     const labelWidth = ctx.measureText(link.label).width
                     ctx.fillRect(midX - (labelWidth + 1) / 2, midY - 2.184, labelWidth + 1, 3.833);
+
+                    // add label
                     ctx.fillStyle = 'black';
                     ctx.font = '4px Arial';
                     ctx.fillText(link.label, midX, midY);
                 }}
                 onNodeClick={handelNodeClick}
-                onNodeDrag={unsetSelectedObjects}
+                onNodeDrag={() => unsetSelectedObjects()}
                 onNodeRightClick={handelNodeRightClick}
                 onLinkClick={handelLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
-                onZoom={unsetSelectedObjects}
+                onZoom={() => unsetSelectedObjects()}
                 onEngineStop={() => {
                     setCooldownTicks(0)
-                    setCooldownTime(500)
+                    setCooldownTime(0)
                 }}
                 cooldownTicks={cooldownTicks}
                 cooldownTime={cooldownTime}

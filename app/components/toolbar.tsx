@@ -9,10 +9,17 @@ interface Props {
 
 export function Toolbar({ chartRef, className }: Props) {
 
-    function handleZoomClick(changefactor: number) {
-        let chart = chartRef.current
+    const handleZoomClick = (changefactor: number) => {
+        const chart = chartRef.current
         if (chart) {
             chart.zoom(chart.zoom() * changefactor)
+        }
+    }
+
+    const handleCenterClick = () => {
+        const chart = chartRef.current
+        if (chart) {
+            chart.zoomToFit(1000, 40)
         }
     }
 
@@ -27,7 +34,7 @@ export function Toolbar({ chartRef, className }: Props) {
             </button>
             <button
                 className="border p-2"
-                onClick={() => chartRef.current?.zoomToFit(1000, 40)}
+                onClick={() => handleCenterClick()}
                 title="Center"
             >
                 <CircleDot />

@@ -64,16 +64,9 @@ export function CodeGraph({
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
-    const [containerWidth, setContainerWidth] = useState(0);
     const [cooldownTicks, setCooldownTicks] = useState<number>()
     const [cooldownTime, setCooldownTime] = useState<number>(2000)
     const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            setContainerWidth(containerRef.current.clientWidth);
-        }
-    }, [containerRef.current]);
 
     useEffect(() => {
         setData({ ...graph.Elements })
@@ -159,21 +152,14 @@ export function CodeGraph({
     }
 
     function onCategoryClick(name: string, show: boolean) {
-        const elements: Node[] = []
-
         graph.Categories.find(c => c.name === name)!.show = show
 
         graph.Elements.nodes.forEach(node => {
-            if (node.category === name) {
-                node.visibility = show
-                elements.push(node)
-            }
+            if (!(node.category === name)) return
+            node.visibility = show
         })
 
         graph.visibleLinks()
-
-        setCooldownTicks(undefined)
-        setCooldownTime(1000)
 
         setData({ ...graph.Elements })
     }
@@ -260,15 +246,12 @@ export function CodeGraph({
     }
 
     const handelRemove = (ids: number[]) => {
-        graph.Elements = {
-            nodes: graph.Elements.nodes.map(node => ids.includes(node.id) ? { ...node, visibility: false } : node),
-            links: graph.Elements.links
-        }
+        graph.Elements.nodes.forEach(node => {
+            if (!ids.includes(node.id)) return
+            node.visibility = false
+        })
 
         graph.visibleLinks(ids, false)
-
-        setCooldownTicks(undefined)
-        setCooldownTime(1000)
 
         setData({ ...graph.Elements })
     }
@@ -300,22 +283,42 @@ export function CodeGraph({
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
                                     </div>
-                                    {
-                                        (isPathResponse || isPathResponse === undefined) &&
-                                        <button
-                                            className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
-                                            onClick={() => {
-                                                graph.getElements().forEach((element) => {
-                                                    element.isPath = false
-                                                    element.isPathSelected = false
-                                                })
-                                                setIsPathResponse(false)
-                                            }}
-                                        >
-                                            <X size={15} />
-                                            <p>Clear Graph</p>
-                                        </button>
-                                    }
+                                    <div className="flex gap-2">
+                                        {
+                                            (isPathResponse || isPathResponse === undefined) &&
+                                            <button
+                                                className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
+                                                onClick={() => {
+                                                    graph.getElements().forEach((element) => {
+                                                        element.isPath = false
+                                                        element.isPathSelected = false
+                                                    })
+                                                    setIsPathResponse(false)
+                                                }}
+                                            >
+                                                <X size={15} />
+                                                <p>Reset Graph</p>
+                                            </button>
+                                        }
+                                        {
+                                            (graph.Elements.nodes.some(e => !e.visibility)) &&
+                                            <button
+                                                className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
+                                                onClick={() => {
+                                                    graph.Categories.forEach(c => c.show = true)
+                                                    graph.Elements.nodes.forEach((element) => {
+                                                        element.visibility = true
+                                                    })
+                                                    graph.visibleLinks()
+
+                                                    setData({ ...graph.Elements })
+                                                }}
+                                            >
+                                                <X size={15} />
+                                                <p>Unhide Nodes</p>
+                                            </button>
+                                        }
+                                    </div>
                                 </div>
                                 <div data-name="canvas-info-panel" className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
                                     <div data-name="metrics-panel" className="flex gap-4 text-gray-500">

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, GraphData, Node } from './components/model';
+import { Graph, GraphData } from './components/model';
 import { BookOpen, Github, HomeIcon, X } from 'lucide-react';
 import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -11,8 +11,6 @@ import { toast } from '@/components/ui/use-toast';
 import { GraphContext } from './components/provider';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
 import { prepareArg } from './utils';
 
 export type PathNode = {
@@ -65,6 +63,10 @@ export default function Home() {
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const chartRef = useRef<any>()
+
+  useEffect(() => {
+    setIsPathResponse(false)
+  }, [graph.Id])
 
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

@@ -81,8 +81,8 @@ interface Props {
     setPath: Dispatch<SetStateAction<Path | undefined>>
     graph: Graph
     selectedPathId: number | undefined
-    isPathResponse: boolean
-    setIsPathResponse: (isPathResponse: boolean) => void
+    isPathResponse: boolean | undefined
+    setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
 }
 
@@ -176,7 +176,6 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             }
             return p
         })
-        debugger
         if (isPathResponse && paths.length > 0 && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...p.nodes, ...p.links].some((el: any) => el.id === e.id)))) {
             graph.Elements.links.forEach(e => {
                 if (p.links.some(el => el.id === e.id)) {
@@ -184,21 +183,20 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                 }
             })
         } else {
-            console.log(p.nodes[p.nodes.length - 1].id, p.nodes[0].id);
-            console.log(graph.Elements.nodes.map(e => e.id));
-            console.log(p.links.map(l => l.id));
-            console.log(graph.Elements.links.map(e => e.id));
-            const elements: any = { nodes: [], edges: [] };
-            [...p.nodes, ...p.links].forEach(e => {
-                let element = graph.getElements().find(el => el.id === e.id)
+            const elements: PathData = { nodes: [], links: [] };
+            p.nodes.forEach(node => {
+                let element = graph.Elements.nodes.find(n => n.id === node.id)
                 if (!element) {
-                    const type = "src_node" in e
-                    e = type ? { ...e, id: e.id } : e
-                    type
-                        ? elements.edges.push(e)
-                        : elements.nodes.push(e)
+                    elements.nodes.push(node)
                 }
             })
+            p.links.forEach(link => {
+                let element = graph.Elements.links.find(l => l.id === link.id)
+                if (!element) {
+                    elements.links.push(link)
+                }
+            })
+            graph.extend(elements, true, { start: p.nodes[0], end: p.nodes[p.nodes.length - 1] })
             graph.getElements().filter(e => "source" in e ? p.links.some(l => l.id === e.id) : p.nodes.some(n => n.id === e.id)).forEach(e => {
                 if ((e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id) || "source" in e) {
                     e.isPathSelected = true
@@ -402,9 +400,9 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                 key={i}
                                 className={cn(
                                     "flex text-wrap border p-2 gap-2 rounded-md",
-                                    p.nodes.length === selectedPath?.nodes.length 
-                                      && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) 
-                                      && "border-[#FF66B3] bg-[#FFF0F7]",
+                                    p.nodes.length === selectedPath?.nodes.length &&
+                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) &&
+                                    "border-[#FF66B3] bg-[#FFF0F7]",
                                     message.graphName !== graph.Id && "opacity-50 bg-gray-200"
                                 )}
                                 title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
@@ -417,10 +415,12 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                         });
                                         return;
                                     }
-                                    
+
                                     if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
+                                    
                                     if (!isPathResponse) {
-                                        setIsPathResponse(true)
+                                        setIsPathResponse(undefined)
+                                    
                                     }
                                     handelSetSelectedPath(p)
                                 }}
