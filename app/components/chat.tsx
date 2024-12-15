@@ -209,11 +209,10 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).layout(LAYOUT).run();
         } else {
             const elements: any = { nodes: [], edges: [] };
-
             [...p.nodes, ...p.edges].forEach(e => {
                 let element = chart.elements(`#${e.id}`)
                 if (element.length === 0) {
-                    const type = "src_node" in e
+                    const type = e.id.startsWith("_")
                     e = type ? { ...e, id: e.id.slice(1) } : e
                     type
                         ? elements.edges.push(e)
@@ -221,13 +220,16 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                 }
             })
 
-            chart.add(graph.extend(elements))
-            chart.elements().filter((e) => [...p.nodes, ...p.edges].some((el) => el.id == e.id())).forEach((e) => {
+            chart.elements().filter((e) => {
+                console.log(e.id());
+                return [...p.nodes, ...p.edges].some((el) => el.id == e.id())
+            }).forEach((e) => {
                 if (e.id() == p.nodes[0].id || e.id() == p.nodes[p.nodes.length - 1].id) {
                     e.removeStyle().style(SELECTED_PATH_NODE_STYLE);
                 } else if (e.isNode()) {
                     e.removeStyle().style(PATH_NODE_STYLE);
                 }
+
                 if (e.isEdge()) {
                     e.removeStyle().style(SELECTED_PATH_EDGE_STYLE);
                 }
@@ -455,13 +457,22 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 key={i}
                                 className={cn(
                                     "flex text-wrap border p-2 gap-2 rounded-md",
-                                    p.nodes.length === selectedPath?.nodes.length &&
-                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length && "border-[#FF66B3] bg-[#FFF0F7]",
+                                    p.nodes.length === selectedPath?.nodes.length 
+                                      && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) 
+                                      && "border-[#FF66B3] bg-[#FFF0F7]",
                                     message.graphName !== graph.Id && "opacity-50 bg-gray-200"
                                 )}
                                 title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
                                 disabled={message.graphName !== graph.Id}
                                 onClick={() => {
+                                    if (message.graphName !== graph.Id) {
+                                        toast({
+                                            title: "Path Disabled",
+                                            description: "The path is disabled because it is not from this graph.",
+                                        });
+                                        return;
+                                    }
+
                                     if (p.nodes.length === selectedPath?.nodes.length &&
                                         selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return;
                                     handleSetSelectedPath(p);
@@ -470,13 +481,11 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                             >
                                 <p className="font-bold">#{i + 1}</p>
                                 <div className="flex flex-wrap">
-                                    {
-                                        p.nodes.map((node: any, j: number) => (
-                                            <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
-                                                {` - ${node.properties.name}`}
-                                            </span>
-                                        ))
-                                    }
+                                    {p.nodes.map((node: any, j: number) => (
+                                        <span key={j} className={cn((j === 0 || j === p.nodes.length - 1) && "font-bold")}>
+                                            {` - ${node.properties.name}`}
+                                        </span>
+                                    ))}
                                 </div>
                             </button>
                         ))
@@ -528,7 +537,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
                                 <DropdownMenuTrigger asChild>
-                                    <button className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
+                                    <button data-name="questionOptionsMenu" className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
                                         <ArrowDown color="white" />
                                     </button>
                                 </DropdownMenuTrigger>

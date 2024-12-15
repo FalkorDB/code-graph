@@ -14,8 +14,8 @@ export class ApiCalls {
         return await result.json();
     }
 
-    async fetchLatestRepoInfo(projectName: string): Promise<fetchLatestRepoInfo>{
-        const result = await postRequest(urls.baseUrl + "api/repo/" + projectName);
+    async projectInfo(projectName: string): Promise<fetchLatestRepoInfo>{
+        const result = await getRequest(urls.baseUrl + "api/repo/" + projectName + "/info");
         return await result.json();
     }
 
