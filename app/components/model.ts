@@ -33,20 +33,21 @@ export type Link = {
   collapsed: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-
   [key: string]: any,
 }
 
 const COLORS_ORDER_NAME = [
-  "pink",
-  "yellow",
   "blue",
+  "pink",
+  "orange",
+  "turquoise",
 ]
 
 const COLORS_ORDER = [
-  "#F43F5F",
-  "#E9B306",
-  "#15B8A6",
+  "#7466FF",
+  "#FF66B3",
+  "#FF804D",
+  "#80E6E6",
 ]
 
 export function getCategoryColorValue(index: number): string {
@@ -163,7 +164,7 @@ export class Graph {
     })
 
     if (!("edges" in results)) {
-      results.edges = results.links 
+      results.edges = results.links
     }
 
     results.edges.forEach((edgeData: any) => {

@@ -64,8 +64,8 @@ export function CodeGraph({
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
-    const [cooldownTicks, setCooldownTicks] = useState<number>()
-    const [cooldownTime, setCooldownTime] = useState<number>(2000)
+    const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
+    const [cooldownTime, setCooldownTime] = useState<number>(0)
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {

@@ -63,7 +63,7 @@ export default function GraphView({
 
     useEffect(() => {
         setCooldownTicks(undefined)
-        setCooldownTime(2000)
+        setCooldownTime(4000)
     }, [graph.Id])
 
     useEffect(() => {
@@ -122,7 +122,7 @@ export default function GraphView({
                 })
                 return
             }
-
+            
             graph.Elements = {
                 nodes: [...graph.Elements.nodes, ...elements.nodes],
                 links: [...graph.Elements.links, ...elements.links]
@@ -204,7 +204,6 @@ export default function GraphView({
 
                     // truncate text if it's too long
                     if (textWidth > nodeSize) {
-                        name = node.name;
                         while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
                             name = name.slice(0, -1);
                         }
@@ -291,8 +290,8 @@ export default function GraphView({
                     setCooldownTicks(0)
                     setCooldownTime(0)
                 }}
-                cooldownTicks={cooldownTicks}
-                cooldownTime={cooldownTime}
+                cooldownTicks={undefined}
+                cooldownTime={undefined}
             />
         </div>
     )
