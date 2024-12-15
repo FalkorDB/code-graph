@@ -28,6 +28,7 @@
     "playwright": "^1.49.1",
     "playwright-core": "^1.49.1",
     "react": "^18",
+    "react-cytoscape": "^1.0.6",
     "react-cytoscapejs": "^2.0.0",
     "react-dom": "^18",
     "react-resizable-panels": "^2.0.20",
@@ -39,8 +40,10 @@
   "devDependencies": {
     "@playwright/test": "^1.49.1",
     "@types/cytoscape": "^3.21.8",
+    "@types/cytoscape-fcose": "^2.2.4",
     "@types/node": "^22.10.2",
     "@types/react": "^18",
+    "@types/react-cytoscapejs": "^1.2.5",
     "@types/react-dom": "^18",
     "@types/react-syntax-highlighter": "^15.5.13",
     "eslint": "^9",
