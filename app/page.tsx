@@ -63,7 +63,7 @@ export default function Home() {
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
-  const chartRef = useRef<cytoscape.Core | null>(null)
+  const chartRef = useRef<cytoscape.Core>(null)
 
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
