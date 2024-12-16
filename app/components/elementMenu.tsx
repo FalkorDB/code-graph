@@ -4,8 +4,8 @@ import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react"
 import { Node } from "./model";
 import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
-import { Position } from "cytoscape";
 import { Path } from "../page";
+import { Position } from "./graphView";
 
 interface Props {
     obj: Node | undefined;
