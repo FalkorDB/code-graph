@@ -33,7 +33,7 @@
     "react-type-animation": "^3.2.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "web-tree-sitter": "^0.22.6"
+    "web-tree-sitter": "^0.24.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
