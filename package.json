@@ -26,6 +26,7 @@
     "playwright": "^1.49.1",
     "react": "^18",
     "react-dom": "^18",
+    "react-force-graph-2d": "^1.25.8",
     "react-resizable-panels": "^2.0.20",
     "react-syntax-highlighter": "^15.6.1",
     "react-type-animation": "^3.2.0",
@@ -34,11 +35,11 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-syntax-highlighter": "^15.5.13",
     "eslint": "^9",
-    "react-force-graph-2d": "^1.25.8",
     "eslint-config-next": "15.1.0",
     "tailwindcss": "^3.4.3",
     "typescript": "^5"

@@ -312,8 +312,11 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                     ])
 
                     if (isPathResponse) {
-                        // chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
                         setIsPathResponse(false)
+                        graph.getElements().forEach(e => {
+                            e.isPath = false
+                            e.isPathSelected = false
+                        })
                     }
 
                     setTimeout(() => setMessages(prev => [...prev, {
