@@ -21,6 +21,7 @@ export interface getProjectResponse {
                     ext?: string;
                     name: string;
                     path: string;
+                    src: string;
                     doc?: string;
                     src_end?: number;
                     src_start?: number;

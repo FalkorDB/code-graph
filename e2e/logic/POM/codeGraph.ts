@@ -1,7 +1,7 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
 import { delay, waitToBeEnabled } from "../utils";
-import { analyzeCanvasWithLocator, CanvasAnalysisResult } from "../canvasAnalysis";
+import { analyzeCanvasNodes, CanvasAnalysisResult } from "../canvasAnalysis";
 
 export default class CodeGraph extends BasePage {
     /* NavBar Locators*/
@@ -21,17 +21,33 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//div[@role='dialog']")
     }
 
+    private get tipBtn(): Locator {
+        return this.page.locator("//button[@title='Tip']")
+    }
+
+    private get genericMenu(): Locator {
+        return this.page.locator("//div[contains(@role, 'menu')]")
+    }
+
+    private get tipMenuCloseBtn(): Locator {
+        return this.page.locator("//div[@role='menu']//button[@title='Close']")
+    }
+
     /* CodeGraph Locators*/
     private get comboBoxbtn(): Locator {
         return this.page.locator("//button[@role='combobox']")
     }
 
-    private get selectGraphInComboBox(): (graph: string) => Locator {
-        return (graph: string) => this.page.locator(`//div[@role='presentation']//div[@role='option'][${graph}]`);
+    private get selectGraphInComboBoxByName(): (graph: string) => Locator {
+        return (graph: string) => this.page.locator(`//div[@role='presentation']//div//span[contains(text(), '${graph}')]`);
+    }
+
+    private get selectGraphInComboBoxById(): (graph: string) => Locator {
+        return (graph: string) => this.page.locator(`//div[@role='presentation']//div[${graph}]`);
     }
 
     private get lastElementInChat(): Locator {
-        return this.page.locator("//main[@data-name='main-chat']/*[last()]/p");
+        return this.page.locator("//main[@data-name='main-chat']/*[last()]/span");
     }
 
     private get typeUrlInput(): Locator {
@@ -115,6 +131,22 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//div[@role='region']//ol//li");
     }
 
+    private get notificationErrorCloseBtn(): Locator {
+        return this.page.locator("//div[@role='region']//ol//li/button");
+    }
+
+    private get questionOptionsMenu(): Locator {
+        return this.page.locator("//button[@data-name='questionOptionsMenu']");
+    }
+
+    private get selectQuestionInMenu(): (questionNumber: string) => Locator {
+        return (questionNumber: string) => this.page.locator(`//div[contains(@role, 'menu')]/button[${questionNumber}]`);
+    }
+
+    private get lastQuestionInChat(): Locator {
+        return this.page.locator("//main[@data-name='main-chat']/*[last()-1]/p");
+    }
+
     /* Canvas Locators*/
 
     private get canvasElement(): Locator {
@@ -133,10 +165,37 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//button[@title='Center']");
     }
 
-    private get removeNodeViaElementMenu(): Locator {
-        return this.page.locator("//button[@title='Remove']");
+    private get codeGraphCheckbox(): (checkbox: string) => Locator {
+        return (checkbox: string) => this.page.locator(`(//button[@role='checkbox'])[${checkbox}]`);
+    }
+
+    private get clearGraphBtn(): Locator {
+        return this.page.locator("//button[p[text()='Clear Graph']]");
+    }
+
+    private get elementMenuButton(): (buttonID: string) => Locator {
+        return (buttonID: string) => this.page.locator(`//button[@title='${buttonID}']`);
     }
     
+    private get nodedetailsPanelHeader(): Locator {
+        return this.page.locator("//div[@data-name='node-details-panel']/header/p");
+    }
+    
+    private get nodedetailsPanelcloseBtn(): Locator {
+        return this.page.locator("//div[@data-name='node-details-panel']/header/button");
+    }
+    private get canvasMetricsPanel(): (itemId: string) => Locator {
+        return (itemId: string) => this.page.locator(`//div[@data-name='metrics-panel']/p[${itemId}]`);
+    }
+
+    private get nodedetailsPanelID(): Locator {
+        return this.page.locator("//div[@data-name='node-details-panel']/main/div[1]/p[2]");
+    }
+
+    private get nodedetailsPanelElements(): Locator {
+        return this.page.locator("//div[@data-name='node-details-panel']/main/div/p[1]");
+    }
+
     /* NavBar functionality */
     async clickOnFalkorDbLogo(): Promise<Page> {
         await this.page.waitForLoadState('networkidle'); 
@@ -164,6 +223,19 @@ export default class CodeGraph extends BasePage {
         return await this.createNewProjectDialog.isVisible();
     }
 
+    async clickonTipBtn(): Promise<void> {
+        await this.tipBtn.click();
+    }
+
+    async isTipMenuVisible(): Promise<boolean> {
+        await delay(500);
+        return await this.genericMenu.isVisible();
+    }
+
+    async clickonTipMenuCloseBtn(): Promise<void> {
+        await this.tipMenuCloseBtn.click();
+    }
+
     /* Chat functionality */
     async clickOnshowPathBtn(): Promise<void> {
         await this.showPathBtn.click();
@@ -183,8 +255,9 @@ export default class CodeGraph extends BasePage {
         await this.lightbulbBtn.click();
     }
 
-    async getTextInLastChatElement(): Promise<string | null>{
-        return await this.lastElementInChat.textContent();
+    async getTextInLastChatElement(): Promise<string>{
+        await delay(2500);
+        return (await this.lastElementInChat.textContent())!;
     }
 
     async getLastChatElementButtonCount(): Promise<number | null>{
@@ -224,14 +297,37 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNotificationError(): Promise<boolean> {
+        await delay(500);
         return await this.notificationError.isVisible();
     }
 
+    async clickOnNotificationErrorCloseBtn(): Promise<void> {
+        await this.notificationErrorCloseBtn.click();
+    }
+
+    async clickOnQuestionOptionsMenu(): Promise<void> {
+        await this.questionOptionsMenu.click();
+    }
+
+    async selectAndGetQuestionInOptionsMenu(questionNumber: string): Promise<string> {
+        await this.selectQuestionInMenu(questionNumber).click();
+        return await this.selectQuestionInMenu(questionNumber).innerHTML();
+    }
+
+    async getLastQuestionInChat(): Promise<string> {
+        return await this.lastQuestionInChat.innerText();
+    }
+
     /* CodeGraph functionality */
-    async selectGraph(graph: string): Promise<void> {
+    async selectGraph(graph: string | number): Promise<void> {
         await this.comboBoxbtn.click();
-        await this.selectGraphInComboBox(graph).waitFor({ state : 'visible'})
-        await this.selectGraphInComboBox(graph).click();
+        if(typeof graph === 'number'){
+            await this.selectGraphInComboBoxById(graph.toString()).waitFor({ state : 'visible'})
+            await this.selectGraphInComboBoxById(graph.toString()).click();
+        } else {
+            await this.selectGraphInComboBoxByName(graph).waitFor({ state : 'visible'})
+            await this.selectGraphInComboBoxByName(graph).click();
+        }
     }
 
     async createProject(url : string): Promise<void> {
@@ -251,6 +347,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async getSearchAutoCompleteCount(): Promise<number> {
+        await this.searchBarAutoCompleteOptions.first().waitFor({ state: 'visible' });
         return await this.searchBarAutoCompleteOptions.count();
     }
 
@@ -259,6 +356,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async selectSearchBarOptionBtn(buttonNum: string): Promise<void> {
+        await delay(1000);
         await this.searchBarOptionBtn(buttonNum).click();
     }
 
@@ -266,7 +364,6 @@ export default class CodeGraph extends BasePage {
         return await this.searchBarInput.inputValue();
     }
     
-
     async scrollToBottomInSearchBarList(): Promise<void> {
         await this.searchBarList.evaluate((element) => {
           element.scrollTop = element.scrollHeight;
@@ -279,10 +376,10 @@ export default class CodeGraph extends BasePage {
     }
 
     /* Canvas functionality */
-    
+
     async getCanvasAnalysis(): Promise<CanvasAnalysisResult> {
         await delay(2000);
-        return await analyzeCanvasWithLocator(this.canvasElement);
+        return await analyzeCanvasNodes(this.canvasElement);
     }
 
     async clickZoomIn(): Promise<void> {
@@ -298,14 +395,70 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
-        await this.removeNodeViaElementMenu.click();
+        await this.elementMenuButton("Remove").click();
     }
 
-    async rightClickOnNode(x : number, y: number): Promise<void> {
+    async rightClickOnNode(x: number, y: number): Promise<void> {
         const boundingBox = (await this.canvasElement.boundingBox())!;
-        const adjustedX = boundingBox.x + Math.round(x);
-        const adjustedY = boundingBox.y + Math.round(y);
+        const devicePixelRatio = await this.page.evaluate(() => window.devicePixelRatio || 1);
+        const adjustedX = boundingBox.x + Math.round(x * devicePixelRatio);
+        const adjustedY = boundingBox.y + Math.round(y * devicePixelRatio);
         await this.page.mouse.click(adjustedX, adjustedY, { button: 'right' });
     }
     
+
+    async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
+        await this.codeGraphCheckbox(checkbox).click();
+    }
+
+    async clickOnClearGraphBtn(): Promise<void> {
+        await this.clearGraphBtn.click();
+    } 
+
+    async changeNodePosition(x: number, y: number): Promise<void> {
+        const box = (await this.canvasElement.boundingBox())!;
+        const targetX = x + 100;
+        const targetY = y + 50;
+        const absStartX = box.x + x;
+        const absStartY = box.y + y;
+        const absEndX = box.x + targetX;
+        const absEndY = box.y + targetY;
+        await this.page.mouse.move(absStartX, absStartY);
+        await this.page.mouse.down();
+        await this.page.mouse.move(absEndX, absEndY);
+        await this.page.mouse.up();
+    }
+
+    async getNodeDetailsHeader(): Promise<string> {
+        await this.elementMenuButton("View Node").click();
+        const text = await this.nodedetailsPanelHeader.innerHTML();
+        return text;
+    }
+
+    async clickOnNodeDetailsCloseBtn(): Promise<void>{
+        await this.nodedetailsPanelcloseBtn.click();
+    }
+
+    async getMetricsPanelInfo(): Promise<{nodes: string, edges: string}> {
+        const nodes = await this.canvasMetricsPanel("1").innerHTML();
+        const edges = await this.canvasMetricsPanel("2").innerHTML();
+        return { nodes, edges }
+    }
+
+    async clickOnCopySrcOnNode(): Promise<string> {
+        await this.elementMenuButton("Copy src to clipboard").click();
+        await delay(1000)
+        return await this.page.evaluate(() => navigator.clipboard.readText());
+    }
+
+    async getNodedetailsPanelID(): Promise<string> {
+        return await this.nodedetailsPanelID.innerHTML();
+    }
+
+    async getNodeDetailsPanelElements(): Promise<string[]> {
+        await this.elementMenuButton("View Node").click();
+        await delay(500)
+        const elements = await this.nodedetailsPanelElements.all();
+        return Promise.all(elements.map(element => element.innerHTML()));
+    }
 }
