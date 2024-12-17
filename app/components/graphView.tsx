@@ -72,7 +72,6 @@ export default function GraphView({
     }, [graph.getElements().length])
 
     const unsetSelectedObjects = (evt?: MouseEvent) => {
-        debugger
         if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
         setSelectedObj(undefined)
         setSelectedObjects([])

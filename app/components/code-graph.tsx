@@ -70,7 +70,7 @@ export function CodeGraph({
 
     useEffect(() => {
         setData({ ...graph.Elements })
-    }, [graph])
+    }, [graph.Id])
 
     useEffect(() => {
         if (!selectedValue) return
