@@ -198,11 +198,6 @@ export function CodeGraph({
                 })
                 return
             }
-
-            graph.Elements = {
-                nodes: [...graph.Elements.nodes, ...elements.nodes],
-                links: [...graph.Elements.links, ...elements.links]
-            }
         } else {
             const deleteNodes = nodes.filter(n => n.expand)
             if (deleteNodes.length > 0) {
@@ -213,9 +208,8 @@ export function CodeGraph({
         nodes.forEach((node) => {
             node.expand = expand
         })
-
+        
         setSelectedObj(undefined)
-
         setData({ ...graph.Elements })
     }
 
@@ -376,7 +370,6 @@ export function CodeGraph({
                                     setPosition={setPosition}
                                     onFetchNode={onFetchNode}
                                     deleteNeighbors={deleteNeighbors}
-                                    parentRef={containerRef}
                                     isShowPath={isShowPath}
                                     setPath={setPath}
                                     isPathResponse={isPathResponse}

@@ -1,3 +1,4 @@
+import { LinkObject, NodeObject } from 'react-force-graph-2d'
 import { Path } from '../page'
 
 export interface GraphData {
@@ -10,7 +11,7 @@ export interface Category {
   show: boolean,
 }
 
-export type Node = {
+export type Node = NodeObject<{
   id: number,
   name: string,
   category: string,
@@ -21,9 +22,9 @@ export type Node = {
   isPathSelected: boolean,
   isPath: boolean,
   [key: string]: any,
-}
+}>
 
-export type Link = {
+export type Link = LinkObject<Node, {
   id: number,
   source: Node,
   target: Node,
@@ -34,7 +35,7 @@ export type Link = {
   isPathSelected: boolean,
   isPath: boolean,
   [key: string]: any,
-}
+}>
 
 const COLORS_ORDER_NAME = [
   "blue",

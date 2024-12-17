@@ -1,7 +1,7 @@
 
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, Ref, RefObject, SetStateAction, useCallback, useEffect, useState } from 'react';
+import { Dispatch, RefObject, SetStateAction, useEffect, useRef } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { Path } from '../page';
 
@@ -22,7 +22,6 @@ interface Props {
     setPosition: Dispatch<SetStateAction<Position | undefined>>
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>
     deleteNeighbors: (nodes: Node[]) => void
-    parentRef: RefObject<HTMLDivElement>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     isPathResponse: boolean | undefined
@@ -49,7 +48,6 @@ export default function GraphView({
     setPosition,
     onFetchNode,
     deleteNeighbors,
-    parentRef,
     isShowPath,
     setPath,
     isPathResponse,
@@ -61,18 +59,21 @@ export default function GraphView({
     setCooldownTime
 }: Props) {
 
+    const parentRef = useRef<HTMLDivElement>(null)
+
     useEffect(() => {
-        setCooldownTicks(undefined)
         setCooldownTime(4000)
+        setCooldownTicks(undefined)
     }, [graph.Id])
 
     useEffect(() => {
-        setCooldownTicks(undefined)
         setCooldownTime(1000)
+        setCooldownTicks(undefined)
     }, [graph.getElements().length])
 
     const unsetSelectedObjects = (evt?: MouseEvent) => {
-        if (evt?.ctrlKey) return
+        debugger
+        if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
         setSelectedObj(undefined)
         setSelectedObjects([])
     }
@@ -122,11 +123,6 @@ export default function GraphView({
                 })
                 return
             }
-            
-            graph.Elements = {
-                nodes: [...graph.Elements.nodes, ...elements.nodes],
-                links: [...graph.Elements.links, ...elements.links]
-            }
         } else {
             deleteNeighbors([node]);
         }
@@ -138,7 +134,7 @@ export default function GraphView({
     }
 
     return (
-        <div className="relative w-fill h-full">
+        <div ref={parentRef} className="relative w-fill h-full">
             <ForceGraph2D
                 ref={chartRef}
                 height={parentRef.current?.clientHeight || 0}
@@ -247,18 +243,15 @@ export default function GraphView({
                         ctx.arcTo(link.target.x - 20, link.target.y + 20, link.target.x, link.target.y, 10);
                         ctx.closePath();
                     } else {
-                        if (link.source.id === 4) {   
-                            console.log(link.source.x, link.source.y);
-                        }
-                        
                         // handel multiple links between same nodes
                         const sameNodeLinks = data.links.filter(l =>
-                            (l.source.id === link.source.id && l.target.id === link.target.id) ||
-                            (l.source.id === link.target.id && l.target.id === link.source.id)
+                            ((l.source.id === link.source.id && l.target.id === link.target.id) ||
+                                (l.source.id === link.target.id && l.target.id === link.source.id))
+                            && l.id !== link.id
                         );
 
                         const linkIndex = sameNodeLinks.findIndex(l => l.id === link.id);
-                        const offset = (linkIndex - (sameNodeLinks.length - 1) / 2) * 5;
+                        const offset = linkIndex === -1 ? 0 : (linkIndex) * 5;
 
                         // add link
                         ctx.moveTo(link.source.x, link.source.y);
@@ -280,7 +273,9 @@ export default function GraphView({
                     ctx.fillText(link.label, midX, midY);
                 }}
                 onNodeClick={handelNodeClick}
-                onNodeDrag={() => unsetSelectedObjects()}
+                onNodeDragEnd={(n, translate) => setPosition(prev => {
+                    return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
+                })}
                 onNodeRightClick={handelNodeRightClick}
                 onLinkClick={handelLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
@@ -290,8 +285,8 @@ export default function GraphView({
                     setCooldownTicks(0)
                     setCooldownTime(0)
                 }}
-                cooldownTicks={undefined}
-                cooldownTime={undefined}
+                cooldownTicks={cooldownTicks}
+                cooldownTime={cooldownTime}
             />
         </div>
     )
