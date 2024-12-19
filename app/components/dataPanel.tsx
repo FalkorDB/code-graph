@@ -16,7 +16,16 @@ const excludedProperties = [
     "expand",
     "collapsed",
     "isPath",
-    "isPathStartEnd"
+    "isPathStartEnd",
+    "visibility",
+    "index",
+    "__indexColor",
+    "x",
+    "y",
+    "vx",
+    "vy",
+    "fx",
+    "fy",
 ]
 
 export default function DataPanel({ obj, setObj, url }: Props) {

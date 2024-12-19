@@ -1,13 +1,12 @@
 export function getEnvVariables() {
-    const url = process.env.BACKEND_URL
-    const token = process.env.SECRET_TOKEN
+    const { SECRET_TOKEN, BACKEND_URL } = process.env
 
-    if (!url) {
+    if (!BACKEND_URL) {
         throw new Error("Environment variable BACKEND_URL must be set");
     }
-    if (!token) {
+    if (!SECRET_TOKEN) {
         throw new Error("Environment variable SECRET_TOKEN must be set");
     }
 
-    return { url, token }
+    return { url: BACKEND_URL, token: SECRET_TOKEN };
 }

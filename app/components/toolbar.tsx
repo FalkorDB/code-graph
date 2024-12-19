@@ -1,31 +1,26 @@
 import { CircleDot, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils"
-import { Dispatch, RefObject, SetStateAction } from "react";
-import { Node } from "./model";
+import { RefObject } from "react";
 
 interface Props {
-    chartRef: RefObject<cytoscape.Core>
-    setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
+    chartRef: RefObject<any>
     className?: string
 }
 
-export function Toolbar({ chartRef, setSelectedObj, className }: Props) {
+export function Toolbar({ chartRef, className }: Props) {
 
-    function handleZoomClick(changefactor: number) {
-        let chart = chartRef.current
+    const handleZoomClick = (changefactor: number) => {
+        const chart = chartRef.current
         if (chart) {
             chart.zoom(chart.zoom() * changefactor)
         }
-        setSelectedObj(undefined)
     }
 
-    function handleCenterClick() {
-        let chart = chartRef.current
+    const handleCenterClick = () => {
+        const chart = chartRef.current
         if (chart) {
-            chart.fit(undefined, 80)
-            chart.center()
+            chart.zoomToFit(1000, 40)
         }
-        setSelectedObj(undefined)
     }
 
     return (
