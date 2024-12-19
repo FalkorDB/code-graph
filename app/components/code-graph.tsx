@@ -159,7 +159,7 @@ export function CodeGraph({
             node.visibility = show
         })
 
-        graph.visibleLinks()
+        graph.visibleLinks(show)
 
         setData({ ...graph.Elements })
     }
@@ -226,7 +226,7 @@ export function CodeGraph({
                 setCooldownTicks(undefined)
                 setCooldownTime(1000)
             }
-            graph.visibleLinks([chartNode.id], true)
+            graph.visibleLinks(true, [chartNode.id])
         }
 
         setSearchNode(n)
@@ -245,7 +245,7 @@ export function CodeGraph({
             node.visibility = false
         })
 
-        graph.visibleLinks(ids, false)
+        graph.visibleLinks(false, ids)
 
         setData({ ...graph.Elements })
     }
@@ -303,7 +303,7 @@ export function CodeGraph({
                                                     graph.Elements.nodes.forEach((element) => {
                                                         element.visibility = true
                                                     })
-                                                    graph.visibleLinks()
+                                                    graph.visibleLinks(true)
 
                                                     setData({ ...graph.Elements })
                                                 }}

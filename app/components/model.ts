@@ -209,18 +209,18 @@ export class Graph {
     }
   }
 
-  public visibleLinks(ids?: number[], visibility?: boolean) {
-    this.elements.links.forEach(link => {
-      if (ids && visibility !== undefined) {
-        if (ids.includes(link.source.id) || ids.includes(link.target.id)) {
-          link.visibility = visibility
-        }
-      } else {
-        if (this.categories.find(category => category.name === link.source.category)?.show && this.categories.find(category => category.name === link.target.category)?.show) {
-          link.visibility = true
-        } else {
-          link.visibility = false
-        }
+  public visibleLinks(visible: boolean, ids?: number[]) {
+    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source.id) || ids.includes(link.target.id)) : this.elements.links
+
+    elements.forEach(link => {
+      if (visible && this.elements.nodes.map(n => n.id).includes(link.source.id) && link.source.visible && this.elements.nodes.map(n => n.id).includes(link.target.id) && link.target.visible) {
+        // eslint-disable-next-line no-param-reassign
+        link.visible = true
+      }
+
+      if (!visible && ((this.elements.nodes.map(n => n.id).includes(link.source.id) && !link.source.visible) || (this.elements.nodes.map(n => n.id).includes(link.target.id) && !link.target.visible))) {
+        // eslint-disable-next-line no-param-reassign
+        link.visible = false
       }
     })
   }
