@@ -122,7 +122,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const [sugOpen, setSugOpen] = useState(false);
 
     // A reference to the chat container to allow scrolling to the bottom
-    const containerRef: React.RefObject<HTMLDivElement> = useRef(null);
+    const containerRef: React.RefObject<HTMLDivElement | null> = useRef(null);
 
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
 
