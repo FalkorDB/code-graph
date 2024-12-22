@@ -4,7 +4,7 @@ import { Dispatch, RefObject, SetStateAction } from "react";
 import { Node } from "./model";
 
 interface Props {
-    chartRef: RefObject<cytoscape.Core>
+    chartRef: RefObject<cytoscape.Core | null>
     setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
     className?: string
 }
