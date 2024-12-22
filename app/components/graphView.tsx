@@ -139,12 +139,15 @@ export default function GraphView({
                 height={parentRef.current?.clientHeight || 0}
                 width={parentRef.current?.clientWidth || 0}
                 graphData={data}
-                nodeVisibility={"visibility"}
-                linkVisibility={"visibility"}
-                linkLabel={"label"}
+                nodeVisibility="visibility"
+                linkVisibility="visibility"
+                linkCurvature="curve"
                 nodeRelSize={NODE_SIZE}
-                nodeCanvasObjectMode={() => 'replace'}
-                linkCanvasObjectMode={() => 'replace'}
+                linkLineDash={(link) => (link.isPath && !link.isPathSelected) ? [5, 5] : []}
+                linkColor={(link) => (link.isPath || link.isPathSelected) ? "#FF66B3" : link.color}
+                linkWidth={(link) => (link.id === selectedObj?.id || link.isPathSelected) ? 1 : 0.5}
+                nodeCanvasObjectMode={() => 'after'}
+                linkCanvasObjectMode={() => 'after'}
                 nodeCanvasObject={(node, ctx) => {
                     if (!node.x || !node.y) return
 
@@ -209,67 +212,64 @@ export default function GraphView({
                     ctx.fillText(name, node.x, node.y);
                 }}
                 linkCanvasObject={(link, ctx) => {
-                    if (!link.source.x || !link.source.y || !link.target.x || !link.target.y) return
+                    const start = link.source;
+                    const end = link.target;
 
-                    //give path links a different color
-                    if (isPathResponse || isPathResponse === undefined) {
-                        if (link.isPathSelected) {
-                            ctx.strokeStyle = '#FF66B3';
-                            ctx.lineWidth = 1
-                            ctx.setLineDash([]);
-                        } else if (link.isPath) {
-                            ctx.strokeStyle = '#FF66B3';
-                            ctx.lineWidth = 0.5
-                            ctx.setLineDash([5, 5]);
+                    if (!start.x || !start.y || !end.x || !end.y) return
+
+                    const sameNodesLinks = graph.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
+                    const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
+                    const even = index % 2 === 0
+                    let curve
+
+                    if (start.id === end.id) {
+                        if (even) {
+                            curve = Math.floor(-(index / 2)) - 3
                         } else {
-                            ctx.strokeStyle = 'gray';
-                            ctx.lineWidth = 0.5
-                            ctx.setLineDash([]);
+                            curve = Math.floor((index + 1) / 2) + 2
                         }
+
+                        link.curve = curve * 0.1
+                        
+                        const radius = NODE_SIZE * link.curve * 6.2;
+                        const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
+                        const textX = start.x + radius * Math.cos(angleOffset);
+                        const textY = start.y + radius * Math.sin(angleOffset);
+
+                        ctx.save();
+                        ctx.translate(textX, textY);
+                        ctx.rotate(-angleOffset);
                     } else {
-                        ctx.strokeStyle = 'gray';
-                        ctx.lineWidth = 0.5
-                        ctx.setLineDash([]);
+                        if (even) {
+                            curve = Math.floor(-(index / 2))
+                        } else {
+                            curve = Math.floor((index + 1) / 2)
+                        }
+
+                        link.curve = curve * 0.1
+                        
+                        const midX = (start.x + end.x) / 2 + (end.y - start.y) * (link.curve / 2);
+                        const midY = (start.y + end.y) / 2 + (start.x - end.x) * (link.curve / 2);
+
+                        let textAngle = Math.atan2(end.y - start.y, end.x - start.x)
+
+                        // maintain label vertical orientation for legibility
+                        if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
+                        if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
+
+                        ctx.save();
+                        ctx.translate(midX, midY);
+                        ctx.rotate(textAngle);
                     }
-
-                    ctx.beginPath();
-
-                    if (link.source.id === link.target.id) {
-                        // handel self closing link
-                        ctx.lineWidth = ctx.lineWidth * 2
-                        ctx.moveTo(link.source.x, link.source.y);
-                        ctx.arcTo(link.target.x + 20, link.target.y + 35, link.target.x - 20, link.target.y + 20, 10);
-                        ctx.arcTo(link.target.x - 20, link.target.y + 20, link.target.x, link.target.y, 10);
-                        ctx.closePath();
-                    } else {
-                        // handel multiple links between same nodes
-                        const sameNodeLinks = data.links.filter(l =>
-                            ((l.source.id === link.source.id && l.target.id === link.target.id) ||
-                                (l.source.id === link.target.id && l.target.id === link.source.id))
-                            && l.id !== link.id
-                        );
-
-                        const linkIndex = sameNodeLinks.findIndex(l => l.id === link.id);
-                        const offset = linkIndex === -1 ? 0 : (linkIndex) * 5;
-
-                        // add link
-                        ctx.moveTo(link.source.x, link.source.y);
-                        ctx.lineTo(link.target.x + offset, link.target.y + offset);
-                    }
-                    ctx.stroke();
-
-                    // add label box
-                    const midX = (link.source.x + link.target.x) / 2;
-                    const midY = (link.source.y + link.target.y) / 2;
-                    ctx.fillStyle = 'white';
-                    ctx.fill();
-                    const labelWidth = ctx.measureText(link.label).width
-                    ctx.fillRect(midX - (labelWidth + 1) / 2, midY - 2.184, labelWidth + 1, 3.833);
 
                     // add label
+                    ctx.globalAlpha = 1;
                     ctx.fillStyle = 'black';
-                    ctx.font = '4px Arial';
-                    ctx.fillText(link.label, midX, midY);
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = '2px Arial';
+                    ctx.fillText(link.label, 0, 0);
+                    ctx.restore()
                 }}
                 onNodeClick={handelNodeClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {

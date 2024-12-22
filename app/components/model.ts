@@ -34,6 +34,7 @@ export type Link = LinkObject<Node, {
   collapsed: boolean,
   isPathSelected: boolean,
   isPath: boolean,
+  curve: number,
   [key: string]: any,
 }>
 
@@ -188,6 +189,7 @@ export class Graph {
         collapsed,
         isPathSelected: false,
         isPath: !!path,
+        curve: 0
       }
       this.linksMap.set(edgeData.id, link)
       this.elements.links.push(link)
