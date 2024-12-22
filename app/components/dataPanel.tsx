@@ -17,7 +17,7 @@ const excludedProperties = [
     "collapsed",
     "isPath",
     "isPathStartEnd",
-    "visibility",
+    "visible",
     "index",
     "__indexColor",
     "x",

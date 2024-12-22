@@ -156,7 +156,7 @@ export function CodeGraph({
 
         graph.Elements.nodes.forEach(node => {
             if (!(node.category === name)) return
-            node.visibility = show
+            node.visible = show
         })
 
         graph.visibleLinks(show)
@@ -222,7 +222,7 @@ export function CodeGraph({
             if (!chartNode) {
                 chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
             } else {
-                chartNode.visibility = true
+                chartNode.visible = true
                 setCooldownTicks(undefined)
                 setCooldownTime(1000)
             }
@@ -242,7 +242,7 @@ export function CodeGraph({
     const handelRemove = (ids: number[]) => {
         graph.Elements.nodes.forEach(node => {
             if (!ids.includes(node.id)) return
-            node.visibility = false
+            node.visible = false
         })
 
         graph.visibleLinks(false, ids)
@@ -295,13 +295,13 @@ export function CodeGraph({
                                             </button>
                                         }
                                         {
-                                            (graph.Elements.nodes.some(e => !e.visibility)) &&
+                                            (graph.Elements.nodes.some(e => !e.visible)) &&
                                             <button
                                                 className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
                                                 onClick={() => {
                                                     graph.Categories.forEach(c => c.show = true)
                                                     graph.Elements.nodes.forEach((element) => {
-                                                        element.visibility = true
+                                                        element.visible = true
                                                     })
                                                     graph.visibleLinks(true)
 

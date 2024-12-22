@@ -139,8 +139,8 @@ export default function GraphView({
                 height={parentRef.current?.clientHeight || 0}
                 width={parentRef.current?.clientWidth || 0}
                 graphData={data}
-                nodeVisibility="visibility"
-                linkVisibility="visibility"
+                nodeVisibility="visible"
+                linkVisibility="visible"
                 linkCurvature="curve"
                 nodeRelSize={NODE_SIZE}
                 linkLineDash={(link) => (link.isPath && !link.isPathSelected) ? [5, 5] : []}
