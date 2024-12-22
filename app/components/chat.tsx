@@ -405,7 +405,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                     "flex text-wrap border p-2 gap-2 rounded-md",
                                     p.nodes.length === selectedPath?.nodes.length &&
                                     selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) &&
-                                    "border-[#FF66B3] bg-[#FFF0F7]",
+                                    "border-[#ffde21] bg-[#ffde2133]",
                                     message.graphName !== graph.Id && "opacity-50 bg-gray-200"
                                 )}
                                 title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}

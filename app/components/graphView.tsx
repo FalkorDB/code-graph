@@ -33,6 +33,7 @@ interface Props {
     setCooldownTime: Dispatch<SetStateAction<number>>
 }
 
+const PATH_COLOR = "#ffde21"
 const NODE_SIZE = 6;
 const PADDING = 2;
 
@@ -142,10 +143,13 @@ export default function GraphView({
                 nodeVisibility="visible"
                 linkVisibility="visible"
                 linkCurvature="curve"
+                linkDirectionalArrowRelPos={1}
+                linkDirectionalArrowColor={(link) => (link.isPath || link.isPathSelected) ? PATH_COLOR : link.color}
+                linkDirectionalArrowLength={(link) => link.source.id === link.target.id ? 0 : (link.id === selectedObj?.id || link.isPathSelected) ? 3 : 2}
                 nodeRelSize={NODE_SIZE}
                 linkLineDash={(link) => (link.isPath && !link.isPathSelected) ? [5, 5] : []}
-                linkColor={(link) => (link.isPath || link.isPathSelected) ? "#FF66B3" : link.color}
-                linkWidth={(link) => (link.id === selectedObj?.id || link.isPathSelected) ? 1 : 0.5}
+                linkColor={(link) => (link.isPath || link.isPathSelected) ? PATH_COLOR : link.color}
+                linkWidth={(link) => (link.id === selectedObj?.id || link.isPathSelected) ? 2 : 1}
                 nodeCanvasObjectMode={() => 'after'}
                 linkCanvasObjectMode={() => 'after'}
                 nodeCanvasObject={(node, ctx) => {
@@ -154,11 +158,11 @@ export default function GraphView({
                     if (isPathResponse) {
                         if (node.isPathSelected) {
                             ctx.fillStyle = node.color;
-                            ctx.strokeStyle = '#FF66B3';
+                            ctx.strokeStyle = PATH_COLOR;
                             ctx.lineWidth = 1
                         } else if (node.isPath) {
                             ctx.fillStyle = node.color;
-                            ctx.strokeStyle = '#FF66B3';
+                            ctx.strokeStyle = PATH_COLOR;
                             ctx.lineWidth = 0.5
                         } else {
                             ctx.fillStyle = '#E5E5E5';
@@ -168,11 +172,11 @@ export default function GraphView({
                     } else if (isPathResponse === undefined) {
                         if (node.isPathSelected) {
                             ctx.fillStyle = node.color;
-                            ctx.strokeStyle = '#FF66B3';
+                            ctx.strokeStyle = PATH_COLOR;
                             ctx.lineWidth = 1
                         } else if (node.isPath) {
                             ctx.fillStyle = node.color;
-                            ctx.strokeStyle = '#FF66B3';
+                            ctx.strokeStyle = PATH_COLOR;
                             ctx.lineWidth = 0.5
                         } else {
                             ctx.fillStyle = node.color;
