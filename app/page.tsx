@@ -160,7 +160,7 @@ export default function Home() {
             <Link href="https://www.falkordb.com" target='_blank'>
               <Image src="/logo_02.svg" alt="FalkorDB" width={27.73} height={23.95} />
             </Link>
-            <h1 className='italic font-bold text-[22px]'>
+            <h1 className='font-bold text-[22px]'>
               CODE GRAPH
             </h1>
           </div>
