@@ -408,7 +408,7 @@ export default class CodeGraph extends BasePage {
 
     async clickCenter(): Promise<void> {
         await this.centerBtn.click();
-        await delay(1000); //animation delay
+        await delay(2000); //animation delay
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
