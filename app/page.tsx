@@ -127,7 +127,10 @@ export default function Home() {
     }
 
     const json = await result.json()
-    setGraph(Graph.create(json.result.entities, graphName))
+    const g = Graph.create(json.result.entities, graphName)
+    setGraph(g)
+    // @ts-ignore
+    window.graph = g
   }
 
   // Send the user query to the server to expand a node

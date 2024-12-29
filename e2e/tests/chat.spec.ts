@@ -3,8 +3,9 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import urls from "../config/urls.json";
 import { ApiCalls } from "../logic/api/apiCalls";
 import CodeGraph from "../logic/POM/codeGraph";
-import { CHAT_OPTTIONS_COUNT, GRAPH_ID, Node_Add_Edge, Node_Import_Data, Node_Question, PROJECT_NAME } from "../config/constants";
+import { CHAT_OPTTIONS_COUNT, GRAPH_ID, Node_Question, PROJECT_NAME } from "../config/constants";
 import { delay } from "../logic/utils";
+import { nodesPath } from "../config/testData";
 
 test.describe("Chat tests", () => {
   let browser: BrowserWrapper;
@@ -56,25 +57,29 @@ test.describe("Chat tests", () => {
     expect(await chat.isAtBottom()).toBe(true);
   });
 
-  test("Verify successful node path connection between two nodes in chat", async () => {
-    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-    await chat.selectGraph(GRAPH_ID);
-    await chat.clickOnshowPathBtn();
-    await chat.insertInputForShowPath("1", Node_Import_Data);
-    await chat.insertInputForShowPath("2", Node_Add_Edge);
-    expect(await chat.isNodeVisibleInLastChatPath(Node_Import_Data)).toBe(true);
-    expect(await chat.isNodeVisibleInLastChatPath(Node_Add_Edge)).toBe(true);
-  });
+  nodesPath.forEach((path) => {
+    test(`Verify successful node path connection between two nodes in chat for ${path.firstNode} and ${path.secondNode}`, async () => {
+      const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await chat.selectGraph(GRAPH_ID);
+      await chat.clickOnshowPathBtn();
+      await chat.insertInputForShowPath("1", path.firstNode);
+      await chat.insertInputForShowPath("2", path.secondNode);
+      expect(await chat.isNodeVisibleInLastChatPath(path.firstNode)).toBe(true);
+      expect(await chat.isNodeVisibleInLastChatPath(path.secondNode)).toBe(true);
+    });
+  })
 
-  test("Verify unsuccessful node path connection between two nodes in chat", async () => {
-    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-    await chat.selectGraph(GRAPH_ID);
-    await chat.clickOnshowPathBtn();
-    await chat.insertInputForShowPath("1", Node_Add_Edge);
-    await chat.insertInputForShowPath("2", Node_Import_Data);
-    await delay(500);
-    expect(await chat.isNotificationError()).toBe(true);
-  });
+  nodesPath.forEach((path) => {
+    test(`Verify unsuccessful node path connection between two nodes in chat for ${path.firstNode} and ${path.secondNode}`, async () => {
+      const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await chat.selectGraph(GRAPH_ID);
+      await chat.clickOnshowPathBtn();
+      await chat.insertInputForShowPath("1", path.secondNode);
+      await chat.insertInputForShowPath("2", path.firstNode);
+      await delay(500);
+      expect(await chat.isNotificationError()).toBe(true);
+    });
+  })
 
   test("Validate error notification and its closure when sending an empty question in chat", async () => {
     const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);

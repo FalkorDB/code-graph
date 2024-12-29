@@ -1,7 +1,12 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
 import { delay, waitToBeEnabled } from "../utils";
-import { analyzeCanvasNodes, CanvasAnalysisResult } from "../canvasAnalysis";
+
+declare global {
+    interface Window {
+        graph: any;
+    }
+}
 
 export default class CodeGraph extends BasePage {
     /* NavBar Locators*/
@@ -120,7 +125,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get locateNodeInLastChatPath(): (node: string) => Locator {
-        return (node: string) => this.page.locator(`//main[@data-name='main-chat']/*[last()]//span[contains(text(), '${node}')]`);
+        return (node: string) => this.page.locator(`(//main[@data-name='main-chat']//span[contains(text(), '${node}')])[last()]`);
     }
 
     private get selectFirstPathOption(): (inputNum: string) => Locator {
@@ -150,7 +155,7 @@ export default class CodeGraph extends BasePage {
     /* Canvas Locators*/
 
     private get canvasElement(): Locator {
-        return this.page.locator("//canvas[position()=3]");
+        return this.page.locator("//canvas");
     }
 
     private get zoomInBtn(): Locator {
@@ -170,11 +175,19 @@ export default class CodeGraph extends BasePage {
     }
 
     private get clearGraphBtn(): Locator {
-        return this.page.locator("//button[p[text()='Clear Graph']]");
+        return this.page.locator("//button[p[text()='Reset Graph']]");
+    }
+
+    private get unhideNodesBtn(): Locator {
+        return this.page.locator("//button[p[text()='Unhide Nodes']]");
     }
 
     private get elementMenuButton(): (buttonID: string) => Locator {
         return (buttonID: string) => this.page.locator(`//button[@title='${buttonID}']`);
+    }
+
+    private get nodeDetailsPanel(): Locator {
+        return this.page.locator("//div[@data-name='node-details-panel']");
     }
     
     private get nodedetailsPanelHeader(): Locator {
@@ -194,6 +207,14 @@ export default class CodeGraph extends BasePage {
 
     private get nodedetailsPanelElements(): Locator {
         return this.page.locator("//div[@data-name='node-details-panel']/main/div/p[1]");
+    }
+
+    private get canvasElementBeforeGraphSelection(): Locator {
+        return this.page.locator("//h1[contains(text(), 'Select a repo to show its graph here')]");
+    }
+
+    private get copyToClipboardNodePanelDetails(): Locator {
+        return this.page.locator(`//div[@data-name='node-details-panel']//button[@title='Copy src to clipboard']`);
     }
 
     /* NavBar functionality */
@@ -377,11 +398,6 @@ export default class CodeGraph extends BasePage {
 
     /* Canvas functionality */
 
-    async getCanvasAnalysis(): Promise<CanvasAnalysisResult> {
-        await delay(2000);
-        return await analyzeCanvasNodes(this.canvasElement);
-    }
-
     async clickZoomIn(): Promise<void> {
         await this.zoomInBtn.click();
     }
@@ -392,28 +408,29 @@ export default class CodeGraph extends BasePage {
 
     async clickCenter(): Promise<void> {
         await this.centerBtn.click();
+        await delay(1000); //animation delay
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
         await this.elementMenuButton("Remove").click();
     }
 
-    async rightClickOnNode(x: number, y: number): Promise<void> {
-        const boundingBox = (await this.canvasElement.boundingBox())!;
-        const devicePixelRatio = await this.page.evaluate(() => window.devicePixelRatio || 1);
-        const adjustedX = boundingBox.x + Math.round(x * devicePixelRatio);
-        const adjustedY = boundingBox.y + Math.round(y * devicePixelRatio);
-        await this.page.mouse.click(adjustedX, adjustedY, { button: 'right' });
+    async nodeClick(x: number, y: number): Promise<void> {
+        await this.canvasElement.hover({ position: { x, y } });
+        await this.canvasElement.click({ position: { x, y } });
     }
     
-
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await this.codeGraphCheckbox(checkbox).click();
     }
 
     async clickOnClearGraphBtn(): Promise<void> {
         await this.clearGraphBtn.click();
-    } 
+    }
+
+    async clickOnUnhideNodesBtn(): Promise<void> {
+        await this.unhideNodesBtn.click();
+    }
 
     async changeNodePosition(x: number, y: number): Promise<void> {
         const box = (await this.canvasElement.boundingBox())!;
@@ -427,6 +444,14 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.down();
         await this.page.mouse.move(absEndX, absEndY);
         await this.page.mouse.up();
+    }
+
+    async isNodeDetailsPanel(): Promise<boolean> {
+        return this.nodeDetailsPanel.isVisible();
+    }
+
+    async clickOnViewNode(): Promise<void> {
+        await this.elementMenuButton("View Node").click();
     }
 
     async getNodeDetailsHeader(): Promise<string> {
@@ -445,7 +470,13 @@ export default class CodeGraph extends BasePage {
         return { nodes, edges }
     }
 
-    async clickOnCopySrcOnNode(): Promise<string> {
+    async clickOnCopyToClipboardNodePanelDetails(): Promise<string> {
+        await this.copyToClipboardNodePanelDetails.click();
+        await delay(1000)
+        return await this.page.evaluate(() => navigator.clipboard.readText());
+    }
+
+    async clickOnCopyToClipboard(): Promise<string> {
         await this.elementMenuButton("Copy src to clipboard").click();
         await delay(1000)
         return await this.page.evaluate(() => navigator.clipboard.readText());
@@ -461,4 +492,55 @@ export default class CodeGraph extends BasePage {
         const elements = await this.nodedetailsPanelElements.all();
         return Promise.all(elements.map(element => element.innerHTML()));
     }
+
+    async getGraphDetails(): Promise<any> {
+        await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
+        await delay(2000)
+        await this.page.waitForFunction(() => !!window.graph);
+    
+        const graphData = await this.page.evaluate(() => {
+            return window.graph;
+        });
+        
+        return graphData;
+    }
+
+    async transformNodeCoordinates(graphData: any): Promise<any[]> {
+        const { canvasLeft, canvasTop, canvasWidth, canvasHeight, transform } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
+            const rect = canvas.getBoundingClientRect();
+            const ctx = canvas.getContext('2d');
+            const transform = ctx?.getTransform()!; 
+            return {
+                canvasLeft: rect.left,
+                canvasTop: rect.top,
+                canvasWidth: rect.width,
+                canvasHeight: rect.height,
+                transform,
+            };
+        });
+
+        const screenCoordinates = graphData.elements.nodes.map((node: any) => {
+            const adjustedX = node.x * transform.a + transform.e; 
+            const adjustedY = node.y * transform.d + transform.f;
+            const screenX = canvasLeft + adjustedX - 35;
+            const screenY = canvasTop + adjustedY - 190;
+    
+            return {...node, screenX, screenY,};
+        });
+    
+        return screenCoordinates;
+    }
+   
+    async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
+        const { scaleX, scaleY } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
+            const ctx = canvas.getContext('2d');
+            const transform = ctx?.getTransform();
+            return {
+                scaleX: transform?.a || 1,
+                scaleY: transform?.d || 1,
+            };
+        });
+        return { scaleX, scaleY };
+    }
+
 }
