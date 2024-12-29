@@ -1,30 +1,42 @@
-import twcolors from 'tailwindcss/colors'
+import { LinkObject, NodeObject } from 'react-force-graph-2d'
 import { Path } from '../page'
 
-export interface Element {
-  data: Node | Edge,
+export interface GraphData {
+  nodes: Node[],
+  links: Link[],
 }
-
 export interface Category {
   name: string,
   index: number,
   show: boolean,
 }
 
-export interface Node {
-  id: string,
+export type Node = NodeObject<{
+  id: number,
   name: string,
   category: string,
   color: string,
+  collapsed: boolean,
+  expand: boolean,
+  visible: boolean,
+  isPathSelected: boolean,
+  isPath: boolean,
   [key: string]: any,
-}
+}>
 
-export interface Edge {
-  source: number,
-  target: number,
+export type Link = LinkObject<Node, {
+  id: number,
+  source: Node,
+  target: Node,
   label: string,
+  visible: boolean,
+  expand: boolean,
+  collapsed: boolean,
+  isPathSelected: boolean,
+  isPath: boolean,
+  curve: number,
   [key: string]: any,
-}
+}>
 
 const COLORS_ORDER_NAME = [
   "blue",
@@ -52,20 +64,20 @@ export class Graph {
 
   private id: string;
   private categories: Category[];
-  private elements: any[];
+  private elements: GraphData;
 
   private categoriesMap: Map<string, Category>;
   private nodesMap: Map<number, Node>;
-  private edgesMap: Map<number, Edge>;
+  private linksMap: Map<number, Link>;
 
-  private constructor(id: string, categories: Category[], elements: any[],
-    categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Edge>) {
+  private constructor(id: string, categories: Category[], elements: GraphData,
+    categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Link>) {
     this.id = id;
     this.categories = categories;
     this.elements = elements;
     this.categoriesMap = categoriesMap;
     this.nodesMap = nodesMap;
-    this.edgesMap = edgesMap;
+    this.linksMap = edgesMap;
   }
 
   get Id(): string {
@@ -80,20 +92,28 @@ export class Graph {
     return this.categoriesMap;
   }
 
-  get Elements(): Element[] {
+  get Elements(): GraphData {
     return this.elements;
   }
 
-  get EdgesMap(): Map<number, Edge> {
-    return this.edgesMap;
+  set Elements(elements: GraphData) {
+    this.elements = elements;
+  }
+
+  get EdgesMap(): Map<number, Link> {
+    return this.linksMap;
   }
 
   get NodesMap(): Map<number, Node> {
     return this.nodesMap;
   }
 
+  public getElements(): (Node | Link)[] {
+    return [...this.elements.nodes, ...this.elements.links]
+  }
+
   public static empty(): Graph {
-    return new Graph("", [], [], new Map<string, Category>(), new Map<number, Node>(), new Map<number, Edge>())
+    return new Graph("", [], { nodes: [], links: [] }, new Map<string, Category>(), new Map<number, Node>(), new Map<number, Link>())
   }
 
   public static create(results: any, graphName: string): Graph {
@@ -103,8 +123,8 @@ export class Graph {
     return graph
   }
 
-  public extend(results: any, collapsed = false, path?: Path): any[] {
-    let newElements: any[] = []
+  public extend(results: any, collapsed = false, path?: Path): GraphData {
+    let newElements: GraphData = { nodes: [], links: [] }
 
     results.nodes.forEach((nodeData: any) => {
       let label = nodeData.labels[0];
@@ -120,57 +140,90 @@ export class Graph {
       let node = this.nodesMap.get(nodeData.id)
       if (node) {
         node.isPath = !!path
-        if (path?.start?.id == nodeData.id || path?.end?.id == nodeData.id) {
-          node.isPathStartEnd = true
+        if (path?.start?.id === nodeData.id || path?.end?.id === nodeData.id) {
+          node.isPathSelected = true
         }
-        node.isPath = !!path
         return
       }
 
       node = {
-        id: nodeData.id.toString(),
+        id: nodeData.id,
         name: nodeData.name,
         color: getCategoryColorValue(category.index),
         category: category.name,
         expand: false,
+        visible: true,
         collapsed,
         isPath: !!path,
-      }
-      if (path?.start?.id == nodeData.id || path?.end?.id == nodeData.id) {
-        node.isPathStartEnd = true
+        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id
       }
       Object.entries(nodeData.properties).forEach(([key, value]) => {
         node[key] = value
       })
       this.nodesMap.set(nodeData.id, node)
-      this.elements.push({ data: node })
-      newElements.push({ data: node })
+      this.elements.nodes.push(node)
+      newElements.nodes.push(node)
     })
 
+    if (!("edges" in results)) {
+      results.edges = results.links
+    }
+
     results.edges.forEach((edgeData: any) => {
-      let edge = this.edgesMap.get(edgeData.id)
-      if (edge) {
-        edge.isPath = !!path
+      let link = this.linksMap.get(edgeData.id)
+      if (link) {
+        link.isPath = !!path
         return
       }
 
-      let sourceId = edgeData.src_node.toString();
-      let destinationId = edgeData.dest_node.toString()
+      let sourceId = edgeData.src_node;
+      let destinationId = edgeData.dest_node
 
-      edge = {
-        id: `_${edgeData.id}`,
+      link = {
+        id: edgeData.id,
         source: sourceId,
         target: destinationId,
         label: edgeData.relation,
+        visible: true,
         expand: false,
         collapsed,
+        isPathSelected: false,
         isPath: !!path,
+        curve: 0
       }
-      this.edgesMap.set(edgeData.id, edge)
-      this.elements.push({ data: edge })
-      newElements.push({ data: edge })
+      this.linksMap.set(edgeData.id, link)
+      this.elements.links.push(link)
+      newElements.links.push(link)
     })
 
     return newElements
+  }
+
+  public removeLinks() {
+    this.elements = {
+      nodes: this.elements.nodes,
+      links: this.elements.links.map(link => {
+        if (this.elements.nodes.map(n => n.id).includes(link.source.id) && this.elements.nodes.map(n => n.id).includes(link.target.id)) {
+          return link
+        }
+        this.linksMap.delete(link.id)
+      }).filter(link => link !== undefined)
+    }
+  }
+
+  public visibleLinks(visible: boolean, ids?: number[]) {
+    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source.id) || ids.includes(link.target.id)) : this.elements.links
+
+    elements.forEach(link => {
+      if (visible && this.elements.nodes.map(n => n.id).includes(link.source.id) && link.source.visible && this.elements.nodes.map(n => n.id).includes(link.target.id) && link.target.visible) {
+        // eslint-disable-next-line no-param-reassign
+        link.visible = true
+      }
+
+      if (!visible && ((this.elements.nodes.map(n => n.id).includes(link.source.id) && !link.source.visible) || (this.elements.nodes.map(n => n.id).includes(link.target.id) && !link.target.visible))) {
+        // eslint-disable-next-line no-param-reassign
+        link.visible = false
+      }
+    })
   }
 }

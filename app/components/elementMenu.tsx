@@ -1,11 +1,11 @@
 "use client"
 
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react";
 import { Node } from "./model";
-import { ChevronLeft, ChevronRight, ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
+import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
-import { EventObject, Position } from "cytoscape";
 import { Path } from "../page";
+import { Position } from "./graphView";
 
 interface Props {
     obj: Node | undefined;
@@ -14,12 +14,12 @@ interface Props {
     handleRemove: (nodes: number[]) => void;
     position: Position | undefined;
     url: string;
-    handleExpand: (nodes: Node[], expand: boolean) => void;
-    parentWidth: number;
+    handelExpand: (nodes: Node[], expand: boolean) => void;
+    parentRef: RefObject<HTMLDivElement>;
 }
 
 
-export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handleExpand, parentWidth }: Props) {
+export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handelExpand, parentRef }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
 
@@ -42,8 +42,8 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                 }}
                 className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
                 style={{
-                    left: Math.max(-34, Math.min(position.x - containerWidth / 2, parentWidth + 34 - containerWidth)),
-                    top: position.y + 5,
+                    left: Math.max(-34, Math.min(position.x - 33 - containerWidth / 2, (parentRef?.current?.clientWidth || 0) + 32 - containerWidth)),
+                    top: Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - 9),
                 }}
             >
                 {
@@ -62,19 +62,19 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove(objects.map(o => Number(o.id)))}
+                                onClick={() => handleRemove(objects.map(o => o.id))}
                             >
                                 <EyeOff color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand(objects, true)}
+                                onClick={() => handelExpand(objects, true)}
                             >
                                 <Maximize2 color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand(objects, false)}
+                                onClick={() => handelExpand(objects, false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
@@ -90,7 +90,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove([Number(obj.id)])}
+                                onClick={() => handleRemove([obj.id])}
                             >
                                 <EyeOff color="white" />
                             </button>
@@ -114,13 +114,13 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand([obj], true)}
+                                onClick={() => handelExpand([obj], true)}
                             >
                                 <Maximize2 color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand([obj], false)}
+                                onClick={() => handelExpand([obj], false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
