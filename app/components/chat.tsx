@@ -1,16 +1,19 @@
 import { toast } from "@/components/ui/use-toast";
-import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
-import { Graph } from "./model";
+import { Graph, GraphData } from "./model";
 import { cn } from "@/lib/utils";
-import { LAYOUT } from "./code-graph";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import cytoscape from "cytoscape";
 import { prepareArg } from "../utils";
+
+type PathData = {
+    nodes: any[]
+    links: any[]
+}
 
 enum MessageTypes {
     Query,
@@ -68,7 +71,7 @@ const SELECTED_PATH_NODE_STYLE = {
 interface Message {
     type: MessageTypes;
     text?: string;
-    paths?: { nodes: any[], edges: any[] }[];
+    paths?: { nodes: any[], links: any[] }[];
     graphName?: string;
 }
 
@@ -77,10 +80,10 @@ interface Props {
     path: Path | undefined
     setPath: Dispatch<SetStateAction<Path | undefined>>
     graph: Graph
-    chartRef: MutableRefObject<cytoscape.Core | null>
-    selectedPathId: string | undefined
-    isPath: boolean
-    setIsPath: (isPathResponse: boolean) => void
+    selectedPathId: number | undefined
+    isPathResponse: boolean | undefined
+    setIsPathResponse: (isPathResponse: boolean | undefined) => void
+    setData: Dispatch<SetStateAction<GraphData>>
 }
 
 const SUGGESTIONS = [
@@ -102,20 +105,18 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isPath, setIsPath }: Props) {
+export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData }: Props) {
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
 
     // Holds the messages in the chat
-    const [paths, setPaths] = useState<{ nodes: any[], edges: any[] }[]>([]);
+    const [paths, setPaths] = useState<PathData[]>([]);
 
-    const [selectedPath, setSelectedPath] = useState<{ nodes: any[], edges: any[] }>();
+    const [selectedPath, setSelectedPath] = useState<PathData>();
 
     // Holds the user input while typing
     const [query, setQuery] = useState('');
-
-    const [isPathResponse, setIsPathResponse] = useState(false);
 
     const [tipOpen, setTipOpen] = useState(false);
 
@@ -127,16 +128,11 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const isSendMessage = messages.some(m => m.type === MessageTypes.Pending) || (messages.some(m => m.text === "Please select a starting point and the end point. Select or press relevant item on the graph") && !messages.some(m => m.type === MessageTypes.Path))
 
     useEffect(() => {
-        setSelectedPath(undefined)
-        setIsPathResponse(false)
-    }, [graph.Id])
-
-    useEffect(() => {
-        const p = paths.find((path) => [...path.edges, ...path.nodes].some((e: any) => e.id === selectedPathId))
+        const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
 
-        handleSetSelectedPath(p)
+        handelSetSelectedPath(p)
     }, [selectedPathId])
 
     // Scroll to the bottom of the chat on new message
@@ -151,90 +147,65 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     }, [path])
 
     useEffect(() => {
-        if (isPath) return
+        if (isPathResponse || isPathResponse === undefined) return
         setIsPathResponse(false)
         setSelectedPath(undefined)
         setPaths([])
-    }, [isPath])
-
-    useEffect(() => {
-        setIsPath(isPathResponse)
     }, [isPathResponse])
 
-    const updatePreviousPath = (chart: cytoscape.Core, p: { nodes: any[], edges: any[] }) => {
+    const handelSetSelectedPath = (p: PathData) => {
         setSelectedPath(prev => {
             if (prev) {
-                if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...prev.nodes, ...prev.edges].some((el: any) => el.id === e.id)))) {
-                    chart.edges().forEach(e => {
-                        const id = e.id()
+                if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
+                    graph.getElements().forEach(link => {
+                        const { id } = link
 
-                        if (prev.edges.some(el => el.id == id) && !p.edges.some(el => el.id == id)) {
-                            e.style(PATH_EDGE_STYLE)
+                        if (prev.links.some(e => e.id === id) && !p.links.some(e => e.id === id)) {
+                            link.isPathSelected = false
                         }
                     })
                 } else {
-                    const elements = chart.elements().filter(e => [...prev.edges, ...prev.nodes].some(el => el.id == e.id() && ![...p.nodes, ...p.edges].some(ele => ele.id == e.id()))).removeStyle()
-                    if (isPathResponse) {
+                    const elements = graph.getElements().filter(e => [...prev.links, ...prev.nodes].some(el => el.id === e.id && ![...p.nodes, ...p.links].some(ele => ele.id === el.id)))
+                    if (isPathResponse || isPathResponse === undefined) {
                         elements.forEach(e => {
-                            if (e.isNode()) {
-                                e.style(NODE_STYLE);
-                            }
-
-                            if (e.isEdge()) {
-                                e.style(EDGE_STYLE);
-                            }
+                            e.isPath = false
+                            e.isPathSelected = false
                         })
                     }
                 }
             }
             return p
         })
-    }
-
-    const handleSetSelectedPath = (p: { nodes: any[], edges: any[] }) => {
-        const chart = chartRef.current
-
-        if (!chart) return
-
-        updatePreviousPath(chart, p)
-
-        if (isPathResponse && paths.some((path) => [...path.nodes, ...path.edges].every((e: any) => [...p.nodes, ...p.edges].some((el: any) => el.id === e.id)))) {
-            chart.edges().forEach(e => {
-                const id = e.id()
-
-                if (p.edges.some(el => el.id == id)) {
-                    e.style(SELECTED_PATH_EDGE_STYLE)
+        if (isPathResponse && paths.length > 0 && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...p.nodes, ...p.links].some((el: any) => el.id === e.id)))) {
+            graph.Elements.links.forEach(e => {
+                if (p.links.some(el => el.id === e.id)) {
+                    e.isPathSelected = true
                 }
             })
-            chart.elements().filter(el => [...p.nodes, ...p.edges].some(e => e.id == el.id())).layout(LAYOUT).run();
         } else {
-            const elements: any = { nodes: [], edges: [] };
-            [...p.nodes, ...p.edges].forEach(e => {
-                let element = chart.elements(`#${e.id}`)
-                if (element.length === 0) {
-                    const type = e.id.startsWith("_")
-                    e = type ? { ...e, id: e.id.slice(1) } : e
-                    type
-                        ? elements.edges.push(e)
-                        : elements.nodes.push(e)
+            const elements: PathData = { nodes: [], links: [] };
+            p.nodes.forEach(node => {
+                let element = graph.Elements.nodes.find(n => n.id === node.id)
+                if (!element) {
+                    elements.nodes.push(node)
                 }
             })
-
-            chart.elements().filter((e) => {
-                console.log(e.id());
-                return [...p.nodes, ...p.edges].some((el) => el.id == e.id())
-            }).forEach((e) => {
-                if (e.id() == p.nodes[0].id || e.id() == p.nodes[p.nodes.length - 1].id) {
-                    e.removeStyle().style(SELECTED_PATH_NODE_STYLE);
-                } else if (e.isNode()) {
-                    e.removeStyle().style(PATH_NODE_STYLE);
+            p.links.forEach(link => {
+                let element = graph.Elements.links.find(l => l.id === link.id)
+                if (!element) {
+                    elements.links.push(link)
                 }
-
-                if (e.isEdge()) {
-                    e.removeStyle().style(SELECTED_PATH_EDGE_STYLE);
+            })
+            graph.extend(elements, true, { start: p.nodes[0], end: p.nodes[p.nodes.length - 1] })
+            graph.getElements().filter(e => "source" in e ? p.links.some(l => l.id === e.id) : p.nodes.some(n => n.id === e.id)).forEach(e => {
+                if ((e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id) || "source" in e) {
+                    e.isPathSelected = true
+                } else {
+                    e.isPath = true
                 }
-            }).layout(LAYOUT).run();
+            });
         }
+        setData({ ...graph.Elements })
     }
 
     // A function that handles the change event of the url input box
@@ -293,9 +264,7 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
     const handleSubmit = async () => {
         setSelectedPath(undefined)
 
-        const chart = chartRef?.current
-
-        if (!chart || !path?.start?.id || !path.end?.id) return
+        if (!path?.start?.id || !path.end?.id) return
 
         const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
@@ -320,40 +289,14 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
             return
         }
 
-        const formattedPaths: { nodes: any[], edges: any[] }[] = json.result.paths.map((p: any) => ({ nodes: p.filter((node: any, i: number) => i % 2 === 0), edges: p.filter((edge: any, i: number) => i % 2 !== 0) }))
-        chart.add(formattedPaths.flatMap((p: any) => graph.extend(p, false, path)))
-        formattedPaths.forEach(p => p.edges.forEach(e => e.id = `_${e.id}`))
-        graph.Elements.forEach((element: any) => {
-            const { id } = element.data
-            const e = chart.elements().filter(el => el.id() == id)
-            if (id == path.start?.id || id == path.end?.id) {
-                e.style(SELECTED_PATH_NODE_STYLE);
-            } else if (formattedPaths.some((p: any) => [...p.nodes, ...p.edges].some((el: any) => el.id == id))) {
-                if (e.isNode()) {
-                    e.style(PATH_NODE_STYLE);
-                }
+        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
+        formattedPaths.forEach((p: any) => graph.extend(p, false, path))
 
-                if (e.isEdge()) {
-                    e.style(PATH_EDGE_STYLE);
-                }
-            } else {
-                if (e.isNode()) {
-                    e.style(NODE_STYLE);
-                }
-
-                if (e.isEdge()) {
-                    e.style(EDGE_STYLE);
-                }
-            }
-        })
-        const elements = chart.elements().filter((element) => {
-            return formattedPaths.some(p => [...p.nodes, ...p.edges].some((node) => node.id == element.id()))
-        });
-        elements.layout(LAYOUT).run()
         setPaths(formattedPaths)
         setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
         setPath(undefined)
         setIsPathResponse(true)
+        setData({ ...graph.Elements })
     }
 
     const getTip = (disabled = false) =>
@@ -369,8 +312,11 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                     ])
 
                     if (isPathResponse) {
-                        chartRef.current?.elements().removeStyle().layout(LAYOUT).run()
                         setIsPathResponse(false)
+                        graph.getElements().forEach(e => {
+                            e.isPath = false
+                            e.isPathSelected = false
+                        })
                     }
 
                     setTimeout(() => setMessages(prev => [...prev, {
@@ -378,8 +324,8 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                         text: "Please select a starting point and the end point. Select or press relevant item on the graph"
                     }]), 300)
                     setTimeout(() => {
-                        setPath({})
                         setMessages(prev => [...prev, { type: MessageTypes.Path }])
+                        setPath({})
                     }, 4000)
                 }}
             >
@@ -457,9 +403,9 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                 key={i}
                                 className={cn(
                                     "flex text-wrap border p-2 gap-2 rounded-md",
-                                    p.nodes.length === selectedPath?.nodes.length 
-                                      && selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) 
-                                      && "border-[#FF66B3] bg-[#FFF0F7]",
+                                    p.nodes.length === selectedPath?.nodes.length &&
+                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) &&
+                                    "border-[#ffde21] bg-[#ffde2133]",
                                     message.graphName !== graph.Id && "opacity-50 bg-gray-200"
                                 )}
                                 title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
@@ -473,10 +419,13 @@ export function Chat({ repo, path, setPath, graph, chartRef, selectedPathId, isP
                                         return;
                                     }
 
-                                    if (p.nodes.length === selectedPath?.nodes.length &&
-                                        selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id))) return;
-                                    handleSetSelectedPath(p);
-                                    setIsPath(true);
+                                    if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
+                                    
+                                    if (!isPathResponse) {
+                                        setIsPathResponse(undefined)
+                                    
+                                    }
+                                    handelSetSelectedPath(p)
                                 }}
                             >
                                 <p className="font-bold">#{i + 1}</p>
