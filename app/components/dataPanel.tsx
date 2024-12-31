@@ -16,7 +16,16 @@ const excludedProperties = [
     "expand",
     "collapsed",
     "isPath",
-    "isPathStartEnd"
+    "isPathStartEnd",
+    "visible",
+    "index",
+    "__indexColor",
+    "x",
+    "y",
+    "vx",
+    "vy",
+    "fx",
+    "fy",
 ]
 
 export default function DataPanel({ obj, setObj, url }: Props) {
@@ -36,14 +45,14 @@ export default function DataPanel({ obj, setObj, url }: Props) {
     const object = Object.entries(obj).filter(([k]) => !excludedProperties.includes(k))
 
     return (
-        <div className="z-20 absolute -top-10 left-20 bg-[#343434] text-white shadow-lg rounded-lg flex flex-col max-h-[88%] max-w-[56%] overflow-hidden" >
+        <div data-name="node-details-panel" className="z-20 absolute -top-10 left-20 bg-[#343434] text-white shadow-lg rounded-lg flex flex-col max-h-[88%] max-w-[56%] overflow-hidden" >
             <header className="bg-[#191919] flex items-center gap-8 justify-between p-8">
                 <p title={label} className="truncate font-bold">{label.toUpperCase()}</p>
                 <button onClick={() => setObj(undefined)}>
                     <X color="white" />
                 </button>
             </header>
-            <main ref={containerRef} className="bg-[#343434] flex flex-col grow overflow-y-auto p-4 justify-center">
+            <main ref={containerRef} className="bg-[#343434] flex flex-col grow overflow-y-auto p-4">
                 {
                     object.map(([key, value]) => (
                         <div key={key} className="flex gap-2">
@@ -74,7 +83,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                 <button
                     className="flex items-center gap-2 p-2"
                     title="Copy src to clipboard"
-                    onClick={() => navigator.clipboard.writeText(obj.src)}
+                    onClick={() => navigator.clipboard.writeText(obj.src || "")}
                 >
                     <Copy color="white" />
                     Copy

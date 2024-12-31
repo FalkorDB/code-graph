@@ -15,4 +15,6 @@ export const waitToBeEnabled = async (locator: Locator, timeout: number = 5000):
     return false;
 };
 
-
+export function findNodeByName(nodes: { name: string }[], nodeName: string): any {
+    return nodes.find((node) => node.name === nodeName);
+  }
