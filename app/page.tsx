@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, Node } from './components/model';
+import { Graph, GraphData } from './components/model';
 import { BookOpen, Github, HomeIcon, X } from 'lucide-react';
 import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -11,8 +11,6 @@ import { toast } from '@/components/ui/use-toast';
 import { GraphContext } from './components/provider';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
 import { prepareArg } from './utils';
 
 export type PathNode = {
@@ -53,17 +51,22 @@ const TIPS: Tip[] = [
 
 export default function Home() {
 
+  const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
   const [graph, setGraph] = useState(Graph.empty());
   const [selectedValue, setSelectedValue] = useState("");
-  const [selectedPathId, setSelectedPathId] = useState<string>();
-  const [isPathResponse, setIsPathResponse] = useState<boolean>(false);
+  const [selectedPathId, setSelectedPathId] = useState<number>();
+  const [isPathResponse, setIsPathResponse] = useState<boolean | undefined>(false);
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [tipOpen, setTipOpen] = useState(false)
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
-  const chartRef = useRef<cytoscape.Core | null>(null)
+  const chartRef = useRef<any>()
+
+  useEffect(() => {
+    setIsPathResponse(false)
+  }, [graph.Id])
 
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -124,11 +127,14 @@ export default function Home() {
     }
 
     const json = await result.json()
-    setGraph(Graph.create(json.result.entities, graphName))
+    const g = Graph.create(json.result.entities, graphName)
+    setGraph(g)
+    // @ts-ignore
+    window.graph = g
   }
 
   // Send the user query to the server to expand a node
-  async function onFetchNode(nodeIds: string[]) {
+  async function onFetchNode(nodeIds: number[]) {
 
     const result = await fetch(`/api/repo/${prepareArg(graph.Id)}/neighbors`, {
       method: 'POST',
@@ -144,7 +150,7 @@ export default function Home() {
         title: "Uh oh! Something went wrong.",
         description: await result.text(),
       })
-      return []
+      return { nodes: [], links: [] }
     }
 
     const json = await result.json()
@@ -255,6 +261,8 @@ export default function Home() {
         <Panel defaultSize={70} className="flex flex-col" minSize={50}>
           <GraphContext.Provider value={graph}>
             <CodeGraph
+              data={data}
+              setData={setData}
               chartRef={chartRef}
               options={options}
               setOptions={setOptions}
@@ -273,14 +281,14 @@ export default function Home() {
         <PanelResizeHandle />
         <Panel className="border-l min-w-[420px]" defaultSize={30} >
           <Chat
-            chartRef={chartRef}
             setPath={setPath}
             path={path}
             repo={graph.Id}
             graph={graph}
             selectedPathId={selectedPathId}
-            isPath={isPathResponse}
-            setIsPath={setIsPathResponse}
+            isPathResponse={isPathResponse}
+            setIsPathResponse={setIsPathResponse}
+            setData={setData}
           />
         </Panel>
       </PanelGroup>
