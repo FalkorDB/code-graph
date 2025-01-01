@@ -52,7 +52,7 @@ const COLORS_ORDER = [
   "#80E6E6",
 ]
 
-export function getCategoryColorValue(index: number): string {
+export function getCategoryColorValue(index: number = 0): string {
   return COLORS_ORDER[index % COLORS_ORDER.length]
 }
 
@@ -176,13 +176,41 @@ export class Graph {
         return
       }
 
-      let sourceId = edgeData.src_node;
-      let destinationId = edgeData.dest_node
+      let source = this.nodesMap.get(edgeData.src_node)
+      let target = this.nodesMap.get(edgeData.dest_node)
+
+      if (!source) {
+        source = {
+          id: edgeData.src_node,
+          name: edgeData.src_node,
+          color: getCategoryColorValue(),
+          category: "",
+          expand: false,
+          visible: true,
+          collapsed,
+          isPath: !!path,
+          isPathSelected: path?.start?.id === edgeData.src_node || path?.end?.id === edgeData.src_node
+        }
+      }
+
+      if (!target) {
+        target = {
+          id: edgeData.dest_node,
+          name: edgeData.dest_node,
+          color: getCategoryColorValue(),
+          category: "",
+          expand: false,
+          visible: true,
+          collapsed,
+          isPath: !!path,
+          isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node
+        }
+      }
 
       link = {
         id: edgeData.id,
-        source: sourceId,
-        target: destinationId,
+        source,
+        target,
         label: edgeData.relation,
         visible: true,
         expand: false,
@@ -195,6 +223,34 @@ export class Graph {
       this.elements.links.push(link)
       newElements.links.push(link)
     })
+
+    newElements.links.forEach(link => {
+      const start = link.source
+      const end = link.target
+      const sameNodesLinks = this.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
+      const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
+      const even = index % 2 === 0
+      let curve
+
+      if (start.id === end.id) {
+        if (even) {
+          curve = Math.floor(-(index / 2)) - 3
+        } else {
+          curve = Math.floor((index + 1) / 2) + 2
+        }
+      } else {
+        console.log(link.curve)
+        if (even) {
+          curve = Math.floor(-(index / 2))
+        } else {
+          curve = Math.floor((index + 1) / 2)
+        }
+
+      }
+
+      link.curve = curve * 0.1
+    })
+
 
     return newElements
   }
