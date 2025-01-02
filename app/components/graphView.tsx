@@ -221,20 +221,7 @@ export default function GraphView({
 
                     if (!start.x || !start.y || !end.x || !end.y) return
 
-                    const sameNodesLinks = graph.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
-                    const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
-                    const even = index % 2 === 0
-                    let curve
-
                     if (start.id === end.id) {
-                        if (even) {
-                            curve = Math.floor(-(index / 2)) - 3
-                        } else {
-                            curve = Math.floor((index + 1) / 2) + 2
-                        }
-
-                        link.curve = curve * 0.1
-                        
                         const radius = NODE_SIZE * link.curve * 6.2;
                         const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
                         const textX = start.x + radius * Math.cos(angleOffset);
@@ -244,14 +231,6 @@ export default function GraphView({
                         ctx.translate(textX, textY);
                         ctx.rotate(-angleOffset);
                     } else {
-                        if (even) {
-                            curve = Math.floor(-(index / 2))
-                        } else {
-                            curve = Math.floor((index + 1) / 2)
-                        }
-
-                        link.curve = curve * 0.1
-                        
                         const midX = (start.x + end.x) / 2 + (end.y - start.y) * (link.curve / 2);
                         const midY = (start.y + end.y) / 2 + (start.x - end.x) * (link.curve / 2);
 
