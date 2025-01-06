@@ -78,7 +78,7 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handelNodeRightClick = (node: Node, evt: MouseEvent) => {
+    const handleNodeRightClick = (node: Node, evt: MouseEvent) => {
         if (evt.ctrlKey) {
             if (selectedObjects.some(obj => obj.id === node.id)) {
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
@@ -94,13 +94,13 @@ export default function GraphView({
         setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
-    const handelLinkClick = (link: Link, evt: MouseEvent) => {
+    const handleLinkClick = (link: Link, evt: MouseEvent) => {
         unsetSelectedObjects(evt)
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
     }
 
-    const handelNodeClick = async (node: Node) => {
+    const handleNodeClick = async (node: Node) => {
         if (isShowPath) {
             setPath(prev => {
                 if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
@@ -122,7 +122,7 @@ export default function GraphView({
                     title: `No neighbors found`,
                     description: `No neighbors found`,
                 })
-                
+
                 return
             }
         } else {
@@ -256,12 +256,12 @@ export default function GraphView({
                     ctx.fillText(link.label, 0, 0);
                     ctx.restore()
                 }}
-                onNodeClick={handelNodeClick}
+                onNodeClick={handleNodeClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
                     return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
                 })}
-                onNodeRightClick={handelNodeRightClick}
-                onLinkClick={handelLinkClick}
+                onNodeRightClick={handleNodeRightClick}
+                onLinkClick={handleLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}

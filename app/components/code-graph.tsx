@@ -81,7 +81,7 @@ export function CodeGraph({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Delete') {
                 if (selectedObj && selectedObjects.length === 0) return
-                handelRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined));
+                handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined));
             }
         };
 
@@ -213,7 +213,7 @@ export function CodeGraph({
         setData({ ...graph.Elements })
     }
 
-    const handelSearchSubmit = (node: any) => {
+    const handleSearchSubmit = (node: any) => {
         const n = { name: node.properties.name, id: node.id }
 
         let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
@@ -239,7 +239,7 @@ export function CodeGraph({
         }
     }
 
-    const handelRemove = (ids: number[]) => {
+    const handleRemove = (ids: number[]) => {
         graph.Elements.nodes.forEach(node => {
             if (!ids.includes(node.id)) return
             node.visible = false
@@ -272,7 +272,7 @@ export function CodeGraph({
                                             value={searchNode.name}
                                             onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
-                                            handleSubmit={handelSearchSubmit}
+                                            handleSubmit={handleSearchSubmit}
                                             node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
@@ -352,10 +352,10 @@ export function CodeGraph({
                                         setPath(path)
                                         setSelectedObj(undefined)
                                     }}
-                                    handleRemove={handelRemove}
+                                    handleRemove={handleRemove}
                                     position={position}
                                     url={url}
-                                    handelExpand={handleExpand}
+                                    handleExpand={handleExpand}
                                     parentRef={containerRef}
                                 />
                                 <GraphView
