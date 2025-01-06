@@ -78,18 +78,7 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handelNodeClick = (node: Node, evt: MouseEvent) => {
-        if (isShowPath) {
-            setPath(prev => {
-                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
-                    return ({ start: { id: Number(node.id), name: node.name } })
-                } else {
-                    return ({ end: { id: Number(node.id), name: node.name }, start: prev.start })
-                }
-            })
-            return
-        }
-
+    const handelNodeRightClick = (node: Node, evt: MouseEvent) => {
         if (evt.ctrlKey) {
             if (selectedObjects.some(obj => obj.id === node.id)) {
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
@@ -111,8 +100,20 @@ export default function GraphView({
         setSelectedPathId(link.id)
     }
 
-    const handelNodeRightClick = async (node: Node) => {
+    const handelNodeClick = async (node: Node) => {
+        if (isShowPath) {
+            setPath(prev => {
+                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
+                    return ({ start: { id: Number(node.id), name: node.name } })
+                } else {
+                    return ({ end: { id: Number(node.id), name: node.name }, start: prev.start })
+                }
+            })
+            return
+        }
+
         const expand = !node.expand
+        
         if (expand) {
             const elements = await onFetchNode([node.id])
 
@@ -121,6 +122,7 @@ export default function GraphView({
                     title: `No neighbors found`,
                     description: `No neighbors found`,
                 })
+                
                 return
             }
         } else {
