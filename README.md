@@ -8,28 +8,76 @@
 ## Getting Started
 [Live Demo](https://code-graph.falkordb.com/)
 
+## Run locally
+This project is composed of three pieces:
+
+1. FalkorDB Graph DB - this is where your graphs are stored and queried
+2. Code-Graph-Backend - backend logic
+3. Code-Graph-Frontend - website
+
+You'll need to start all three components:
+
 ### Run FalkorDB 
 
 ```bash
 docker run -p 6379:6379 -it --rm falkordb/falkordb
 ```
 
-### Install node packages
+### Run Code-Graph-Backend
+
+#### Clone the Backend
 
 ```bash
+git clone https://github.com/FalkorDB/code-graph-backend.git
+```
+
+#### Setup environment variables
+
+```bash
+export FALKORDB_HOST=falkordb FALKORDB_PORT=6379 \
+    OPENAI_API_KEY=<YOUR OPENAI_API_KEY> SECRET_TOKEN=Vespa \
+    FLASK_RUN_HOST=0.0.0.0 FLASK_RUN_PORT=5000
+```
+
+#### Install dependencies & run
+
+```bash
+cd code-graph-backend
+
+pip install --no-cache-dir -r requirements.txt
+
+flask --app api/index.py run --debug
+```
+
+### Run Code-Graph-Frontend
+
+#### Clone the Frontend
+
+```bash
+git clone https://github.com/FalkorDB/code-graph.git
+```
+
+#### Setup environment variables
+
+```bash
+export BACKEND_URL=http://localhost:5000 SECRET_TOKEN=Vespa OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
+```
+
+#### Install dependencies & run
+
+```bash
+cd code-graph
 npm install
-```
-
-### Set your OpenAI key
-
-```
-export OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-```
-
-### Run the development server
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Process a local repository
+```bash
+curl -X POST http://127.0.0.1:5000/analyze_folder -H "Content-Type: application/json" -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git","./deps", "./bin", "./build"]}' -H "Authorization: Vespa"
+```
+
+Note: At the moment code-graph can analyze both the C & Python source files.
+Support for additional languages e.g. JavaScript, Go, Java is planned to be added
+in the future.
+
+Browse to [http://localhost:3000](http://localhost:3000)
