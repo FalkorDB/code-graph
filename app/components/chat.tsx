@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
+import { NodeObject } from "react-force-graph-2d";
 
 type PathData = {
     nodes: any[]
@@ -84,6 +85,7 @@ interface Props {
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
+    chartRef: any
 }
 
 const SUGGESTIONS = [
@@ -105,7 +107,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData }: Props) {
+export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, chartRef }: Props) {
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
@@ -131,7 +133,6 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
-
         handelSetSelectedPath(p)
     }, [selectedPathId])
 
@@ -154,6 +155,9 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }, [isPathResponse])
 
     const handelSetSelectedPath = (p: PathData) => {
+        const chart = chartRef.current
+        
+        if (!chart) return
         setSelectedPath(prev => {
             if (prev) {
                 if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
@@ -206,6 +210,9 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             });
         }
         setData({ ...graph.Elements })
+        setTimeout(() => {
+            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => p.nodes.some(node => node.id === n.id));
+        }, 0)
     }
 
     // A function that handles the change event of the url input box
@@ -262,6 +269,10 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }
 
     const handleSubmit = async () => {
+        const chart = chartRef.current
+
+        if (!chart) return
+
         setSelectedPath(undefined)
 
         if (!path?.start?.id || !path.end?.id) return
@@ -297,6 +308,9 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setPath(undefined)
         setIsPathResponse(true)
         setData({ ...graph.Elements })
+        setTimeout(() => {
+            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => formattedPaths.some(p => p.nodes.some(node => node.id === n.id)));
+        }, 0)
     }
 
     const getTip = (disabled = false) =>

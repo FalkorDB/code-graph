@@ -191,6 +191,7 @@ export class Graph {
           isPath: !!path,
           isPathSelected: path?.start?.id === edgeData.src_node || path?.end?.id === edgeData.src_node
         }
+        this.nodesMap.set(edgeData.src_node, source)
       }
 
       if (!target) {
@@ -205,6 +206,7 @@ export class Graph {
           isPath: !!path,
           isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node
         }
+        this.nodesMap.set(edgeData.dest_node, target)
       }
 
       link = {
@@ -228,7 +230,7 @@ export class Graph {
       const start = link.source
       const end = link.target
       const sameNodesLinks = this.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
-      const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
+      const index = sameNodesLinks.findIndex(l => l.id === link.id) ?? 0
       const even = index % 2 === 0
       let curve
 
@@ -239,7 +241,6 @@ export class Graph {
           curve = Math.floor((index + 1) / 2) + 2
         }
       } else {
-        console.log(link.curve)
         if (even) {
           curve = Math.floor(-(index / 2))
         } else {

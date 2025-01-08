@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
+import { NodeObject } from "react-force-graph-2d";
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -208,34 +209,35 @@ export function CodeGraph({
         nodes.forEach((node) => {
             node.expand = expand
         })
-        
+
         setSelectedObj(undefined)
         setData({ ...graph.Elements })
     }
 
     const handelSearchSubmit = (node: any) => {
-        const n = { name: node.properties.name, id: node.id }
-
-        let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
-
-        if (!chartNode?.visible) {
-            if (!chartNode) {
-                chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
-            } else {
-                chartNode.visible = true
-                setCooldownTicks(undefined)
-                setCooldownTime(1000)
-            }
-            graph.visibleLinks(true, [chartNode.id])
-        }
-
-        setSearchNode(n)
-        setData({ ...graph.Elements })
-
         const chart = chartRef.current
-
+        
         if (chart) {
-            chart.centerAt(chartNode.x, chartNode.y, 1000);
+            const n = { name: node.properties.name, id: node.id }
+
+            let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
+            
+            if (!chartNode?.visible) {
+                if (!chartNode) {
+                    chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
+                } else {
+                    chartNode.visible = true
+                    setCooldownTicks(undefined)
+                    setCooldownTime(1000)
+                }
+                graph.visibleLinks(true, [chartNode!.id])
+                setData({ ...graph.Elements })
+            }
+            
+            setSearchNode(n)
+            setTimeout(() => {
+                chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
+            }, 0)
         }
     }
 
