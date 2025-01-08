@@ -61,7 +61,7 @@ export default function GraphView({
 }: Props) {
 
     const parentRef = useRef<HTMLDivElement>(null)
-
+    const lastClick = useRef<Date>(new Date())
     useEffect(() => {
         setCooldownTime(4000)
         setCooldownTicks(undefined)
@@ -101,7 +101,35 @@ export default function GraphView({
     }
 
     const handelNodeClick = async (node: Node) => {
-        if (isShowPath) {
+        const now = new Date()
+
+        const isDoubleClick = now.getTime() - lastClick.current.getTime() < 1000
+        lastClick.current = now
+        
+        if (isDoubleClick) {
+            const expand = !node.expand
+
+            if (expand) {
+                const elements = await onFetchNode([node.id])
+
+                if (elements.nodes.length === 0) {
+                    toast({
+                        title: `No neighbors found`,
+                        description: `No neighbors found`,
+                    })
+
+                    return
+                }
+            } else {
+                deleteNeighbors([node]);
+            }
+
+            node.expand = expand
+
+            setSelectedObj(undefined)
+            setData({ ...graph.Elements })
+
+        } else if (isShowPath) {
             setPath(prev => {
                 if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
                     return ({ start: { id: Number(node.id), name: node.name } })
@@ -111,28 +139,6 @@ export default function GraphView({
             })
             return
         }
-
-        const expand = !node.expand
-        
-        if (expand) {
-            const elements = await onFetchNode([node.id])
-
-            if (elements.nodes.length === 0) {
-                toast({
-                    title: `No neighbors found`,
-                    description: `No neighbors found`,
-                })
-                
-                return
-            }
-        } else {
-            deleteNeighbors([node]);
-        }
-
-        node.expand = expand
-
-        setSelectedObj(undefined)
-        setData({ ...graph.Elements })
     }
 
     return (
