@@ -33,9 +33,11 @@ git clone https://github.com/FalkorDB/code-graph-backend.git
 
 #### Setup environment variables
 
+`SECRET_TOKEN` - user defined token used to authorize the request
+
 ```bash
-export FALKORDB_HOST=falkordb FALKORDB_PORT=6379 \
-    OPENAI_API_KEY=<YOUR OPENAI_API_KEY> SECRET_TOKEN=Vespa \
+export FALKORDB_HOST=localhost FALKORDB_PORT=6379 \
+    OPENAI_API_KEY=<YOUR OPENAI_API_KEY> SECRET_TOKEN=<YOUR_SECRECT_TOKEN> \
     FLASK_RUN_HOST=0.0.0.0 FLASK_RUN_PORT=5000
 ```
 
@@ -46,7 +48,8 @@ cd code-graph-backend
 
 pip install --no-cache-dir -r requirements.txt
 
-flask --app api/index.py run --debug
+flask --app api/index.py run --debug > flask.log 2>&1 &
+
 ```
 
 ### Run Code-Graph-Frontend
@@ -60,7 +63,8 @@ git clone https://github.com/FalkorDB/code-graph.git
 #### Setup environment variables
 
 ```bash
-export BACKEND_URL=http://localhost:5000 SECRET_TOKEN=Vespa OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
+export BACKEND_URL=http://${FLASK_RUN_HOST}:${FLASK_RUN_PORT} \
+    SECRET_TOKEN=<YOUR_SECRECT_TOKEN> OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
 ```
 
 #### Install dependencies & run
@@ -73,7 +77,7 @@ npm run dev
 
 ### Process a local repository
 ```bash
-curl -X POST http://127.0.0.1:5000/analyze_folder -H "Content-Type: application/json" -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git","./deps", "./bin", "./build"]}' -H "Authorization: Vespa"
+curl -X POST http://127.0.0.1:5000/analyze_folder -H "Content-Type: application/json" -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git","./deps", "./bin", "./build"]}' -H "Authorization: <YOUR_SECRECT_TOKEN>"
 ```
 
 Note: At the moment code-graph can analyze both the C & Python source files.
