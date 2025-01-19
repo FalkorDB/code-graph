@@ -133,7 +133,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
-        handelSetSelectedPath(p)
+        handleSetSelectedPath(p)
     }, [selectedPathId])
 
     // Scroll to the bottom of the chat on new message
@@ -154,7 +154,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setPaths([])
     }, [isPathResponse])
 
-    const handelSetSelectedPath = (p: PathData) => {
+    const handleSetSelectedPath = (p: PathData) => {
         const chart = chartRef.current
         
         if (!chart) return
@@ -439,7 +439,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                         setIsPathResponse(undefined)
                                     
                                     }
-                                    handelSetSelectedPath(p)
+                                    handleSetSelectedPath(p)
                                 }}
                             >
                                 <p className="font-bold">#{i + 1}</p>

@@ -1,7 +1,7 @@
 
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, RefObject, SetStateAction, useEffect, useRef } from 'react';
+import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { Path } from '../page';
 
@@ -61,7 +61,23 @@ export default function GraphView({
 }: Props) {
 
     const parentRef = useRef<HTMLDivElement>(null)
-    const lastClick = useRef<Date>(new Date())
+    const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
+    const [parentWidth, setParentWidth] = useState(0)
+    const [parentHeight, setParentHeight] = useState(0)
+
+    useEffect(() => {
+        if (!chartRef.current || data.nodes.length === 0 || data.links.length === 0) return
+        chartRef.current.d3Force('link').id((link: any) => link.id).distance(50)
+        chartRef.current.d3Force('charge').strength(-300)
+        chartRef.current.d3Force('center').strength(0.05)
+    }, [chartRef, data.links.length, data.nodes.length])
+
+    useEffect(() => {
+        if (!parentRef.current) return
+        setParentWidth(parentRef.current.clientWidth)
+        setParentHeight(parentRef.current.clientHeight)
+    }, [parentRef.current?.clientWidth, parentRef.current?.clientHeight])
+
     useEffect(() => {
         setCooldownTime(4000)
         setCooldownTicks(undefined)
@@ -78,7 +94,7 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handelNodeRightClick = (node: Node, evt: MouseEvent) => {
+    const handleNodeRightClick = (node: Node, evt: MouseEvent) => {
         if (evt.ctrlKey) {
             if (selectedObjects.some(obj => obj.id === node.id)) {
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
@@ -94,18 +110,19 @@ export default function GraphView({
         setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
-    const handelLinkClick = (link: Link, evt: MouseEvent) => {
+    const handleLinkClick = (link: Link, evt: MouseEvent) => {
         unsetSelectedObjects(evt)
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
     }
 
-    const handelNodeClick = async (node: Node) => {
+    const handleNodeClick = async (node: Node) => {
         const now = new Date()
+        const { date, name } = lastClick.current
 
-        const isDoubleClick = now.getTime() - lastClick.current.getTime() < 1000
-        lastClick.current = now
-        
+        const isDoubleClick = now.getTime() - date.getTime() < 1000 && name === node.name
+        lastClick.current = { date: now, name: node.name }
+
         if (isDoubleClick) {
             const expand = !node.expand
 
@@ -145,8 +162,8 @@ export default function GraphView({
         <div ref={parentRef} className="relative w-fill h-full">
             <ForceGraph2D
                 ref={chartRef}
-                height={parentRef.current?.clientHeight || 0}
-                width={parentRef.current?.clientWidth || 0}
+                height={parentHeight}
+                width={parentWidth}
                 graphData={data}
                 nodeVisibility="visible"
                 linkVisibility="visible"
@@ -262,12 +279,12 @@ export default function GraphView({
                     ctx.fillText(link.label, 0, 0);
                     ctx.restore()
                 }}
-                onNodeClick={handelNodeClick}
+                onNodeClick={handleNodeClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
                     return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
                 })}
-                onNodeRightClick={handelNodeRightClick}
-                onLinkClick={handelLinkClick}
+                onNodeRightClick={handleNodeRightClick}
+                onLinkClick={handleLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}
