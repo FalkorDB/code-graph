@@ -3,7 +3,7 @@ import { GraphData, Node } from "./model";
 import { GraphContext } from "./provider";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { GitFork, Search, X } from "lucide-react";
+import { Download, GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
@@ -15,6 +15,7 @@ import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
 import { NodeObject } from "react-force-graph-2d";
+import html2canvas from 'html2canvas';
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -252,6 +253,51 @@ export function CodeGraph({
         setData({ ...graph.Elements })
     }
 
+    const handleDownloadImage = async () => {
+        try {
+            if (!containerRef.current) {
+                toast({
+                    variant: "destructive",
+                    title: "Error",
+                    description: "Graph container not found",
+                });
+                return;
+            }
+
+            // Wait for any pending renders/animations to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const canvas = await html2canvas(containerRef.current, {
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: '#ffffff',
+                scale: 10, // Increase quality
+                onclone: (clonedDoc) => {
+                    // Ensure the cloned element maintains proper dimensions
+                    const clonedElement = clonedDoc.querySelector('[data-name="canvas-info-panel"]') as HTMLElement;
+                    if (clonedElement) {
+                        clonedElement.style.position = 'absolute';
+                        clonedElement.style.bottom = '0';
+                    }
+                }
+            });
+            
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `${graphName || 'graph'}.png`;
+            link.click();
+        } catch (error) {
+            console.error('Error downloading graph image:', error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Failed to download image. Please try again.",
+            });
+        }
+    };
+
     return (
         <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
             <header className="flex flex-col gap-4">
@@ -345,6 +391,12 @@ export function CodeGraph({
                                             className="pointer-events-auto"
                                             chartRef={chartRef}
                                         />
+                                        <button
+                                            className="pointer-events-auto bg-white p-2 rounded-md"
+                                            onClick={handleDownloadImage}
+                                        >
+                                            <Download />
+                                        </button>
                                     </div>
                                 </div>
                                 <ElementMenu
