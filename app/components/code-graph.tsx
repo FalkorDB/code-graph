@@ -217,12 +217,12 @@ export function CodeGraph({
 
     const handleSearchSubmit = (node: any) => {
         const chart = chartRef.current
-        
+
         if (chart) {
             const n = { name: node.properties.name, id: node.id }
 
             let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
-            
+
             if (!chartNode?.visible) {
                 if (!chartNode) {
                     chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
@@ -234,7 +234,7 @@ export function CodeGraph({
                 graph.visibleLinks(true, [chartNode!.id])
                 setData({ ...graph.Elements })
             }
-            
+
             setSearchNode(n)
             setTimeout(() => {
                 chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
@@ -255,45 +255,27 @@ export function CodeGraph({
 
     const handleDownloadImage = async () => {
         try {
-            if (!containerRef.current) {
+            const canvas = document.querySelector('.force-graph-container canvas') as HTMLCanvasElement;
+            if (!canvas) {
                 toast({
-                    variant: "destructive",
                     title: "Error",
-                    description: "Graph container not found",
+                    description: "Canvas not found",
+                    variant: "destructive",
                 });
                 return;
             }
 
-            // Wait for any pending renders/animations to complete
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const canvas = await html2canvas(containerRef.current, {
-                useCORS: true,
-                allowTaint: true,
-                logging: false,
-                backgroundColor: '#ffffff',
-                scale: 10, // Increase quality
-                onclone: (clonedDoc) => {
-                    // Ensure the cloned element maintains proper dimensions
-                    const clonedElement = clonedDoc.querySelector('[data-name="canvas-info-panel"]') as HTMLElement;
-                    if (clonedElement) {
-                        clonedElement.style.position = 'absolute';
-                        clonedElement.style.bottom = '0';
-                    }
-                }
-            });
-            
-            const dataURL = canvas.toDataURL('image/svg+xml');
+            const dataURL = canvas.toDataURL('image/webp');
             const link = document.createElement('a');
             link.href = dataURL;
-            link.download = `${graphName || 'graph'}.svg`;
+            link.download = `${graphName}.webp`;
             link.click();
         } catch (error) {
             console.error('Error downloading graph image:', error);
             toast({
-                variant: "destructive",
                 title: "Error",
                 description: "Failed to download image. Please try again.",
+                variant: "destructive",
             });
         }
     };
