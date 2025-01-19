@@ -283,10 +283,10 @@ export function CodeGraph({
                 }
             });
             
-            const dataURL = canvas.toDataURL('image/png');
+            const dataURL = canvas.toDataURL('image/svg+xml');
             const link = document.createElement('a');
             link.href = dataURL;
-            link.download = `${graphName || 'graph'}.png`;
+            link.download = `${graphName || 'graph'}.svg`;
             link.click();
         } catch (error) {
             console.error('Error downloading graph image:', error);
