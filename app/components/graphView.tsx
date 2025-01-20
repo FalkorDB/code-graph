@@ -76,13 +76,6 @@ export default function GraphView({
     }, [data.nodes.length, data.links.length, chartRef])
 
     useEffect(() => {
-        if (!chartRef.current || data.nodes.length === 0 || data.links.length === 0) return
-        chartRef.current.d3Force('link').id((link: any) => link.id).distance(50)
-        chartRef.current.d3Force('charge').strength(-300)
-        chartRef.current.d3Force('center').strength(0.05)
-    }, [chartRef, data.links.length, data.nodes.length])
-
-    useEffect(() => {
         if (!parentRef.current) return
         setParentWidth(parentRef.current.clientWidth)
         setParentHeight(parentRef.current.clientHeight)
