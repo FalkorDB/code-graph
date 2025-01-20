@@ -66,17 +66,14 @@ export default function GraphView({
     const [parentHeight, setParentHeight] = useState(0)
 
     useEffect(() => {
-        if (!chartRef.current || data.nodes.length === 0 || data.links.length === 0) return
-        chartRef.current.d3Force('link').id((link: any) => link.id).distance(50)
-        chartRef.current.d3Force('charge').strength(-300)
-        chartRef.current.d3Force('center').strength(0.05)
-    }, [chartRef, data.links.length, data.nodes.length])
+        const timeout = setTimeout(() => {
+            chartRef.current?.zoomToFit(1000, 40)
+        }, 1000)
 
-    useEffect(() => {
-        if (!parentRef.current) return
-        setParentWidth(parentRef.current.clientWidth)
-        setParentHeight(parentRef.current.clientHeight)
-    }, [parentRef.current?.clientWidth, parentRef.current?.clientHeight])
+        return () => {
+            clearTimeout(timeout)
+        }
+    }, [data.nodes.length, data.links.length, chartRef])
 
     useEffect(() => {
         setCooldownTime(4000)
