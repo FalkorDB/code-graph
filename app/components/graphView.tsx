@@ -66,10 +66,25 @@ export default function GraphView({
     const [parentHeight, setParentHeight] = useState(0)
 
     useEffect(() => {
-        if (!parentRef.current) return
-        setParentWidth(parentRef.current.clientWidth)
-        setParentHeight(parentRef.current.clientHeight)
-    }, [parentRef.current?.clientWidth, parentRef.current?.clientHeight])
+        const handleResize = () => {
+            if (!parentRef.current) return
+            setParentWidth(parentRef.current.clientWidth)
+            setParentHeight(parentRef.current.clientHeight)
+        }
+
+        window.addEventListener('resize', handleResize)
+
+        const observer = new ResizeObserver(handleResize)
+
+        if (parentRef.current) {
+            observer.observe(parentRef.current)
+        }
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            observer.disconnect()
+        }
+    }, [parentRef])
 
     useEffect(() => {
         setCooldownTime(4000)
