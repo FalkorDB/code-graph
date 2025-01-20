@@ -15,8 +15,8 @@ interface Props {
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
     chartRef: RefObject<any>
-    selectedObj: Node | undefined
-    setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
+    selectedObj: Node | Link | undefined
+    setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
@@ -66,6 +66,16 @@ export default function GraphView({
     const [parentHeight, setParentHeight] = useState(0)
 
     useEffect(() => {
+        const timeout = setTimeout(() => {
+            chartRef.current?.zoomToFit(1000, 40)
+        }, 1000)
+
+        return () => {
+            clearTimeout(timeout)
+        }
+    }, [data.nodes.length, data.links.length, chartRef])
+
+    useEffect(() => {
         if (!chartRef.current || data.nodes.length === 0 || data.links.length === 0) return
         chartRef.current.d3Force('link').id((link: any) => link.id).distance(50)
         chartRef.current.d3Force('charge').strength(-300)
@@ -94,13 +104,13 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handleNodeRightClick = (node: Node, evt: MouseEvent) => {
-        if (evt.ctrlKey) {
+    const handleRightClick = (node: Node | Link, evt: MouseEvent) => {
+        if (evt.ctrlKey && "category" in node) {
             if (selectedObjects.some(obj => obj.id === node.id)) {
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
                 return
             } else {
-                setSelectedObjects([...selectedObjects, node])
+                setSelectedObjects([...selectedObjects, node as Node])
             }
         } else {
             setSelectedObjects([])
@@ -283,7 +293,8 @@ export default function GraphView({
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
                     return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
                 })}
-                onNodeRightClick={handleNodeRightClick}
+                onNodeRightClick={handleRightClick}
+                onLinkRightClick={handleRightClick}
                 onLinkClick={handleLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}

@@ -30,8 +30,6 @@ export type Link = LinkObject<Node, {
   target: Node,
   label: string,
   visible: boolean,
-  expand: boolean,
-  collapsed: boolean,
   isPathSelected: boolean,
   isPath: boolean,
   curve: number,
