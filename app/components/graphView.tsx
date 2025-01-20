@@ -66,16 +66,6 @@ export default function GraphView({
     const [parentHeight, setParentHeight] = useState(0)
 
     useEffect(() => {
-        const timeout = setTimeout(() => {
-            chartRef.current?.zoomToFit(1000, 40)
-        }, 1000)
-
-        return () => {
-            clearTimeout(timeout)
-        }
-    }, [data.nodes.length, data.links.length, chartRef])
-
-    useEffect(() => {
         if (!parentRef.current) return
         setParentWidth(parentRef.current.clientWidth)
         setParentHeight(parentRef.current.clientHeight)
