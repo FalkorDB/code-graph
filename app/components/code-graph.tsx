@@ -15,7 +15,6 @@ import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
 import { NodeObject } from "react-force-graph-2d";
-import html2canvas from 'html2canvas';
 
 const GraphView = dynamic(() => import('./graphView'));
 
