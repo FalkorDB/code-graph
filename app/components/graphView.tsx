@@ -66,14 +66,25 @@ export default function GraphView({
     const [parentHeight, setParentHeight] = useState(0)
 
     useEffect(() => {
-        const timeout = setTimeout(() => {
-            chartRef.current?.zoomToFit(1000, 40)
-        }, 1000)
+        const handleResize = () => {
+            if (!parentRef.current) return
+            setParentWidth(parentRef.current.clientWidth)
+            setParentHeight(parentRef.current.clientHeight)
+        }
+
+        window.addEventListener('resize', handleResize)
+
+        const observer = new ResizeObserver(handleResize)
+
+        if (parentRef.current) {
+            observer.observe(parentRef.current)
+        }
 
         return () => {
-            clearTimeout(timeout)
+            window.removeEventListener('resize', handleResize)
+            observer.disconnect()
         }
-    }, [data.nodes.length, data.links.length, chartRef])
+    }, [parentRef])
 
     useEffect(() => {
         setCooldownTime(4000)
