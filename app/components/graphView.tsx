@@ -2,7 +2,6 @@
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
-import { toast } from '@/components/ui/use-toast';
 import { Path } from '../page';
 
 export interface Position {
@@ -21,7 +20,7 @@ interface Props {
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>
-    deleteNeighbors: (nodes: Node[]) => void
+    handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     isPathResponse: boolean | undefined
@@ -48,7 +47,7 @@ export default function GraphView({
     setSelectedObjects,
     setPosition,
     onFetchNode,
-    deleteNeighbors,
+    handleExpand,
     isShowPath,
     setPath,
     isPathResponse,
@@ -132,28 +131,7 @@ export default function GraphView({
         lastClick.current = { date: now, name: node.name }
 
         if (isDoubleClick) {
-            const expand = !node.expand
-
-            if (expand) {
-                const elements = await onFetchNode([node.id])
-
-                if (elements.nodes.length === 0) {
-                    toast({
-                        title: `No neighbors found`,
-                        description: `No neighbors found`,
-                    })
-
-                    return
-                }
-            } else {
-                deleteNeighbors([node]);
-            }
-
-            node.expand = expand
-
-            setSelectedObj(undefined)
-            setData({ ...graph.Elements })
-
+            handleExpand([node], !node.expand)
         } else if (isShowPath) {
             setPath(prev => {
                 if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {

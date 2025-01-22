@@ -166,29 +166,38 @@ export function CodeGraph({
     }
 
     const deleteNeighbors = (nodes: Node[]) => {
+        
         if (nodes.length === 0) return;
-
+        
+        const expandedNodes: Node[] = []
+        
         graph.Elements = {
-            nodes: graph.Elements.nodes.map(node => {
+            nodes: graph.Elements.nodes.filter(node => {
+                if (!node.collapsed) return true
+                
                 const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
+                
+                debugger
 
-                if (!isTarget || !node.collapsed) return node
+                if (!isTarget) return true
 
-                if (node.expand) {
-                    node.expand = false
-                    deleteNeighbors([node])
+                const deleted = graph.NodesMap.delete(Number(node.id))
+
+                if (deleted && node.expand) {
+                    expandedNodes.push(node)
                 }
 
-                graph.NodesMap.delete(Number(node.id))
-            }).filter(node => node !== undefined),
+                return false
+            }),
             links: graph.Elements.links
         }
+        
+        deleteNeighbors(expandedNodes)
 
         graph.removeLinks()
     }
 
     const handleExpand = async (nodes: Node[], expand: boolean) => {
-
         if (expand) {
             const elements = await onFetchNode(nodes.map(n => n.id))
 
@@ -216,12 +225,11 @@ export function CodeGraph({
 
     const handleSearchSubmit = (node: any) => {
         const chart = chartRef.current
-        
+
         if (chart) {
-            const n = { name: node.properties.name, id: node.id }
 
             let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
-            
+
             if (!chartNode?.visible) {
                 if (!chartNode) {
                     chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
@@ -233,8 +241,7 @@ export function CodeGraph({
                 graph.visibleLinks(true, [chartNode!.id])
                 setData({ ...graph.Elements })
             }
-            
-            setSearchNode(n)
+        
             setTimeout(() => {
                 chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
             }, 0)
@@ -271,8 +278,7 @@ export function CodeGraph({
                                     <div className='flex gap-4'>
                                         <Input
                                             graph={graph}
-                                            value={searchNode.name}
-                                            onValueChange={({ name }) => setSearchNode({ name })}
+                                            onValueChange={(node) => setSearchNode(node)}
                                             icon={<Search />}
                                             handleSubmit={handleSearchSubmit}
                                             node={searchNode}
@@ -371,7 +377,7 @@ export function CodeGraph({
                                     setSelectedObjects={setSelectedObjects}
                                     setPosition={setPosition}
                                     onFetchNode={onFetchNode}
-                                    deleteNeighbors={deleteNeighbors}
+                                    handleExpand={handleExpand}
                                     isShowPath={isShowPath}
                                     setPath={setPath}
                                     isPathResponse={isPathResponse}
