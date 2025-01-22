@@ -1,7 +1,7 @@
 
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, RefObject, SetStateAction, useEffect, useRef } from 'react';
+import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { Path } from '../page';
 
@@ -61,6 +61,30 @@ export default function GraphView({
 }: Props) {
 
     const parentRef = useRef<HTMLDivElement>(null)
+    const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
+    const [parentWidth, setParentWidth] = useState(0)
+    const [parentHeight, setParentHeight] = useState(0)
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (!parentRef.current) return
+            setParentWidth(parentRef.current.clientWidth)
+            setParentHeight(parentRef.current.clientHeight)
+        }
+
+        window.addEventListener('resize', handleResize)
+
+        const observer = new ResizeObserver(handleResize)
+
+        if (parentRef.current) {
+            observer.observe(parentRef.current)
+        }
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            observer.disconnect()
+        }
+    }, [parentRef])
 
     useEffect(() => {
         setCooldownTime(4000)
@@ -78,18 +102,7 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handelNodeClick = (node: Node, evt: MouseEvent) => {
-        if (isShowPath) {
-            setPath(prev => {
-                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
-                    return ({ start: { id: Number(node.id), name: node.name } })
-                } else {
-                    return ({ end: { id: Number(node.id), name: node.name }, start: prev.start })
-                }
-            })
-            return
-        }
-
+    const handleNodeRightClick = (node: Node, evt: MouseEvent) => {
         if (evt.ctrlKey) {
             if (selectedObjects.some(obj => obj.id === node.id)) {
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
@@ -105,40 +118,60 @@ export default function GraphView({
         setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
-    const handelLinkClick = (link: Link, evt: MouseEvent) => {
+    const handleLinkClick = (link: Link, evt: MouseEvent) => {
         unsetSelectedObjects(evt)
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
     }
 
-    const handelNodeRightClick = async (node: Node) => {
-        const expand = !node.expand
-        if (expand) {
-            const elements = await onFetchNode([node.id])
+    const handleNodeClick = async (node: Node) => {
+        const now = new Date()
+        const { date, name } = lastClick.current
 
-            if (elements.nodes.length === 0) {
-                toast({
-                    title: `No neighbors found`,
-                    description: `No neighbors found`,
-                })
-                return
+        const isDoubleClick = now.getTime() - date.getTime() < 1000 && name === node.name
+        lastClick.current = { date: now, name: node.name }
+
+        if (isDoubleClick) {
+            const expand = !node.expand
+
+            if (expand) {
+                const elements = await onFetchNode([node.id])
+
+                if (elements.nodes.length === 0) {
+                    toast({
+                        title: `No neighbors found`,
+                        description: `No neighbors found`,
+                    })
+
+                    return
+                }
+            } else {
+                deleteNeighbors([node]);
             }
-        } else {
-            deleteNeighbors([node]);
+
+            node.expand = expand
+
+            setSelectedObj(undefined)
+            setData({ ...graph.Elements })
+
+        } else if (isShowPath) {
+            setPath(prev => {
+                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
+                    return ({ start: { id: Number(node.id), name: node.name } })
+                } else {
+                    return ({ end: { id: Number(node.id), name: node.name }, start: prev.start })
+                }
+            })
+            return
         }
-
-        node.expand = expand
-
-        setSelectedObj(undefined)
-        setData({ ...graph.Elements })
     }
 
     return (
         <div ref={parentRef} className="relative w-fill h-full">
             <ForceGraph2D
                 ref={chartRef}
-                height={parentRef.current?.clientHeight || 0}
-                width={parentRef.current?.clientWidth || 0}
+                height={parentHeight}
+                width={parentWidth}
                 graphData={data}
                 nodeVisibility="visible"
                 linkVisibility="visible"
@@ -221,20 +254,7 @@ export default function GraphView({
 
                     if (!start.x || !start.y || !end.x || !end.y) return
 
-                    const sameNodesLinks = graph.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
-                    const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
-                    const even = index % 2 === 0
-                    let curve
-
                     if (start.id === end.id) {
-                        if (even) {
-                            curve = Math.floor(-(index / 2)) - 3
-                        } else {
-                            curve = Math.floor((index + 1) / 2) + 2
-                        }
-
-                        link.curve = curve * 0.1
-                        
                         const radius = NODE_SIZE * link.curve * 6.2;
                         const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
                         const textX = start.x + radius * Math.cos(angleOffset);
@@ -244,14 +264,6 @@ export default function GraphView({
                         ctx.translate(textX, textY);
                         ctx.rotate(-angleOffset);
                     } else {
-                        if (even) {
-                            curve = Math.floor(-(index / 2))
-                        } else {
-                            curve = Math.floor((index + 1) / 2)
-                        }
-
-                        link.curve = curve * 0.1
-                        
                         const midX = (start.x + end.x) / 2 + (end.y - start.y) * (link.curve / 2);
                         const midY = (start.y + end.y) / 2 + (start.x - end.x) * (link.curve / 2);
 
@@ -275,12 +287,12 @@ export default function GraphView({
                     ctx.fillText(link.label, 0, 0);
                     ctx.restore()
                 }}
-                onNodeClick={handelNodeClick}
+                onNodeClick={handleNodeClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
                     return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
                 })}
-                onNodeRightClick={handelNodeRightClick}
-                onLinkClick={handelLinkClick}
+                onNodeRightClick={handleNodeRightClick}
+                onLinkClick={handleLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}

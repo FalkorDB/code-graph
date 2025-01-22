@@ -152,6 +152,10 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//main[@data-name='main-chat']/*[last()-1]/p");
     }
 
+    private get responseLoadingImg(): Locator {
+        return this.page.locator("//img[@alt='Waiting for response']");
+    }
+
     /* Canvas Locators*/
 
     private get canvasElement(): Locator {
@@ -277,7 +281,8 @@ export default class CodeGraph extends BasePage {
     }
 
     async getTextInLastChatElement(): Promise<string>{
-        await delay(2500);
+        await this.page.waitForSelector('img[alt="Waiting for response"]', { state: 'hidden' });
+        await delay(2000);
         return (await this.lastElementInChat.textContent())!;
     }
 
@@ -349,6 +354,7 @@ export default class CodeGraph extends BasePage {
             await this.selectGraphInComboBoxByName(graph).waitFor({ state : 'visible'})
             await this.selectGraphInComboBoxByName(graph).click();
         }
+        await delay(2000); // graph animation delay
     }
 
     async createProject(url : string): Promise<void> {
@@ -417,7 +423,7 @@ export default class CodeGraph extends BasePage {
 
     async nodeClick(x: number, y: number): Promise<void> {
         await this.canvasElement.hover({ position: { x, y } });
-        await this.canvasElement.click({ position: { x, y } });
+        await this.canvasElement.click({ position: { x, y }, button: 'right' });
     }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {

@@ -14,12 +14,12 @@ interface Props {
     handleRemove: (nodes: number[]) => void;
     position: Position | undefined;
     url: string;
-    handelExpand: (nodes: Node[], expand: boolean) => void;
+    handleExpand: (nodes: Node[], expand: boolean) => void;
     parentRef: RefObject<HTMLDivElement>;
 }
 
 
-export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handelExpand, parentRef }: Props) {
+export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handleExpand, parentRef }: Props) {
     const [currentObj, setCurrentObj] = useState<Node>();
     const [containerWidth, setContainerWidth] = useState(0);
 
@@ -68,13 +68,13 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand(objects, true)}
+                                onClick={() => handleExpand(objects, true)}
                             >
                                 <Maximize2 color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand(objects, false)}
+                                onClick={() => handleExpand(objects, false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
@@ -114,13 +114,13 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand([obj], true)}
+                                onClick={() => handleExpand([obj], true)}
                             >
                                 <Maximize2 color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand([obj], false)}
+                                onClick={() => handleExpand([obj], false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
