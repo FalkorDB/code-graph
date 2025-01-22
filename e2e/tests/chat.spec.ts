@@ -110,12 +110,15 @@ test.describe("Chat tests", () => {
       const result = await chat.getTextInLastChatElement();
       const number = result.match(/\d+/g)?.[0]!;
       responses.push(number);
+      
     }
     const identicalResponses = responses.every((value) => value === responses[0]);
     expect(identicalResponses).toBe(true);
   });
 
   test(`Validate UI response matches API response for a given question in chat`, async () => {
+    const api = new ApiCalls();
+    const apiResponse = await api.askQuestion(PROJECT_NAME, Node_Question);
     const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await chat.selectGraph(GRAPH_ID);
   
@@ -123,8 +126,6 @@ test.describe("Chat tests", () => {
     const uiResponse = await chat.getTextInLastChatElement();
     const number = uiResponse.match(/\d+/g)?.[0]!;
     
-    const api = new ApiCalls();
-    const apiResponse = await api.askQuestion(PROJECT_NAME, Node_Question);
     expect(number).toEqual(apiResponse.result.response.match(/\d+/g)?.[0]);
   });
 });
