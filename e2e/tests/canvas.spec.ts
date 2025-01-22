@@ -43,15 +43,14 @@ test.describe("Canvas tests", () => {
   test(`Verify center graph button centers nodes in canvas`, async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await codeGraph.selectGraph(GRAPH_ID);
+    await codeGraph.clickCenter();
     const initialGraph = await codeGraph.getCanvasScaling();
-    
     await codeGraph.clickZoomOut();
     await codeGraph.clickZoomOut();
     await codeGraph.clickCenter();
     const updatedGraph = await codeGraph.getCanvasScaling();
     expect(Math.abs(initialGraph.scaleX - updatedGraph.scaleX)).toBeLessThanOrEqual(0.1);
     expect(Math.abs(initialGraph.scaleY - updatedGraph.scaleY)).toBeLessThanOrEqual(0.1);
-
   })
 
   nodes.slice(0,2).forEach((node) => {
