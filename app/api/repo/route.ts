@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getEnvVariables } from "../utils";
 
 export async function GET() {
@@ -22,39 +22,41 @@ export async function GET() {
 		return NextResponse.json({ result: repositories }, { status: 200 })
 	} catch (err) {
 		console.error(err)
-        return NextResponse.json((err as Error).message, { status: 400 })
+		return NextResponse.json((err as Error).message, { status: 400 })
 	}
 }
 
-// export async function POST(request: NextRequest) {
-	
-// 	const repo_url = request.nextUrl.searchParams.get('url');
-	
-// 	try {
+export async function POST(request: NextRequest) {
 
-// 		if (!repo_url) {
-// 			throw new Error("URL parameter is missing");
-// 		}
-		
-// 		const { url, token } = getEnvVariables();
+	const repo_url = request.nextUrl.searchParams.get('url');
 
-// 		const result = await fetch(`${url}/process_repo`, {
-// 			method: 'POST',
-// 			body: JSON.stringify({ repo_url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
-// 			headers: {
-// 				"Authorization": token,
-// 				'Content-Type': 'application/json'
-// 		  },
-// 			cache: 'no-store'
-//     });
+	try {
 
-// 		if (!result.ok) {
-// 			throw new Error(await result.text());
-// 		}
+		if (!repo_url) {
+			throw new Error("URL parameter is missing");
+		}
 
-// 		return NextResponse.json({ message: "success" }, { status: 200 });
-// 	} catch (err) {
-// 		console.error(err)
-//      return NextResponse.json((err as Error).message, { status: 400 });
-// 	}
-// }
+		const { url, token } = getEnvVariables();
+
+		const isLocal = repo_url.startsWith("file://")
+
+		const result = await fetch(`${url}/${isLocal ? "analyze_folder" : "process_repo"}`, {
+			method: 'POST',
+			body: JSON.stringify({ repo_url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
+			headers: {
+				"Authorization": token,
+				'Content-Type': 'application/json'
+			},
+			cache: 'no-store'
+		});
+
+		if (!result.ok) {
+			throw new Error(await result.text());
+		}
+
+		return NextResponse.json({ message: "success" }, { status: 200 });
+	} catch (err) {
+		console.error(err)
+		return NextResponse.json((err as Error).message, { status: 400 });
+	}
+}
