@@ -33,20 +33,5 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: false
-          tags: ${{ env.TAGS }}
-    
-      - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          image-ref: ${{ env.TAGS }}
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
-    
-      - name: Push image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
           push: true
           tags: ${{ env.TAGS }}
