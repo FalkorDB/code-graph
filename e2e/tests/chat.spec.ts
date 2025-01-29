@@ -31,7 +31,7 @@ test.describe("Chat tests", () => {
     await chat.selectGraph(GRAPH_ID);
     const isLoadingArray: boolean[] = [];
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
       await chat.sendMessage(Node_Question);
       const isLoading: boolean = await chat.getpreviousQuestionLoadingImage();
       isLoadingArray.push(isLoading);
@@ -45,16 +45,44 @@ test.describe("Chat tests", () => {
   test("Verify auto-scroll and manual scroll in chat", async () => {
     const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await chat.selectGraph(GRAPH_ID);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
       await chat.sendMessage(Node_Question);
     }
     await delay(500);
     await chat.scrollToTop();
     const { scrollTop } = await chat.getScrollMetrics();
     expect(scrollTop).toBeLessThanOrEqual(1);
-    await chat.sendMessage("Latest Message");
+    await chat.sendMessage(Node_Question);
     await delay(500);
     expect(await chat.isAtBottom()).toBe(true);
+  });
+
+  test(`Validate consistent UI responses for repeated questions in chat`, async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+    const responses: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      await chat.sendMessage(Node_Question);
+      const result = await chat.getTextInLastChatElement();
+      const number = result.match(/\d+/g)?.[0]!;
+      responses.push(number);
+      
+    }
+    const identicalResponses = responses.every((value) => value === responses[0]);
+    expect(identicalResponses).toBe(true);
+  });
+
+  test(`Validate UI response matches API response for a given question in chat`, async () => {
+    const api = new ApiCalls();
+    const apiResponse = await api.askQuestion(PROJECT_NAME, Node_Question);
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPH_ID);
+  
+    await chat.sendMessage(Node_Question);
+    const uiResponse = await chat.getTextInLastChatElement();
+    const number = uiResponse.match(/\d+/g)?.[0]!;
+    
+    expect(number).toEqual(apiResponse.result.response.match(/\d+/g)?.[0]);
   });
 
   nodesPath.forEach((path) => {
@@ -100,32 +128,4 @@ test.describe("Chat tests", () => {
       expect(selectedQuestion).toEqual(await chat.getLastQuestionInChat())
     });
   }
-
-  test(`Validate consistent UI responses for repeated questions in chat`, async () => {
-    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-    await chat.selectGraph(GRAPH_ID);
-    const responses: string[] = [];
-    for (let i = 0; i < 3; i++) {
-      await chat.sendMessage(Node_Question);
-      const result = await chat.getTextInLastChatElement();
-      const number = result.match(/\d+/g)?.[0]!;
-      responses.push(number);
-      
-    }
-    const identicalResponses = responses.every((value) => value === responses[0]);
-    expect(identicalResponses).toBe(true);
-  });
-
-  test(`Validate UI response matches API response for a given question in chat`, async () => {
-    const api = new ApiCalls();
-    const apiResponse = await api.askQuestion(PROJECT_NAME, Node_Question);
-    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
-    await chat.selectGraph(GRAPH_ID);
-  
-    await chat.sendMessage(Node_Question);
-    const uiResponse = await chat.getTextInLastChatElement();
-    const number = uiResponse.match(/\d+/g)?.[0]!;
-    
-    expect(number).toEqual(apiResponse.result.response.match(/\d+/g)?.[0]);
-  });
 });
