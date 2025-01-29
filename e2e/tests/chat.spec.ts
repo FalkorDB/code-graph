@@ -128,6 +128,8 @@ test.describe("Chat tests", () => {
       await chat.clickOnQuestionOptionsMenu();
       const selectedQuestion = await chat.selectAndGetQuestionInOptionsMenu(questionNumber.toString());  
       expect(selectedQuestion).toEqual(await chat.getLastQuestionInChat())
+      const result = await chat.getTextInLastChatElement();
+      expect(result).toBeDefined();
     });
   }
 });

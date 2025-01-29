@@ -1,6 +1,6 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
-import { delay, waitToBeEnabled } from "../utils";
+import { waitForStableText, waitToBeEnabled } from "../utils";
 
 declare global {
     interface Window {
@@ -253,7 +253,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async isTipMenuVisible(): Promise<boolean> {
-        await delay(500);
+        await this.page.waitForTimeout(500);
         return await this.genericMenu.isVisible();
     }
 
@@ -267,11 +267,12 @@ export default class CodeGraph extends BasePage {
     }
     
     async clickAskquestionBtn(): Promise<void> {
+        await waitToBeEnabled(this.askquestionBtn);
         await this.askquestionBtn.click();
     }
 
     async sendMessage(message: string) {
-        await waitToBeEnabled(this.askquestionInput);
+        await waitToBeEnabled(this.askquestionBtn);
         await this.askquestionInput.fill(message);
         await this.askquestionBtn.click();
     }
@@ -285,8 +286,7 @@ export default class CodeGraph extends BasePage {
 
     async getTextInLastChatElement(): Promise<string>{
         await this.waitingForResponseIndicator.waitFor({ state: 'hidden' });
-        await delay(2000); //delay for chat response animation 
-        return (await this.lastElementInChat.textContent())!;
+        return await waitForStableText(this.lastElementInChat);
     }
 
     async getLastChatElementButtonCount(): Promise<number | null>{
@@ -326,7 +326,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNotificationError(): Promise<boolean> {
-        await delay(500);
+        await this.page.waitForTimeout(500);
         return await this.notificationError.isVisible();
     }
 
@@ -357,7 +357,7 @@ export default class CodeGraph extends BasePage {
             await this.selectGraphInComboBoxByName(graph).waitFor({ state : 'visible'})
             await this.selectGraphInComboBoxByName(graph).click();
         }
-        await delay(2000); // graph animation delay
+        await this.page.waitForTimeout(2000); // graph animation delay
     }
 
     async createProject(url : string): Promise<void> {
@@ -386,8 +386,9 @@ export default class CodeGraph extends BasePage {
     }
 
     async selectSearchBarOptionBtn(buttonNum: string): Promise<void> {
-        await delay(1000);
-        await this.searchBarOptionBtn(buttonNum).click();
+        const button = this.searchBarOptionBtn(buttonNum);
+        await button.waitFor({ state : "visible"})
+        await button.click();
     }
 
     async getSearchBarInputValue(): Promise<string> {
@@ -417,11 +418,13 @@ export default class CodeGraph extends BasePage {
 
     async clickCenter(): Promise<void> {
         await this.centerBtn.click();
-        await delay(2000); //animation delay
+        await this.page.waitForTimeout(2000); //animation delay
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
-        await this.elementMenuButton("Remove").click();
+        const button = this.elementMenuButton("Remove");
+        await button.waitFor({ state: "visible"})
+        await button.click();
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
@@ -456,15 +459,21 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeDetailsPanel(): Promise<boolean> {
+        await this.page.waitForTimeout(500);
         return this.nodeDetailsPanel.isVisible();
     }
 
     async clickOnViewNode(): Promise<void> {
-        await this.elementMenuButton("View Node").click();
+        const button = this.elementMenuButton("View Node");
+        await button.waitFor({ state: "visible"})
+        await button.click();
     }
 
     async getNodeDetailsHeader(): Promise<string> {
-        await this.elementMenuButton("View Node").click();
+        const button = this.elementMenuButton("View Node");
+        await button.waitFor({ state: "visible"})
+        await button.click();
+        await this.nodedetailsPanelHeader.waitFor({ state: "visible" })
         const text = await this.nodedetailsPanelHeader.innerHTML();
         return text;
     }
@@ -480,14 +489,15 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnCopyToClipboardNodePanelDetails(): Promise<string> {
+        await this.copyToClipboardNodePanelDetails.waitFor({ state: "visible" });
         await this.copyToClipboardNodePanelDetails.click();
-        await delay(1000)
         return await this.page.evaluate(() => navigator.clipboard.readText());
     }
 
     async clickOnCopyToClipboard(): Promise<string> {
-        await this.elementMenuButton("Copy src to clipboard").click();
-        await delay(1000)
+        const button = this.elementMenuButton("Copy src to clipboard"); 
+        await button.waitFor({ state: "visible" });
+        await button.click(); 
         return await this.page.evaluate(() => navigator.clipboard.readText());
     }
 
@@ -496,15 +506,16 @@ export default class CodeGraph extends BasePage {
     }
 
     async getNodeDetailsPanelElements(): Promise<string[]> {
-        await this.elementMenuButton("View Node").click();
-        await delay(500)
+        const button = this.elementMenuButton("View Node");
+        await button.waitFor({ state: "visible"})
+        await button.click();
         const elements = await this.nodedetailsPanelElements.all();
         return Promise.all(elements.map(element => element.innerHTML()));
     }
 
     async getGraphDetails(): Promise<any> {
         await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await delay(2000)
+        await this.page.waitForTimeout(2000); //canvas animation
         await this.page.waitForFunction(() => !!window.graph);
     
         const graphData = await this.page.evaluate(() => {
