@@ -271,7 +271,6 @@ export default class CodeGraph extends BasePage {
     }
 
     async sendMessage(message: string) {
-        await delay(3000); //delay before sending a request to the AI model 
         await waitToBeEnabled(this.askquestionInput);
         await this.askquestionInput.fill(message);
         await this.askquestionBtn.click();
@@ -280,9 +279,12 @@ export default class CodeGraph extends BasePage {
     async clickOnLightBulbBtn(): Promise<void> {
         await this.lightbulbBtn.click();
     }
+    private get waitingForResponseIndicator(): Locator {
+        return this.page.locator('img[alt="Waiting for response"]');
+    }
 
     async getTextInLastChatElement(): Promise<string>{
-        await this.page.waitForSelector('img[alt="Waiting for response"]', { state: 'hidden' });
+        await this.waitingForResponseIndicator.waitFor({ state: 'hidden' });
         await delay(2000); //delay for chat response animation 
         return (await this.lastElementInChat.textContent())!;
     }
