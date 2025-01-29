@@ -193,6 +193,10 @@ export default class CodeGraph extends BasePage {
     private get nodeDetailsPanel(): Locator {
         return this.page.locator("//div[@data-name='node-details-panel']");
     }
+
+    private get elementMenu(): Locator {
+        return this.page.locator("//div[@id='elementMenu']");
+    }
     
     private get nodedetailsPanelHeader(): Locator {
         return this.page.locator("//div[@data-name='node-details-panel']/header/p");
@@ -422,8 +426,8 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
+        await this.elementMenu.waitFor({ state: "visible", timeout: 10000})
         const button = this.elementMenuButton("Remove");
-        await button.waitFor({ state: "visible"})
         await button.click();
     }
 
@@ -470,10 +474,10 @@ export default class CodeGraph extends BasePage {
     }
 
     async getNodeDetailsHeader(): Promise<string> {
+        await this.elementMenu.waitFor({ state: "visible", timeout: 10000})
         const button = this.elementMenuButton("View Node");
-        await button.waitFor({ state: "visible"})
         await button.click();
-        await this.nodedetailsPanelHeader.waitFor({ state: "visible" })
+        await this.nodedetailsPanelHeader.waitFor({ state: "visible", timeout: 10000 })
         const text = await this.nodedetailsPanelHeader.innerHTML();
         return text;
     }
