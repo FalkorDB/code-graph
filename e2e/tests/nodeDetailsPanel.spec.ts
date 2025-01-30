@@ -25,6 +25,7 @@ test.describe("Node details panel tests", () => {
       const graphData = await codeGraph.getGraphDetails();
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      expect(targetNode).toBeDefined();
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnViewNode();
       expect(await codeGraph.isNodeDetailsPanel()).toBe(true)

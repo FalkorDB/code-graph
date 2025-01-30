@@ -432,8 +432,13 @@ export default class CodeGraph extends BasePage {
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
+        await this.page.waitForTimeout(500);
+        console.log(`Clicking node at: X=${x}, Y=${y}`);
         await this.canvasElement.hover({ position: { x, y } });
+        await this.page.waitForTimeout(300); // Allow hover to take effect
+        console.log("Hover successful");
         await this.canvasElement.click({ position: { x, y }, button: 'right' });
+        console.log("Right-click performed");
     }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
