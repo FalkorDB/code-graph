@@ -1,8 +1,8 @@
-
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
+import dagre from 'dagre';
 
 export interface Position {
     x: number,
@@ -33,8 +33,16 @@ interface Props {
 }
 
 const PATH_COLOR = "#ffde21"
-const NODE_SIZE = 6;
-const PADDING = 2;
+const NODE_SIZE = 6
+const PADDING = 2
+const DAGRE_NODE_WIDTH = 10
+const DAGRE_NODE_HEIGHT = 10
+const RANKS = {
+    FILE: 0,
+    CLASS: 1,
+    FUNCTION: 2,
+    OTHER: 3
+};
 
 export default function GraphView({
     data,
@@ -63,6 +71,7 @@ export default function GraphView({
     const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
     const [parentWidth, setParentWidth] = useState(0)
     const [parentHeight, setParentHeight] = useState(0)
+    const layoutCache = useRef<{key: string, data: GraphData} | null>(null);
 
     useEffect(() => {
         const handleResize = () => {
@@ -144,13 +153,97 @@ export default function GraphView({
         }
     }
 
+    const getRank = (node: Node) => {
+        switch (node.category) {
+            case 'file': return RANKS.FILE;
+            case 'class': return RANKS.CLASS;
+            case 'function': return RANKS.FUNCTION;
+            default: return RANKS.OTHER;
+        }
+    }
+
+    const getDagreLayout = (graphData: GraphData) => {
+        if (!graphData?.nodes?.length) return graphData;
+        // Cache the previous layout if graph data hasn't changed
+        const graphKey = JSON.stringify(graphData.nodes.map(n => n.id).join(',') + '|' + graphData.links.map(l => `${l.source.id}-${l.target.id}`).join(','));
+        if (layoutCache.current?.key === graphKey) {
+            return layoutCache.current.data;
+        }
+
+        const g = new dagre.graphlib.Graph();
+        g.setGraph({
+            rankdir: 'TB',
+            nodesep: 30,
+            align: 'UL',
+            ranker: 'tight-tree', // Changed from 'network-simplex' for better performance
+            ranksep: 100,
+            edgesep: 10,
+        });
+        g.setDefaultEdgeLabel(() => ({}));
+
+        // Batch node operations
+        const nodeOperations = graphData.nodes.map(node => ({
+            id: node.id.toString(),
+            config: {
+                width: DAGRE_NODE_WIDTH,
+                height: DAGRE_NODE_HEIGHT,
+                rank: getRank(node)
+            }
+        }));
+
+        // Perform batch node setting
+        nodeOperations.forEach(({id, config}) => {
+            g.setNode(id, config);
+        });
+
+        // Batch edge operations
+        graphData.links.forEach((link) => {
+            g.setEdge(
+                link.source.id.toString(),
+                link.target.id.toString(),
+                { weight: 1, label: link.label }
+            );
+        });
+
+        try {
+            dagre.layout(g);
+
+            // Batch node position updates
+            graphData.nodes.forEach((node) => {
+                const nodeWithPos = g.node(node.id.toString());
+                if (nodeWithPos) {
+                    node.x = nodeWithPos.x;
+                    node.y = nodeWithPos.y;
+                }
+            });
+
+            // Cache the result
+            layoutCache.current = {
+                key: graphKey,
+                data: graphData
+            };
+
+            // Defer zoom to fit
+            requestAnimationFrame(() => {
+                if (chartRef.current) {
+                    chartRef.current.zoomToFit(100, 50);
+                }
+            });
+
+        } catch (error) {
+            console.error('Error in dagre layout:', error);
+        }
+
+        return graphData;
+    };
+
     return (
         <div ref={parentRef} className="relative w-fill h-full">
             <ForceGraph2D
                 ref={chartRef}
                 height={parentHeight}
                 width={parentWidth}
-                graphData={data}
+                graphData={getDagreLayout(data)}
                 nodeVisibility="visible"
                 linkVisibility="visible"
                 linkCurvature="curve"
@@ -256,12 +349,23 @@ export default function GraphView({
                         ctx.rotate(textAngle);
                     }
 
+                    ctx.font = '2px Arial';
+                    const textWidth = ctx.measureText(link.label).width;
+
+                    ctx.fillStyle = 'white'; // Background color
+                    ctx.globalAlpha = 0.8; // Semi-transparent background
+                    ctx.fillRect(
+                        -textWidth / 2,
+                        -2, // -2 approximates half text height
+                        textWidth,
+                        4 // 4 approximates text height
+                    );
+
                     // add label
                     ctx.globalAlpha = 1;
                     ctx.fillStyle = 'black';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.font = '2px Arial';
                     ctx.fillText(link.label, 0, 0);
                     ctx.restore()
                 }}
