@@ -91,7 +91,7 @@ test.describe("Chat tests", () => {
     test(`Verify successful node path connection between two nodes in chat for ${path.firstNode} and ${path.secondNode}`, async () => {
       const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await chat.selectGraph(GRAPH_ID);
-      await chat.clickOnshowPathBtn();
+      await chat.clickOnShowPathBtn();
       await chat.insertInputForShowPath("1", path.firstNode);
       await chat.insertInputForShowPath("2", path.secondNode);
       expect(await chat.isNodeVisibleInLastChatPath(path.firstNode)).toBe(true);
@@ -103,7 +103,7 @@ test.describe("Chat tests", () => {
     test(`Verify unsuccessful node path connection between two nodes in chat for ${path.firstNode} and ${path.secondNode}`, async () => {
       const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await chat.selectGraph(GRAPH_ID);
-      await chat.clickOnshowPathBtn();
+      await chat.clickOnShowPathBtn();
       await chat.insertInputForShowPath("1", path.secondNode);
       await chat.insertInputForShowPath("2", path.firstNode);
       await delay(500);
@@ -114,7 +114,7 @@ test.describe("Chat tests", () => {
   test("Validate error notification and its closure when sending an empty question in chat", async () => {
     const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await chat.selectGraph(GRAPH_ID);
-    await chat.clickAskquestionBtn();
+    await chat.clickAskQuestionBtn();
     expect(await chat.isNotificationError()).toBe(true);
     await chat.clickOnNotificationErrorCloseBtn();
     expect(await chat.isNotificationError()).toBe(false);

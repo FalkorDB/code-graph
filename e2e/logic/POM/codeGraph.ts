@@ -1,6 +1,6 @@
 import { Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
-import { waitForStableText, waitToBeEnabled } from "../utils";
+import { waitForElementToBeVisible, waitForStableText, waitToBeEnabled } from "../utils";
 
 declare global {
     interface Window {
@@ -156,6 +156,10 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//img[@alt='Waiting for response']");
     }
 
+    private get waitingForResponseIndicator(): Locator {
+        return this.page.locator('img[alt="Waiting for response"]');
+    }
+
     /* Canvas Locators*/
 
     private get canvasElement(): Locator {
@@ -245,47 +249,52 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickCreateNewProjectBtn(): Promise<void> {
+        const isVisible = await waitForElementToBeVisible(this.createNewProjectBtn);
+        if (!isVisible) throw new Error("'Create New Project' button is not visible!");
         await this.createNewProjectBtn.click();
     }
-
+    
     async isCreateNewProjectDialog(): Promise<boolean> {
-        return await this.createNewProjectDialog.isVisible();
+        return await waitForElementToBeVisible(this.createNewProjectDialog);
     }
-
-    async clickonTipBtn(): Promise<void> {
+    
+    async clickOnTipBtn(): Promise<void> {
+        const isVisible = await waitForElementToBeVisible(this.tipBtn);
+        if (!isVisible) throw new Error("'Tip' button is not visible!");
         await this.tipBtn.click();
     }
 
     async isTipMenuVisible(): Promise<boolean> {
-        await this.page.waitForTimeout(500);
-        return await this.genericMenu.isVisible();
+        // await this.page.waitForTimeout(500);
+        return await waitForElementToBeVisible(this.genericMenu);
     }
-
-    async clickonTipMenuCloseBtn(): Promise<void> {
+    
+    async clickOnTipMenuCloseBtn(): Promise<void> {
+        const isVisible = await waitForElementToBeVisible(this.tipMenuCloseBtn);
+        if (!isVisible) throw new Error("'Tip Menu Close' button is not visible!");
         await this.tipMenuCloseBtn.click();
     }
+    
 
     /* Chat functionality */
-    async clickOnshowPathBtn(): Promise<void> {
+    async clickOnShowPathBtn(): Promise<void> {
         await this.showPathBtn.click();
     }
     
-    async clickAskquestionBtn(): Promise<void> {
-        await waitToBeEnabled(this.askquestionBtn);
+    async clickAskQuestionBtn(): Promise<void> {
+        const isVisible = await waitForElementToBeVisible(this.askquestionBtn);
+        if (!isVisible) throw new Error("'Ask Question' button is not visible!");
         await this.askquestionBtn.click();
     }
-
+    
     async sendMessage(message: string) {
         await waitToBeEnabled(this.askquestionBtn);
         await this.askquestionInput.fill(message);
         await this.askquestionBtn.click();
     }
-
+    
     async clickOnLightBulbBtn(): Promise<void> {
         await this.lightbulbBtn.click();
-    }
-    private get waitingForResponseIndicator(): Locator {
-        return this.page.locator('img[alt="Waiting for response"]');
     }
 
     async getTextInLastChatElement(): Promise<string>{
@@ -293,21 +302,30 @@ export default class CodeGraph extends BasePage {
         return await waitForStableText(this.lastElementInChat);
     }
 
-    async getLastChatElementButtonCount(): Promise<number | null>{
+    async getLastChatElementButtonCount(): Promise<number | null> {
+        const isVisible = await waitForElementToBeVisible(this.lastChatElementButtonCount);
+        if (!isVisible) return null;
         return await this.lastChatElementButtonCount.count();
     }
 
-    async scrollToTop() {
+    async scrollToTop(): Promise<void> {
+        const isVisible = await waitForElementToBeVisible(this.chatContainer);
+        if (!isVisible) throw new Error("Chat container is not visible!");
+    
         await this.chatContainer.evaluate((chat) => {
-          chat.scrollTop = 0;
+            chat.scrollTop = 0;
         });
     }
     
     async getScrollMetrics() {
-        const scrollTop = await this.chatContainer.evaluate((el) => el.scrollTop);
-        const scrollHeight = await this.chatContainer.evaluate((el) => el.scrollHeight);
-        const clientHeight = await this.chatContainer.evaluate((el) => el.clientHeight);
-        return { scrollTop, scrollHeight, clientHeight };
+        const isVisible = await waitForElementToBeVisible(this.chatContainer);
+        if (!isVisible) throw new Error("Chat container is not visible!");
+    
+        return await this.chatContainer.evaluate((el) => ({
+            scrollTop: el.scrollTop,
+            scrollHeight: el.scrollHeight,
+            clientHeight: el.clientHeight
+        }));
     }
 
     async isAtBottom(): Promise<boolean> {
@@ -323,10 +341,10 @@ export default class CodeGraph extends BasePage {
         await this.selectInputForShowPath(inputNum).fill(node);
         await this.selectFirstPathOption(inputNum).click();
     }
-
+    
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
-        await this.locateNodeInLastChatPath(node).waitFor({ state: 'visible' }); 
-        return await this.locateNodeInLastChatPath(node).isVisible();
+        const nodeLocator = this.locateNodeInLastChatPath(node);
+        return await waitForElementToBeVisible(nodeLocator);
     }
 
     async isNotificationError(): Promise<boolean> {
@@ -335,21 +353,31 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnNotificationErrorCloseBtn(): Promise<void> {
+        const isVisible = await waitForElementToBeVisible(this.notificationErrorCloseBtn);
+        if (!isVisible) throw new Error("Notification error close button is not visible!");
         await this.notificationErrorCloseBtn.click();
     }
-
+    
     async clickOnQuestionOptionsMenu(): Promise<void> {
+        const isVisible = await waitForElementToBeVisible(this.questionOptionsMenu);
+        if (!isVisible) throw new Error("Question options menu is not visible!");
         await this.questionOptionsMenu.click();
     }
-
+    
     async selectAndGetQuestionInOptionsMenu(questionNumber: string): Promise<string> {
-        await this.selectQuestionInMenu(questionNumber).click();
-        return await this.selectQuestionInMenu(questionNumber).innerHTML();
+        const question = this.selectQuestionInMenu(questionNumber);
+        const isVisible = await waitForElementToBeVisible(question);
+        if (!isVisible) throw new Error(`Question ${questionNumber} in menu is not visible!`);
+        
+        await question.click();
+        return await question.innerHTML();
     }
-
+    
     async getLastQuestionInChat(): Promise<string> {
+        const isVisible = await waitForElementToBeVisible(this.lastQuestionInChat);
+        if (!isVisible) throw new Error("Last question in chat is not visible!");
         return await this.lastQuestionInChat.innerText();
-    }
+    }    
 
     /* CodeGraph functionality */
     async selectGraph(graph: string | number): Promise<void> {
@@ -435,7 +463,7 @@ export default class CodeGraph extends BasePage {
         await this.page.waitForTimeout(500);
         console.log(`Clicking node at: X=${x}, Y=${y}`);
         await this.canvasElement.hover({ position: { x, y } });
-        await this.page.waitForTimeout(300); // Allow hover to take effect
+        await this.page.waitForTimeout(500); // Allow hover to take effect
         console.log("Hover successful");
         await this.canvasElement.click({ position: { x, y }, button: 'right' });
         console.log("Right-click performed");
@@ -474,17 +502,21 @@ export default class CodeGraph extends BasePage {
 
     async clickOnViewNode(): Promise<void> {
         const button = this.elementMenuButton("View Node");
-        await button.waitFor({ state: "visible"})
+        const isButtonVisible = await waitForElementToBeVisible(button);
+        if (!isButtonVisible) throw new Error("'View Node' button is not visible!");
         await button.click();
     }
 
     async getNodeDetailsHeader(): Promise<string> {
-        await this.elementMenu.waitFor({ state: "visible", timeout: 10000})
-        const button = this.elementMenuButton("View Node");
-        await button.click();
-        await this.nodedetailsPanelHeader.waitFor({ state: "visible", timeout: 10000 })
-        const text = await this.nodedetailsPanelHeader.innerHTML();
-        return text;
+        const isMenuVisible = await waitForElementToBeVisible(this.elementMenu);
+        if (!isMenuVisible) throw new Error("Element menu did not appear!");
+
+        await this.clickOnViewNode();
+
+        const isHeaderVisible = await waitForElementToBeVisible(this.nodedetailsPanelHeader);
+        if (!isHeaderVisible) throw new Error("Node details panel header did not appear!");
+
+        return this.nodedetailsPanelHeader.innerHTML();
     }
 
     async clickOnNodeDetailsCloseBtn(): Promise<void>{
@@ -498,14 +530,16 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnCopyToClipboardNodePanelDetails(): Promise<string> {
-        await this.copyToClipboardNodePanelDetails.waitFor({ state: "visible" });
+        const isButtonVisible = await waitForElementToBeVisible(this.copyToClipboardNodePanelDetails);
+        if (!isButtonVisible) throw new Error("'copy to clipboard button is not visible!");
         await this.copyToClipboardNodePanelDetails.click();
         return await this.page.evaluate(() => navigator.clipboard.readText());
     }
 
     async clickOnCopyToClipboard(): Promise<string> {
         const button = this.elementMenuButton("Copy src to clipboard"); 
-        await button.waitFor({ state: "visible" });
+        const isVisible = await waitForElementToBeVisible(button);
+        if (!isVisible) throw new Error("View Node button is not visible!");
         await button.click(); 
         return await this.page.evaluate(() => navigator.clipboard.readText());
     }
@@ -516,8 +550,13 @@ export default class CodeGraph extends BasePage {
 
     async getNodeDetailsPanelElements(): Promise<string[]> {
         const button = this.elementMenuButton("View Node");
-        await button.waitFor({ state: "visible"})
+        const isVisible = await waitForElementToBeVisible(button);
+        if (!isVisible) throw new Error("View Node button is not visible!");
         await button.click();
+
+        const isPanelVisible = await waitForElementToBeVisible(this.nodedetailsPanelElements.first());
+        if (!isPanelVisible) throw new Error("Node details panel did not appear!");
+
         const elements = await this.nodedetailsPanelElements.all();
         return Promise.all(elements.map(element => element.innerHTML()));
     }

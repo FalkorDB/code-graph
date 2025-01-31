@@ -100,7 +100,7 @@ test.describe("Canvas tests", () => {
     test(`Verify "Clear graph" button resets canvas view for path ${path.firstNode} and ${path.secondNode}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn();
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const initialGraph = await codeGraph.getGraphDetails();
@@ -185,7 +185,7 @@ test.describe("Canvas tests", () => {
     test(`Verify successful node path connection in canvas between ${firstNode} and ${secondNode} via UI`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn();
       await codeGraph.insertInputForShowPath("1", firstNode);
       await codeGraph.insertInputForShowPath("2", secondNode);
       const result = await codeGraph.getGraphDetails();
@@ -200,7 +200,7 @@ test.describe("Canvas tests", () => {
     test(`Validate node path connection in canvas ui and confirm via api for path ${path.firstNode} and ${path.secondNode}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn();
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const result = await codeGraph.getGraphDetails();
