@@ -259,13 +259,11 @@ export default class CodeGraph extends BasePage {
     }
     
     async clickOnTipBtn(): Promise<void> {
-        const isVisible = await waitForElementToBeVisible(this.tipBtn);
-        if (!isVisible) throw new Error("'Tip' button is not visible!");
         await this.tipBtn.click();
     }
 
     async isTipMenuVisible(): Promise<boolean> {
-        // await this.page.waitForTimeout(500);
+        await this.page.waitForTimeout(500);
         return await waitForElementToBeVisible(this.genericMenu);
     }
     
@@ -454,19 +452,16 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
-        await this.elementMenu.waitFor({ state: "visible", timeout: 10000})
-        const button = this.elementMenuButton("Remove");
+        const button = this.elementMenuButton("Remove"); 
+        const isVisible = await waitForElementToBeVisible(button);
+        if (!isVisible) throw new Error("'View Node' button is not visible!");
         await button.click();
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
-        await this.page.waitForTimeout(500);
-        console.log(`Clicking node at: X=${x}, Y=${y}`);
         await this.canvasElement.hover({ position: { x, y } });
         await this.page.waitForTimeout(500); // Allow hover to take effect
-        console.log("Hover successful");
         await this.canvasElement.click({ position: { x, y }, button: 'right' });
-        console.log("Right-click performed");
     }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
