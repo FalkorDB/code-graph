@@ -595,31 +595,54 @@ export default class CodeGraph extends BasePage {
     }
 
     async transformNodeCoordinates(graphData: any): Promise<any[]> {
-        await this.page.waitForTimeout(3000);
-        const { canvasLeft, canvasTop, canvasWidth, canvasHeight, transform } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
-            const rect = canvas.getBoundingClientRect();
-            const ctx = canvas.getContext('2d');
-            const transform = ctx?.getTransform()!; 
-            return {
-                canvasLeft: rect.left,
-                canvasTop: rect.top,
-                canvasWidth: rect.width,
-                canvasHeight: rect.height,
-                transform,
-            };
-        });
-
-        const screenCoordinates = graphData.elements.nodes.map((node: any) => {
-            const adjustedX = node.x * transform.a + transform.e; 
+        let maxRetries = 5;
+        let transform = null;
+        let canvasRect = null;
+    
+        // Ensure the graph is fully loaded before proceeding
+        await this.page.waitForFunction(() => window.graph && window.graph.elements?.nodes?.length > 0);
+        await this.page.waitForTimeout(3000); // Wait for canvas animations to settle
+    
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            await this.page.waitForTimeout(1000); // Allow further stabilization before fetching data
+    
+            // Fetch canvas properties
+            const result = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
+                const rect = canvas.getBoundingClientRect();
+                const ctx = canvas.getContext('2d');
+                return {
+                    canvasLeft: rect.left,
+                    canvasTop: rect.top,
+                    canvasWidth: rect.width,
+                    canvasHeight: rect.height,
+                    transform: ctx?.getTransform() || null, // Ensure transform is not null
+                };
+            });
+    
+            if (!result.transform) {
+                console.warn(`Attempt ${attempt}: Transform not available yet, retrying...`);
+                continue; // Retry if transform is not available
+            }
+    
+            // If we successfully get a transform, store and break out of retry loop
+            transform = result.transform;
+            canvasRect = result;
+            break;
+        }
+    
+        if (!transform) throw new Error("Canvas transform data not available after multiple attempts!");
+    
+        // Convert graph coordinates to screen coordinates
+        return graphData.elements.nodes.map((node: any) => {
+            const adjustedX = node.x * transform.a + transform.e;
             const adjustedY = node.y * transform.d + transform.f;
-            const screenX = canvasLeft + adjustedX - 35;
-            const screenY = canvasTop + adjustedY - 190;
+            const screenX = canvasRect!.canvasLeft + adjustedX - 35;
+            const screenY = canvasRect!.canvasTop + adjustedY - 190;
     
-            return {...node, screenX, screenY,};
+            return { ...node, screenX, screenY };
         });
-    
-        return screenCoordinates;
     }
+    
    
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
         const { scaleX, scaleY } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {

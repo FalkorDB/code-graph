@@ -58,8 +58,11 @@ test.describe("Canvas tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       const initialGraph = await codeGraph.getGraphDetails();
+      const nod = findNodeByName(initialGraph.elements.nodes, node.nodeName);
+      console.log("before x:", nod.x, "  before y: ",nod.y);
       const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
       const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      console.log("after test: ", targetNode.screenX, "  ", targetNode.screenY);
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnRemoveNodeViaElementMenu();
       const updatedGraph = await codeGraph.getGraphDetails();
@@ -73,8 +76,11 @@ test.describe("Canvas tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       const initialGraph = await codeGraph.getGraphDetails();
+      const nod = findNodeByName(initialGraph.elements.nodes, node.nodeName);
+      console.log("before x:", nod.x, "  before y: ",nod.y);
       const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
       const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      console.log("after test: ", targetNode.screenX, "  ", targetNode.screenY);
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnRemoveNodeViaElementMenu();
       await codeGraph.clickOnUnhideNodesBtn();
@@ -170,8 +176,11 @@ test.describe("Canvas tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       const graphData = await codeGraph.getGraphDetails();
+      const nod = findNodeByName(graphData.elements.nodes, node.nodeName);
+      console.log("before x:", nod.x, "  before y: ",nod.y);
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      console.log("after x:", targetNode.x, "  after y: ",targetNode.y);
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       const result = await codeGraph.clickOnCopyToClipboard();
       const api = new ApiCalls();
