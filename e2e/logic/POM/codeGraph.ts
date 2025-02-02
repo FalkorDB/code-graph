@@ -481,6 +481,14 @@ export default class CodeGraph extends BasePage {
     
         throw new Error("Tooltip not visible after multiple attempts!");
     }
+
+    async nodeClicktest(x: number, y: number): Promise<void> {
+        console.log(`Clicking node at (${x}, ${y})`);
+        await this.page.waitForTimeout(500);
+        await this.canvasElement.hover({ position: { x, y } });
+        await this.canvasElement.click({ position: { x, y }, button: 'right' });
+        await this.page.waitForTimeout(5000);
+    }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await this.codeGraphCheckbox(checkbox).click();
@@ -576,8 +584,8 @@ export default class CodeGraph extends BasePage {
 
     async getGraphDetails(): Promise<any> {
         await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await this.page.waitForTimeout(2000); //canvas animation
-        await this.page.waitForFunction(() => !!window.graph);
+        await this.page.waitForTimeout(3000); //canvas animation
+        await this.page.waitForFunction(() => window.graph && window.graph.elements.nodes.length > 0);
     
         const graphData = await this.page.evaluate(() => {
             return window.graph;
@@ -587,6 +595,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async transformNodeCoordinates(graphData: any): Promise<any[]> {
+        await this.page.waitForTimeout(3000);
         const { canvasLeft, canvasTop, canvasWidth, canvasHeight, transform } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
             const rect = canvas.getBoundingClientRect();
             const ctx = canvas.getContext('2d');
