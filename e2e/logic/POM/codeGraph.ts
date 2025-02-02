@@ -454,14 +454,20 @@ export default class CodeGraph extends BasePage {
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
         const button = this.elementMenuButton("Remove"); 
         const isVisible = await waitForElementToBeVisible(button);
-        if (!isVisible) throw new Error("'View Node' button is not visible!");
+        if (!isVisible) throw new Error("'Remove' button is not visible!");
         await button.click();
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
+        await this.page.waitForTimeout(1000); 
+        console.log("x: ", x, "  y: ", y);
+
         await this.canvasElement.hover({ position: { x, y } });
         await this.page.waitForTimeout(500); // Allow hover to take effect
         await this.canvasElement.click({ position: { x, y }, button: 'right' });
+
+        const isMenuVisible = await waitForElementToBeVisible(this.elementMenu);
+        if (!isMenuVisible) throw new Error("Element menu did not appear!");
     }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
