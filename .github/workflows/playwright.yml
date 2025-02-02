@@ -33,7 +33,7 @@ jobs:
         npm install
         npm run build
         NEXTAUTH_SECRET=SECRET npm start & npx playwright test --reporter=dot,list
-     - name: Ensure required directories exist
+    - name: Ensure required directories exist
       run: |
         mkdir -p playwright-report
         mkdir -p playwright-report/artifacts
