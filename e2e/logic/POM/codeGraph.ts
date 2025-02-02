@@ -228,6 +228,10 @@ export default class CodeGraph extends BasePage {
     private get copyToClipboardNodePanelDetails(): Locator {
         return this.page.locator(`//div[@data-name='node-details-panel']//button[@title='Copy src to clipboard']`);
     }
+    
+    private get nodeToolTip(): Locator {
+        return this.page.locator("//div[contains(@class, 'graph-tooltip')]");
+    }
 
     /* NavBar functionality */
     async clickOnFalkorDbLogo(): Promise<Page> {
@@ -459,15 +463,23 @@ export default class CodeGraph extends BasePage {
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
-        await this.page.waitForTimeout(1000); 
-        console.log("x: ", x, "  y: ", y);
-
-        await this.canvasElement.hover({ position: { x, y } });
-        await this.page.waitForTimeout(500); // Allow hover to take effect
-        await this.canvasElement.click({ position: { x, y }, button: 'right' });
-
-        const isMenuVisible = await waitForElementToBeVisible(this.elementMenu);
-        if (!isMenuVisible) throw new Error("Element menu did not appear!");
+        console.log(`Clicking node at (${x}, ${y})`);
+        
+        for (let attempt = 1; attempt <= 5; attempt++) {
+            await this.canvasElement.hover({ position: { x, y } });
+            await this.page.waitForTimeout(500);
+    
+            if (await waitForElementToBeVisible(this.nodeToolTip)) {
+                console.log("Tooltip visible, right-clicking...");
+                await this.canvasElement.click({ position: { x, y }, button: 'right' });
+                return;
+            }
+    
+            console.warn(`Attempt ${attempt}: Tooltip not visible, retrying...`);
+            await this.page.waitForTimeout(1000);
+        }
+    
+        throw new Error("Tooltip not visible after multiple attempts!");
     }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
