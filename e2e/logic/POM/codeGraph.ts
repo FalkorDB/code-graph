@@ -462,23 +462,18 @@ export default class CodeGraph extends BasePage {
         await button.click();
     }
 
-    async nodeClick(x: number, y: number): Promise<void> {
-        console.log(`Clicking node at (${x}, ${y})`);
-        
-        for (let attempt = 1; attempt <= 5; attempt++) {
+    async nodeClick(x: number, y: number): Promise<void> {  
+        for (let attempt = 1; attempt <= 2; attempt++) {
             await this.canvasElement.hover({ position: { x, y } });
             await this.page.waitForTimeout(500);
     
             if (await waitForElementToBeVisible(this.nodeToolTip)) {
-                console.log("Tooltip visible, right-clicking...");
                 await this.canvasElement.click({ position: { x, y }, button: 'right' });
                 return;
             }
-    
-            console.warn(`Attempt ${attempt}: Tooltip not visible, retrying...`);
             await this.page.waitForTimeout(1000);
         }
-    
+
         throw new Error("Tooltip not visible after multiple attempts!");
     }
 
@@ -584,8 +579,8 @@ export default class CodeGraph extends BasePage {
 
     async getGraphDetails(): Promise<any> {
         await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await this.page.waitForTimeout(3000); //canvas animation
         await this.page.waitForFunction(() => window.graph && window.graph.elements.nodes.length > 0);
+        await this.page.waitForTimeout(2000); //canvas animation
     
         const graphData = await this.page.evaluate(() => {
             return window.graph;
@@ -595,18 +590,14 @@ export default class CodeGraph extends BasePage {
     }
 
     async transformNodeCoordinates(graphData: any): Promise<any[]> {
-        let maxRetries = 5;
+        let maxRetries = 3;
         let transform = null;
         let canvasRect = null;
-    
-        // Ensure the graph is fully loaded before proceeding
         await this.page.waitForFunction(() => window.graph && window.graph.elements?.nodes?.length > 0);
-        await this.page.waitForTimeout(3000); // Wait for canvas animations to settle
     
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            await this.page.waitForTimeout(1000); // Allow further stabilization before fetching data
+            await this.page.waitForTimeout(1000);
     
-            // Fetch canvas properties
             const result = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
                 const rect = canvas.getBoundingClientRect();
                 const ctx = canvas.getContext('2d');
@@ -615,24 +606,22 @@ export default class CodeGraph extends BasePage {
                     canvasTop: rect.top,
                     canvasWidth: rect.width,
                     canvasHeight: rect.height,
-                    transform: ctx?.getTransform() || null, // Ensure transform is not null
+                    transform: ctx?.getTransform() || null,
                 };
             });
     
             if (!result.transform) {
                 console.warn(`Attempt ${attempt}: Transform not available yet, retrying...`);
-                continue; // Retry if transform is not available
+                continue;
             }
     
-            // If we successfully get a transform, store and break out of retry loop
             transform = result.transform;
             canvasRect = result;
             break;
         }
     
         if (!transform) throw new Error("Canvas transform data not available after multiple attempts!");
-    
-        // Convert graph coordinates to screen coordinates
+
         return graphData.elements.nodes.map((node: any) => {
             const adjustedX = node.x * transform.a + transform.e;
             const adjustedY = node.y * transform.d + transform.f;

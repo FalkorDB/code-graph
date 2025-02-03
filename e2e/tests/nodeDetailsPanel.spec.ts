@@ -23,11 +23,8 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       const graphData = await codeGraph.getGraphDetails();
-      const nod = findNodeByName(graphData.elements.nodes, node.nodeName);
-      console.log("before x:", nod.x, "  before y: ",nod.y);
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const targetNode = findNodeByName(convertCoordinates, node.nodeName);
-      console.log("after test: ", targetNode.screenX, "  ", targetNode.screenY);
       expect(targetNode).toBeDefined();
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnViewNode();
@@ -40,11 +37,8 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       const graphData = await codeGraph.getGraphDetails();
-      const nod = findNodeByName(graphData.elements.nodes, node.nodeName);
-      console.log("before x:", nod.x, "  before y: ",nod.y);
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const node1 = findNodeByName(convertCoordinates, node.nodeName);
-      console.log("after test: ", node1.screenX, "  ", node1.screenY);
       await codeGraph.nodeClick(node1.screenX, node1.screenY);
       await codeGraph.clickOnViewNode();
       await codeGraph.clickOnNodeDetailsCloseBtn();
@@ -57,11 +51,8 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       const graphData = await codeGraph.getGraphDetails();
-      const nod = findNodeByName(graphData.elements.nodes, node.nodeName);
-      console.log("before x:", nod.x, "  before y: ",nod.y);
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const node1 = findNodeByName(convertCoordinates, node.nodeName);
-      console.log("after test: ", node1.screenX, "  ", node1.screenY);
       await codeGraph.nodeClick(node1.screenX, node1.screenY);
       expect(await codeGraph.getNodeDetailsHeader()).toContain(node.nodeName.toUpperCase())
     })
@@ -72,11 +63,8 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
       const graphData = await codeGraph.getGraphDetails();
-      const nod = findNodeByName(graphData.elements.nodes, node.nodeName);
-      console.log("before x:", nod.x, "  before y: ",nod.y);
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const nodeData = findNodeByName(convertCoordinates, node.nodeName);
-      console.log("after test: ", nodeData.screenX, "  ", nodeData.screenY);
       await codeGraph.nodeClick(nodeData.screenX, nodeData.screenY);
       await codeGraph.clickOnViewNode();
       const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();
@@ -91,13 +79,9 @@ test.describe("Node details panel tests", () => {
     test(`Validate view node panel keys via api for ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
-      const nod = findNodeByName(graphData.elements.nodes, node.nodeName);
-      console.log("before x:", nod.x, "  before y: ",nod.y);
-      
+      const graphData = await codeGraph.getGraphDetails();  
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const node1 = findNodeByName(convertCoordinates, node.nodeName);
-      console.log("after test: ", node1.screenX, "  ", node1.screenY);
       const api = new ApiCalls();
       const response = await api.getProject(PROJECT_NAME);
       const data: any = response.result.entities.nodes;
