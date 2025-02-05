@@ -272,7 +272,7 @@ export function CodeGraph({
                                     <div className='flex gap-4'>
                                         <Input
                                             graph={graph}
-                                            value={searchNode.name}
+                                            value={searchNode.name || ""}
                                             onValueChange={({ name }) => setSearchNode({ name })}
                                             icon={<Search />}
                                             handleSubmit={handleSearchSubmit}

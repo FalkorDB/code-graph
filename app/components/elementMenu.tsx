@@ -45,6 +45,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                     left: Math.max(-34, Math.min(position.x - 33 - containerWidth / 2, (parentRef?.current?.clientWidth || 0) + 32 - containerWidth)),
                     top: Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - 9),
                 }}
+                id="elementMenu"
             >
                 {
                     objects.some(o => o.id === obj.id) && objects.length > 1 ?
