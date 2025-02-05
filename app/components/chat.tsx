@@ -387,7 +387,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                             parentClassName="w-full"
                             graph={graph}
                             onValueChange={({ name, id }) => setPath(prev => ({ start: { name, id }, end: prev?.end }))}
-                            value={path?.start?.name}
+                            value={path?.start?.name || ""}
                             placeholder="Start typing starting point"
                             type="text"
                             icon={<ChevronDown color="gray" />}
@@ -397,7 +397,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                         <Input
                             parentClassName="w-full"
                             graph={graph}
-                            value={path?.end?.name}
+                            value={path?.end?.name || ""}
                             onValueChange={({ name, id }) => setPath(prev => ({ end: { name, id }, start: prev?.start }))}
                             placeholder="Start typing end point"
                             type="text"
