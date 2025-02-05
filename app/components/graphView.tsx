@@ -230,7 +230,7 @@ export default function GraphView({
                     ctx.fillStyle = 'black';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.font = '4px Arial';
+                    ctx.font = '2px Arial';
                     const textWidth = ctx.measureText(node.name).width;
                     const ellipsis = '...';
                     const ellipsisWidth = ctx.measureText(ellipsis).width;
