@@ -1,5 +1,5 @@
 import { Dispatch, RefObject, SetStateAction, useContext, useEffect, useRef, useState } from "react";
-import { GraphData, Node } from "./model";
+import { GraphData, Link, Node } from "./model";
 import { GraphContext } from "./provider";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
@@ -21,7 +21,7 @@ const GraphView = dynamic(() => import('./graphView'));
 interface Props {
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
-    onFetchGraph: (graphName: string) => void,
+    onFetchGraph: (graphName: string) => Promise<void>,
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
     options: string[]
     setOptions: Dispatch<SetStateAction<string[]>>
@@ -55,7 +55,7 @@ export function CodeGraph({
     let graph = useContext(GraphContext)
 
     const [url, setURL] = useState("");
-    const [selectedObj, setSelectedObj] = useState<Node>();
+    const [selectedObj, setSelectedObj] = useState<Node | Link>();
     const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
     const [position, setPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
@@ -145,9 +145,10 @@ export function CodeGraph({
         }
 
         run()
+
     }, [graphName])
 
-    function handleSelectedValue(value: string) {
+    async function handleSelectedValue(value: string) {
         setGraphName(value)
         onFetchGraph(value)
     }
