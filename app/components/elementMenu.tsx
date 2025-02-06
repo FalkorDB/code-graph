@@ -1,14 +1,14 @@
 "use client"
 
 import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react";
-import { Node } from "./model";
+import { Link, Node } from "./model";
 import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
 import { Path } from "../page";
 import { Position } from "./graphView";
 
 interface Props {
-    obj: Node | undefined;
+    obj: Node | Link | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
     handleRemove: (nodes: number[]) => void;
@@ -20,7 +20,7 @@ interface Props {
 
 
 export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handleExpand, parentRef }: Props) {
-    const [currentObj, setCurrentObj] = useState<Node>();
+    const [currentObj, setCurrentObj] = useState<Node | Link>();
     const [containerWidth, setContainerWidth] = useState(0);
 
     useEffect(() => {
@@ -81,13 +81,18 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             </button>
                         </>
                         : <>
-                            <button
-                                className="p-2"
-                                title="Copy src to clipboard"
-                                onClick={() => navigator.clipboard.writeText(obj.src || "")}
-                            >
-                                <Copy color="white" />
-                            </button>
+                            {
+                                "category" in obj &&
+                                <>
+                                    <button
+                                        className="p-2"
+                                        title="Copy src to clipboard"
+                                        onClick={() => navigator.clipboard.writeText(obj.src || "")}
+                                    >
+                                        <Copy color="white" />
+                                    </button>
+                                </>
+                            }
                             <button
                                 className="p-2"
                                 title="Remove"
@@ -95,17 +100,22 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             >
                                 <EyeOff color="white" />
                             </button>
-                            <a
-                                className="p-2"
-                                href={objURL}
-                                target="_blank"
-                                title="Go to repo"
-                                onClick={() => {
-                                    window.open(objURL, '_blank');
-                                }}
-                            >
-                                <Globe color="white" />
-                            </a>
+                            {
+                                "category" in obj &&
+                                <>
+                                    <a
+                                        className="p-2"
+                                        href={objURL}
+                                        target="_blank"
+                                        title="Go to repo"
+                                        onClick={() => {
+                                            window.open(objURL, '_blank');
+                                        }}
+                                    >
+                                        <Globe color="white" />
+                                    </a>
+                                </>
+                            }
                             <button
                                 className="flex p-2"
                                 title="View Node"
@@ -113,18 +123,23 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             >
                                 <ChevronsLeftRight color="white" />
                             </button>
-                            <button
-                                className="p-2"
-                                onClick={() => handleExpand([obj], true)}
-                            >
-                                <Maximize2 color="white" />
-                            </button>
-                            <button
-                                className="p-2"
-                                onClick={() => handleExpand([obj], false)}
-                            >
-                                <Minimize2 color="white" />
-                            </button>
+                            {
+                                "category" in obj &&
+                                <>
+                                    <button
+                                        className="p-2"
+                                        onClick={() => handleExpand([obj as Node], true)}
+                                    >
+                                        <Maximize2 color="white" />
+                                    </button>
+                                    <button
+                                        className="p-2"
+                                        onClick={() => handleExpand([obj as Node], false)}
+                                    >
+                                        <Minimize2 color="white" />
+                                    </button>
+                                </>
+                            }
                         </>
                 }
             </div>

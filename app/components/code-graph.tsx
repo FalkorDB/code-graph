@@ -1,9 +1,9 @@
 import { Dispatch, RefObject, SetStateAction, useContext, useEffect, useRef, useState } from "react";
-import { GraphData, Node } from "./model";
+import { GraphData, Link, Node } from "./model";
 import { GraphContext } from "./provider";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { GitFork, Search, X } from "lucide-react";
+import { Download, GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
@@ -21,7 +21,7 @@ const GraphView = dynamic(() => import('./graphView'));
 interface Props {
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
-    onFetchGraph: (graphName: string) => void,
+    onFetchGraph: (graphName: string) => Promise<void>,
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
     options: string[]
     setOptions: Dispatch<SetStateAction<string[]>>
@@ -55,7 +55,7 @@ export function CodeGraph({
     let graph = useContext(GraphContext)
 
     const [url, setURL] = useState("");
-    const [selectedObj, setSelectedObj] = useState<Node>();
+    const [selectedObj, setSelectedObj] = useState<Node | Link>();
     const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
     const [position, setPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
@@ -145,9 +145,10 @@ export function CodeGraph({
         }
 
         run()
+
     }, [graphName])
 
-    function handleSelectedValue(value: string) {
+    async function handleSelectedValue(value: string) {
         setGraphName(value)
         onFetchGraph(value)
     }
@@ -241,7 +242,8 @@ export function CodeGraph({
                 graph.visibleLinks(true, [chartNode!.id])
                 setData({ ...graph.Elements })
             }
-        
+          
+            setSearchNode(n)
             setTimeout(() => {
                 chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
             }, 0)
@@ -258,6 +260,33 @@ export function CodeGraph({
 
         setData({ ...graph.Elements })
     }
+
+    const handleDownloadImage = async () => {
+        try {
+            const canvas = document.querySelector('.force-graph-container canvas') as HTMLCanvasElement;
+            if (!canvas) {
+                toast({
+                    title: "Error",
+                    description: "Canvas not found",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            const dataURL = canvas.toDataURL('image/webp');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `${graphName}.webp`;
+            link.click();
+        } catch (error) {
+            console.error('Error downloading graph image:', error);
+            toast({
+                title: "Error",
+                description: "Failed to download image. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
 
     return (
         <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
@@ -351,6 +380,12 @@ export function CodeGraph({
                                             className="pointer-events-auto"
                                             chartRef={chartRef}
                                         />
+                                        <button
+                                            className="pointer-events-auto bg-white p-2 rounded-md"
+                                            onClick={handleDownloadImage}
+                                        >
+                                            <Download />
+                                        </button>
                                     </div>
                                 </div>
                                 <ElementMenu
