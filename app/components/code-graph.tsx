@@ -3,7 +3,7 @@ import { GraphData, Link, Node } from "./model";
 import { GraphContext } from "./provider";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { GitFork, Search, X } from "lucide-react";
+import { Download, GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
@@ -217,12 +217,12 @@ export function CodeGraph({
 
     const handleSearchSubmit = (node: any) => {
         const chart = chartRef.current
-        
+
         if (chart) {
             const n = { name: node.properties.name, id: node.id }
 
             let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
-            
+
             if (!chartNode?.visible) {
                 if (!chartNode) {
                     chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
@@ -234,7 +234,7 @@ export function CodeGraph({
                 graph.visibleLinks(true, [chartNode!.id])
                 setData({ ...graph.Elements })
             }
-            
+
             setSearchNode(n)
             setTimeout(() => {
                 chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
@@ -252,6 +252,33 @@ export function CodeGraph({
 
         setData({ ...graph.Elements })
     }
+
+    const handleDownloadImage = async () => {
+        try {
+            const canvas = document.querySelector('.force-graph-container canvas') as HTMLCanvasElement;
+            if (!canvas) {
+                toast({
+                    title: "Error",
+                    description: "Canvas not found",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            const dataURL = canvas.toDataURL('image/webp');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `${graphName}.webp`;
+            link.click();
+        } catch (error) {
+            console.error('Error downloading graph image:', error);
+            toast({
+                title: "Error",
+                description: "Failed to download image. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
 
     return (
         <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
@@ -346,6 +373,12 @@ export function CodeGraph({
                                             className="pointer-events-auto"
                                             chartRef={chartRef}
                                         />
+                                        <button
+                                            className="pointer-events-auto bg-white p-2 rounded-md"
+                                            onClick={handleDownloadImage}
+                                        >
+                                            <Download />
+                                        </button>
                                     </div>
                                 </div>
                                 <ElementMenu
