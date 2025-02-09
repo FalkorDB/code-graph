@@ -2,7 +2,6 @@
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
-import { toast } from '@/components/ui/use-toast';
 import { Path } from '../page';
 
 export interface Position {
@@ -15,13 +14,13 @@ interface Props {
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
     chartRef: RefObject<any>
-    selectedObj: Node | undefined
-    setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
+    selectedObj: Node | Link | undefined
+    setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>
-    deleteNeighbors: (nodes: Node[]) => void
+    handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     isPathResponse: boolean | undefined
@@ -48,7 +47,7 @@ export default function GraphView({
     setSelectedObjects,
     setPosition,
     onFetchNode,
-    deleteNeighbors,
+    handleExpand,
     isShowPath,
     setPath,
     isPathResponse,
@@ -102,13 +101,13 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handleNodeRightClick = (node: Node, evt: MouseEvent) => {
-        if (evt.ctrlKey) {
+    const handleRightClick = (node: Node | Link, evt: MouseEvent) => {
+        if (evt.ctrlKey && "category" in node) {
             if (selectedObjects.some(obj => obj.id === node.id)) {
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
                 return
             } else {
-                setSelectedObjects([...selectedObjects, node])
+                setSelectedObjects([...selectedObjects, node as Node])
             }
         } else {
             setSelectedObjects([])
@@ -132,28 +131,7 @@ export default function GraphView({
         lastClick.current = { date: now, name: node.name }
 
         if (isDoubleClick) {
-            const expand = !node.expand
-
-            if (expand) {
-                const elements = await onFetchNode([node.id])
-
-                if (elements.nodes.length === 0) {
-                    toast({
-                        title: `No neighbors found`,
-                        description: `No neighbors found`,
-                    })
-
-                    return
-                }
-            } else {
-                deleteNeighbors([node]);
-            }
-
-            node.expand = expand
-
-            setSelectedObj(undefined)
-            setData({ ...graph.Elements })
-
+            handleExpand([node], !node.expand)
         } else if (isShowPath) {
             setPath(prev => {
                 if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
@@ -230,7 +208,7 @@ export default function GraphView({
                     ctx.fillStyle = 'black';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.font = '4px Arial';
+                    ctx.font = '2px Arial';
                     const textWidth = ctx.measureText(node.name).width;
                     const ellipsis = '...';
                     const ellipsisWidth = ctx.measureText(ellipsis).width;
@@ -291,7 +269,8 @@ export default function GraphView({
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
                     return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
                 })}
-                onNodeRightClick={handleNodeRightClick}
+                onNodeRightClick={handleRightClick}
+                onLinkRightClick={handleRightClick}
                 onLinkClick={handleLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
