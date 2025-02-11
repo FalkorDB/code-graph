@@ -14,7 +14,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
-import { NodeObject } from "react-force-graph-2d";
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -27,6 +26,8 @@ interface Props {
     setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
+    nodesToZoom: Node[] | undefined
+    setNodesToZoom: Dispatch<SetStateAction<Node[] | undefined>>
     chartRef: RefObject<any>
     selectedValue: string
     selectedPathId: number | undefined
@@ -44,6 +45,8 @@ export function CodeGraph({
     setOptions,
     isShowPath,
     setPath,
+    nodesToZoom,
+    setNodesToZoom,
     chartRef,
     selectedValue,
     setSelectedPathId,
@@ -167,18 +170,16 @@ export function CodeGraph({
     }
 
     const deleteNeighbors = (nodes: Node[]) => {
-        
+
         if (nodes.length === 0) return;
-        
+
         const expandedNodes: Node[] = []
-        
+
         graph.Elements = {
             nodes: graph.Elements.nodes.filter(node => {
                 if (!node.collapsed) return true
-                
+
                 const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
-                
-                debugger
 
                 if (!isTarget) return true
 
@@ -192,43 +193,53 @@ export function CodeGraph({
             }),
             links: graph.Elements.links
         }
-        
+
         deleteNeighbors(expandedNodes)
 
         graph.removeLinks()
     }
 
     const handleExpand = async (nodes: Node[], expand: boolean) => {
+        const chart = chartRef.current;
+        if (!chart) return;
+
         if (expand) {
-            const elements = await onFetchNode(nodes.map(n => n.id))
+            const elements = await onFetchNode(nodes.map(n => n.id));
 
             if (elements.nodes.length === 0) {
                 toast({
                     title: `No neighbors found`,
                     description: `No neighbors found`,
-                })
-                return
+                });
+                return;
             }
+
+            nodes.forEach((node) => {
+                node.expand = expand;
+            });
+
+            setNodesToZoom([...elements.nodes, ...nodes]);
+            setSelectedObj(undefined);
+            setData({ ...graph.Elements });
         } else {
-            const deleteNodes = nodes.filter(n => n.expand)
+            const deleteNodes = nodes.filter(n => n.expand);
             if (deleteNodes.length > 0) {
                 deleteNeighbors(deleteNodes);
             }
+
+            nodes.forEach((node) => {
+                node.expand = expand;
+            });
+
+            setSelectedObj(undefined);
+            setData({ ...graph.Elements });
         }
-
-        nodes.forEach((node) => {
-            node.expand = expand
-        })
-
-        setSelectedObj(undefined)
-        setData({ ...graph.Elements })
-    }
+    };
 
     const handleSearchSubmit = (node: any) => {
         const chart = chartRef.current
 
         if (chart) {
-
             let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
 
             if (!chartNode?.visible) {
@@ -242,11 +253,9 @@ export function CodeGraph({
                 graph.visibleLinks(true, [chartNode!.id])
                 setData({ ...graph.Elements })
             }
-          
+
             setSearchNode(chartNode)
-            setTimeout(() => {
-                chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
-            }, 0)
+            setNodesToZoom([chartNode!]);
         }
     }
 
@@ -403,7 +412,6 @@ export function CodeGraph({
                                 />
                                 <GraphView
                                     data={data}
-                                    setData={setData}
                                     graph={graph}
                                     chartRef={chartRef}
                                     selectedObj={selectedObj}
@@ -411,10 +419,11 @@ export function CodeGraph({
                                     setSelectedObj={setSelectedObj}
                                     setSelectedObjects={setSelectedObjects}
                                     setPosition={setPosition}
-                                    onFetchNode={onFetchNode}
                                     handleExpand={handleExpand}
                                     isShowPath={isShowPath}
                                     setPath={setPath}
+                                    nodesToZoom={nodesToZoom}
+                                    setNodesToZoom={setNodesToZoom}
                                     isPathResponse={isPathResponse}
                                     selectedPathId={selectedPathId}
                                     setSelectedPathId={setSelectedPathId}

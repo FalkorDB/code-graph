@@ -1,5 +1,6 @@
+'use client'
 
-import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph2D, { NodeObject } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
@@ -11,7 +12,6 @@ export interface Position {
 
 interface Props {
     data: GraphData
-    setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
     chartRef: RefObject<any>
     selectedObj: Node | Link | undefined
@@ -19,10 +19,11 @@ interface Props {
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
-    onFetchNode: (nodeIds: number[]) => Promise<GraphData>
     handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
+    nodesToZoom: Node[] | undefined
+    setNodesToZoom: Dispatch<SetStateAction<Node[] | undefined>>
     isPathResponse: boolean | undefined
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
@@ -38,7 +39,6 @@ const PADDING = 2;
 
 export default function GraphView({
     data,
-    setData,
     graph,
     chartRef,
     selectedObj,
@@ -46,10 +46,11 @@ export default function GraphView({
     selectedObjects,
     setSelectedObjects,
     setPosition,
-    onFetchNode,
     handleExpand,
     isShowPath,
     setPath,
+    nodesToZoom,
+    setNodesToZoom,
     isPathResponse,
     selectedPathId,
     setSelectedPathId,
@@ -278,6 +279,27 @@ export default function GraphView({
                 onEngineStop={() => {
                     setCooldownTicks(0)
                     setCooldownTime(0)
+
+                    const chart = chartRef.current;
+                    if (!chart || !nodesToZoom || nodesToZoom.length === 0) return;
+
+                    // Get canvas dimensions
+                    const canvas = document.querySelector('.force-graph-container canvas') as HTMLCanvasElement;
+                    if (!canvas) return;
+
+                    // Calculate padding as 10% of the smallest canvas dimension, with minimum of 40px
+                    const minDimension = Math.min(canvas.width, canvas.height);
+                    const padding = Math.max(minDimension * 0.1, 40);
+
+                    console.log('Canvas dimensions:', canvas.width, canvas.height);
+                    console.log('nodesToZoom', nodesToZoom.map(n => n.id));
+
+                    chart.zoomToFit(1000, padding, (n: NodeObject<Node>) => {
+                        const isMatch = nodesToZoom.some(node => node.id === n.id);
+                        console.log('Checking node:', n.id, 'isMatch:', isMatch);
+                        return isMatch;
+                    });
+                    setNodesToZoom(undefined);
                 }}
                 cooldownTicks={cooldownTicks}
                 cooldownTime={cooldownTime}

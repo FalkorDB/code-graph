@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, GraphData } from './components/model';
+import { Graph, GraphData, Node } from './components/model';
 import { BookOpen, Github, HomeIcon, X } from 'lucide-react';
 import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -62,6 +62,7 @@ export default function Home() {
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
+  const [nodesToZoom, setNodesToZoom] = useState<Node[]>();
   const chartRef = useRef<any>()
 
   useEffect(() => {
@@ -269,6 +270,8 @@ export default function Home() {
               onFetchGraph={onFetchGraph}
               onFetchNode={onFetchNode}
               setPath={setPath}
+              nodesToZoom={nodesToZoom}
+              setNodesToZoom={setNodesToZoom}
               isShowPath={!!path}
               selectedValue={selectedValue}
               selectedPathId={selectedPathId}
@@ -290,7 +293,8 @@ export default function Home() {
             isPathResponse={isPathResponse}
             setIsPathResponse={setIsPathResponse}
             setData={setData}
-          />
+            setNodesToZoom={setNodesToZoom}
+            />
         </Panel>
       </PanelGroup>
     </main>

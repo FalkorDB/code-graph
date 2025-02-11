@@ -4,7 +4,7 @@ import Image from "next/image";
 import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
-import { Graph, GraphData } from "./model";
+import { Graph, GraphData, Node } from "./model";
 import { cn } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -25,50 +25,6 @@ enum MessageTypes {
     Text,
 }
 
-const EDGE_STYLE = {
-    "line-color": "gray",
-    "target-arrow-color": "gray",
-    "opacity": 0.5,
-}
-
-
-const PATH_EDGE_STYLE = {
-    width: 0.5,
-    "line-style": "dashed",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.3,
-    "target-arrow-color": "#FF66B3",
-    "opacity": 1
-}
-
-const SELECTED_PATH_EDGE_STYLE = {
-    width: 1,
-    "line-style": "solid",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.6,
-    "target-arrow-color": "#FF66B3",
-};
-
-const NODE_STYLE = {
-    "border-width": 0.5,
-    "color": "gray",
-    "border-color": "black",
-    "background-color": "gray",
-    "opacity": 0.5
-}
-
-const PATH_NODE_STYLE = {
-    "border-width": 0.5,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-}
-
-const SELECTED_PATH_NODE_STYLE = {
-    "border-width": 1,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-};
-
 interface Message {
     type: MessageTypes;
     text?: string;
@@ -85,6 +41,7 @@ interface Props {
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
+    setNodesToZoom: Dispatch<SetStateAction<Node[] | undefined>>
     chartRef: any
 }
 
@@ -107,7 +64,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, chartRef }: Props) {
+export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, setNodesToZoom, chartRef }: Props) {
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
@@ -156,7 +113,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
     const handleSetSelectedPath = (p: PathData) => {
         const chart = chartRef.current
-        
+
         if (!chart) return
         setSelectedPath(prev => {
             if (prev) {
@@ -210,9 +167,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             });
         }
         setData({ ...graph.Elements })
-        setTimeout(() => {
-            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => p.nodes.some(node => node.id === n.id));
-        }, 0)
+        setNodesToZoom([...p.nodes])
     }
 
     // A function that handles the change event of the url input box
@@ -308,9 +263,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setPath(undefined)
         setIsPathResponse(true)
         setData({ ...graph.Elements })
-        setTimeout(() => {
-            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => formattedPaths.some(p => p.nodes.some(node => node.id === n.id)));
-        }, 0)
+        setNodesToZoom([...formattedPaths.flatMap(path => path.nodes)])
     }
 
     const getTip = (disabled = false) =>
@@ -434,10 +387,10 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                     }
 
                                     if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
-                                    
+
                                     if (!isPathResponse) {
                                         setIsPathResponse(undefined)
-                                    
+
                                     }
                                     handleSetSelectedPath(p)
                                 }}
