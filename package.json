@@ -24,7 +24,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.0",
     "html2canvas": "^1.4.1",
-    "lucide-react": "^0.441.0",
+    "lucide-react": "^0.475.0",
     "next": "^15.1.2",
     "playwright": "^1.49.1",
     "react": "^18",
