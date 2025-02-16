@@ -144,7 +144,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                 }}
                 onKeyDown={handleKeyDown}
                 className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
-                value={node?.name ?? ""}
+                value={node?.name || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
                     const invalidChars = /[%*()\-\[\]{};:"|~]/;

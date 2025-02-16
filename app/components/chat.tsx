@@ -495,7 +495,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                     {
                         repo &&
                         <div className="flex gap-4 px-4">
-                            <button data-name="lightbulb" onClick={() => setTipOpen(true)} className="p-4 border rounded-md hover:border-[#ffde21] hover:bg-[#ffde2133]">
+                            <button data-name="lightbulb" onClick={() => setTipOpen(true)} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
                                 <Lightbulb />
                             </button>
                             <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
