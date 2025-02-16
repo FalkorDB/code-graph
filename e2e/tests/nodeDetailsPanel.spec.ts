@@ -25,6 +25,7 @@ test.describe("Node details panel tests", () => {
       const graphData = await codeGraph.getGraphDetails();
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      expect(targetNode).toBeDefined();
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnViewNode();
       expect(await codeGraph.isNodeDetailsPanel()).toBe(true)
@@ -78,7 +79,7 @@ test.describe("Node details panel tests", () => {
     test(`Validate view node panel keys via api for ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
+      const graphData = await codeGraph.getGraphDetails();  
       const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
       const node1 = findNodeByName(convertCoordinates, node.nodeName);
       const api = new ApiCalls();

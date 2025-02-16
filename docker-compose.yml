@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6379:6379"
+      - "3001:3000"
+    volumes:
+      - ./:/data/
+    stdin_open: true # Keep the container's STDIN open
+    tty: true        # Allocate a pseudo-TTY
+
+  code-graph-frontend:
+    image: falkordb/code-graph-frontend:latest
+    ports:
+      - "3000:3000"
+    depends_on:
+      - code-graph-backend
+    environment:
+      - BACKEND_URL=http://code-graph-backend:5000 # Backend service URL
+      - SECRET_TOKEN=Vespa
+
+  code-graph-backend:
+    image: falkordb/code-graph-backend:latest
+    ports:
+      - "4000:5000"
+    depends_on:
+      - falkordb
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+      - SECRET_TOKEN=Vespa
+      - FLASK_RUN_HOST=0.0.0.0
+      - FLASK_RUN_PORT=5000

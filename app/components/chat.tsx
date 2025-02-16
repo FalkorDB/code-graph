@@ -4,11 +4,12 @@ import Image from "next/image";
 import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
-import { Graph, GraphData } from "./model";
+import { Graph, GraphData, Link } from "./model";
 import { cn } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
+import { NodeObject, ForceGraphMethods } from "react-force-graph-2d";
 
 type PathData = {
     nodes: any[]
@@ -23,50 +24,6 @@ enum MessageTypes {
     Pending,
     Text,
 }
-
-const EDGE_STYLE = {
-    "line-color": "gray",
-    "target-arrow-color": "gray",
-    "opacity": 0.5,
-}
-
-
-const PATH_EDGE_STYLE = {
-    width: 0.5,
-    "line-style": "dashed",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.3,
-    "target-arrow-color": "#FF66B3",
-    "opacity": 1
-}
-
-const SELECTED_PATH_EDGE_STYLE = {
-    width: 1,
-    "line-style": "solid",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.6,
-    "target-arrow-color": "#FF66B3",
-};
-
-const NODE_STYLE = {
-    "border-width": 0.5,
-    "color": "gray",
-    "border-color": "black",
-    "background-color": "gray",
-    "opacity": 0.5
-}
-
-const PATH_NODE_STYLE = {
-    "border-width": 0.5,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-}
-
-const SELECTED_PATH_NODE_STYLE = {
-    "border-width": 1,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-};
 
 interface Message {
     type: MessageTypes;
@@ -84,6 +41,7 @@ interface Props {
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
+    chartRef: React.MutableRefObject<ForceGraphMethods<Node, Link>>
 }
 
 const SUGGESTIONS = [
@@ -105,7 +63,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData }: Props) {
+export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, chartRef }: Props) {
 
     // Holds the messages in the chat
     const [messages, setMessages] = useState<Message[]>([]);
@@ -131,8 +89,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
-
-        handelSetSelectedPath(p)
+        handleSetSelectedPath(p)
     }, [selectedPathId])
 
     // Scroll to the bottom of the chat on new message
@@ -153,7 +110,10 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setPaths([])
     }, [isPathResponse])
 
-    const handelSetSelectedPath = (p: PathData) => {
+    const handleSetSelectedPath = (p: PathData) => {
+        const chart = chartRef.current
+        
+        if (!chart) return
         setSelectedPath(prev => {
             if (prev) {
                 if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
@@ -206,6 +166,9 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             });
         }
         setData({ ...graph.Elements })
+        setTimeout(() => {
+            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => p.nodes.some(node => node.id === n.id));
+        }, 0)
     }
 
     // A function that handles the change event of the url input box
@@ -262,6 +225,10 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }
 
     const handleSubmit = async () => {
+        const chart = chartRef.current
+
+        if (!chart) return
+
         setSelectedPath(undefined)
 
         if (!path?.start?.id || !path.end?.id) return
@@ -297,6 +264,9 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setPath(undefined)
         setIsPathResponse(true)
         setData({ ...graph.Elements })
+        setTimeout(() => {
+            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => formattedPaths.some(p => p.nodes.some(node => node.id === n.id)));
+        }, 0)
     }
 
     const getTip = (disabled = false) =>
@@ -373,7 +343,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                             parentClassName="w-full"
                             graph={graph}
                             onValueChange={({ name, id }) => setPath(prev => ({ start: { name, id }, end: prev?.end }))}
-                            value={path?.start?.name}
+                            value={path?.start?.name || ""}
                             placeholder="Start typing starting point"
                             type="text"
                             icon={<ChevronDown color="gray" />}
@@ -383,7 +353,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                         <Input
                             parentClassName="w-full"
                             graph={graph}
-                            value={path?.end?.name}
+                            value={path?.end?.name || ""}
                             onValueChange={({ name, id }) => setPath(prev => ({ end: { name, id }, start: prev?.start }))}
                             placeholder="Start typing end point"
                             type="text"
@@ -425,7 +395,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                         setIsPathResponse(undefined)
                                     
                                     }
-                                    handelSetSelectedPath(p)
+                                    handleSetSelectedPath(p)
                                 }}
                             >
                                 <p className="font-bold">#{i + 1}</p>

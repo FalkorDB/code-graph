@@ -281,6 +281,7 @@ export default function Home() {
         <PanelResizeHandle />
         <Panel className="border-l min-w-[420px]" defaultSize={30} >
           <Chat
+            chartRef={chartRef}
             setPath={setPath}
             path={path}
             repo={graph.Id}

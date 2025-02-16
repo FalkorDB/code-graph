@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils"
 import { prepareArg } from "../utils"
 
 interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
-    value?: string
     graph: Graph
     onValueChange: (node: PathNode) => void
     handleSubmit?: (node: any) => void
@@ -16,7 +15,7 @@ interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
     scrollToBottom?: () => void
 }
 
-export default function Input({ value, onValueChange, handleSubmit, graph, icon, node, className, parentClassName, scrollToBottom, ...props }: Props) {
+export default function Input({ onValueChange, handleSubmit, graph, icon, node, className, parentClassName, scrollToBottom, ...props }: Props) {
 
     const [open, setOpen] = useState(false)
     const [options, setOptions] = useState<any[]>([])
@@ -38,15 +37,13 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
         let isLastRequest = true
         const timeout = setTimeout(async () => {
 
-            if (!value || node?.id) {
-                if (!value) {
-                    setOptions([])
-                }
+            if (!node?.name) {
+                setOptions([])
                 setOpen(false)
                 return
             }
 
-            const result = await fetch(`/api/repo/${prepareArg(graph.Id)}/?prefix=${prepareArg(value)}`, {
+            const result = await fetch(`/api/repo/${prepareArg(graph.Id)}/?prefix=${prepareArg(node?.name)}`, {
                 method: 'POST'
             })
 
@@ -66,7 +63,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
 
             setOptions(completions || [])
 
-            if (completions?.length > 0) {
+            if (completions?.length > 0 && !node?.id) {
                 setOpen(true)
             } else {
                 setOpen(false)
@@ -77,7 +74,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
             clearTimeout(timeout)
             isLastRequest = false
         }
-    }, [value, graph.Id])
+    }, [node?.name, graph.Id])
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         const container = containerRef.current
@@ -87,6 +84,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 const option = options.find((o, i) => i === selectedOption)
                 if (!option) return
                 if (handleSubmit) {
+                    onValueChange({ name: option.properties.name, id: option.id })
                     handleSubmit(option)
                 } else {
                     if (!open) return
@@ -144,7 +142,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 }}
                 onKeyDown={handleKeyDown}
                 className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
-                value={value || ""}
+                value={node?.name || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
                     const invalidChars = /[%*()\-\[\]{};:"|~]/;

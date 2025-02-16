@@ -1,9 +1,11 @@
 import { CircleDot, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils"
-import { RefObject } from "react";
+import { ForceGraphMethods } from "react-force-graph-2d";
+import { Node, Link } from "./model";
+import { MutableRefObject } from "react";
 
 interface Props {
-    chartRef: RefObject<any>
+    chartRef: MutableRefObject<ForceGraphMethods<Node, Link>>
     className?: string
 }
 
