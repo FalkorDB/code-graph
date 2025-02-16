@@ -1,6 +1,5 @@
-import { Dispatch, RefObject, SetStateAction, useContext, useEffect, useRef, useState } from "react";
-import { GraphData, Link, Node } from "./model";
-import { GraphContext } from "./provider";
+import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from "react";
+import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
 import { Download, GitFork, Search, X } from "lucide-react";
@@ -19,6 +18,7 @@ import { NodeObject } from "react-force-graph-2d";
 const GraphView = dynamic(() => import('./graphView'));
 
 interface Props {
+    graph: Graph,
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
     onFetchGraph: (graphName: string) => Promise<void>,
@@ -36,6 +36,7 @@ interface Props {
 }
 
 export function CodeGraph({
+    graph,
     data,
     setData,
     onFetchGraph,
@@ -51,8 +52,6 @@ export function CodeGraph({
     setIsPathResponse,
     selectedPathId
 }: Props) {
-
-    let graph = useContext(GraphContext)
 
     const [url, setURL] = useState("");
     const [selectedObj, setSelectedObj] = useState<Node | Link>();
@@ -167,17 +166,17 @@ export function CodeGraph({
     }
 
     const deleteNeighbors = (nodes: Node[]) => {
-        
+
         if (nodes.length === 0) return;
-        
+
         const expandedNodes: Node[] = []
-        
+
         graph.Elements = {
             nodes: graph.Elements.nodes.filter(node => {
                 if (!node.collapsed) return true
-                
+
                 const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
-                
+
                 debugger
 
                 if (!isTarget) return true
@@ -192,7 +191,7 @@ export function CodeGraph({
             }),
             links: graph.Elements.links
         }
-        
+
         deleteNeighbors(expandedNodes)
 
         graph.removeLinks()
@@ -242,7 +241,7 @@ export function CodeGraph({
                 graph.visibleLinks(true, [chartNode!.id])
                 setData({ ...graph.Elements })
             }
-          
+
             setSearchNode(chartNode)
             setTimeout(() => {
                 chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
@@ -289,8 +288,9 @@ export function CodeGraph({
     };
 
     return (
-        <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
-            <header className="flex flex-col gap-4">
+        <div className="h-full w-full flex flex-col gap-4 p-4 md:p-8 md:bg-gray-100">
+            <header className="flex flex-col gap-4 relative">
+                <div className="absolute md:hidden inset-x-0 top-0 h-[130%] bg-gray-100 -mx-8 -mt-8 px-8 border-b border-gray-400" />
                 <Combobox
                     options={options}
                     setOptions={setOptions}
@@ -302,8 +302,8 @@ export function CodeGraph({
                 <main ref={containerRef} className="bg-white h-1 grow">
                     {
                         graph.Id ?
-                            <div className="h-full relative border">
-                                <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
+                            <div className="h-full relative border flex flex-col md:block">
+                                <div className="hidden md:flex w-full absolute top-0 left-0 justify-between p-4 z-10 pointer-events-none">
                                     <div className='flex gap-4'>
                                         <Input
                                             graph={graph}
@@ -351,43 +351,6 @@ export function CodeGraph({
                                         }
                                     </div>
                                 </div>
-                                <div data-name="canvas-info-panel" className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
-                                    <div data-name="metrics-panel" className="flex gap-4 text-gray-500">
-                                        <p>{nodesCount} Nodes</p>
-                                        <p>{edgesCount} Edges</p>
-                                    </div>
-                                    <div className='flex gap-4'>
-                                        {
-                                            commitIndex !== commits.length &&
-                                            <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
-                                                <div className='flex gap-2 items-center'>
-                                                    <Checkbox
-                                                        className='h-5 w-5 bg-gray-500 data-[state true]'
-                                                    />
-                                                    <p className='text-bold'>Display Changes</p>
-                                                </div>
-                                                <div className='flex gap-2 items-center'>
-                                                    <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full' />
-                                                    <p className='text-pink-500'>Were added</p>
-                                                </div>
-                                                <div className='flex gap-2 items-center'>
-                                                    <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full' />
-                                                    <p className='text-blue-500'>Were edited</p>
-                                                </div>
-                                            </div>
-                                        }
-                                        <Toolbar
-                                            className="pointer-events-auto"
-                                            chartRef={chartRef}
-                                        />
-                                        <button
-                                            className="pointer-events-auto bg-white p-2 rounded-md"
-                                            onClick={handleDownloadImage}
-                                        >
-                                            <Download />
-                                        </button>
-                                    </div>
-                                </div>
                                 <ElementMenu
                                     obj={selectedObj}
                                     objects={selectedObjects}
@@ -423,10 +386,48 @@ export function CodeGraph({
                                     cooldownTime={cooldownTime}
                                     setCooldownTime={setCooldownTime}
                                 />
+                                <div data-name="canvas-info-panel" className="w-full md:absolute md:bottom-0 md:left-0 md:flex md:justify-between md:items-center md:p-4 z-10 pointer-events-none">
+                                    <div data-name="metrics-panel" className="flex gap-4 justify-center bg-gray-100 md:bg-transparent md:text-gray-500 p-2 md:p-0">
+                                        <p>{nodesCount} Nodes</p>
+                                        <p className="md:hidden">|</p>
+                                        <p>{edgesCount} Edges</p>
+                                    </div>
+                                    <div className='hidden md:flex gap-4'>
+                                        {
+                                            commitIndex !== commits.length &&
+                                            <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
+                                                <div className='flex gap-2 items-center'>
+                                                    <Checkbox
+                                                        className='h-5 w-5 bg-gray-500 data-[state true]'
+                                                    />
+                                                    <p className='text-bold'>Display Changes</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full' />
+                                                    <p className='text-pink-500'>Were added</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full' />
+                                                    <p className='text-blue-500'>Were edited</p>
+                                                </div>
+                                            </div>
+                                        }
+                                        <Toolbar
+                                            className="pointer-events-auto"
+                                            chartRef={chartRef}
+                                        />
+                                        <button
+                                            className="pointer-events-auto bg-white p-2 rounded-md"
+                                            onClick={handleDownloadImage}
+                                        >
+                                            <Download />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             : <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                                <GitFork size={100} color="gray" />
-                                <h1 className="text-4xl">Select a repo to show its graph here</h1>
+                                <GitFork className="md:w-24 md:h-24 w-16 h-16" color="gray" />
+                                <h1 className="md:text-4xl text-2xl text-center">Select a repo to show its graph here</h1>
                             </div>
                     }
                 </main>
