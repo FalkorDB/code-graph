@@ -35,15 +35,11 @@ const excludedProperties = [
 
 export default function DataPanel({ obj, setObj, url }: Props) {
 
-    debugger
-
     if (!obj) return null;
 
     const type = "category" in obj
     const label = type ? `${obj.category}: ${obj.name}` : obj.label
     const object = Object.entries(obj).filter(([k]) => !excludedProperties.includes(k))
-
-    console.log(obj)
 
     return (
         <div data-name="node-details-panel" className="z-20 absolute -top-10 left-20 bg-[#343434] text-white shadow-lg rounded-lg flex flex-col max-h-[88%] max-w-[56%] overflow-hidden" >
