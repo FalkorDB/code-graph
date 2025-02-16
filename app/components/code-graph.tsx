@@ -33,6 +33,13 @@ interface Props {
     setSelectedPathId: (selectedPathId: number) => void
     isPathResponse: boolean | undefined
     setIsPathResponse: Dispatch<SetStateAction<boolean | undefined>>
+    handleSearchSubmit: (node: any) => void
+    searchNode: any
+    setSearchNode: Dispatch<SetStateAction<any>>
+    cooldownTicks: number | undefined
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
+    cooldownTime: number
+    setCooldownTime: Dispatch<SetStateAction<number>>
 }
 
 export function CodeGraph({
@@ -50,7 +57,14 @@ export function CodeGraph({
     setSelectedPathId,
     isPathResponse,
     setIsPathResponse,
-    selectedPathId
+    selectedPathId,
+    handleSearchSubmit,
+    searchNode,
+    setSearchNode,
+    cooldownTicks,
+    setCooldownTicks,
+    cooldownTime,
+    setCooldownTime
 }: Props) {
 
     const [url, setURL] = useState("");
@@ -58,14 +72,11 @@ export function CodeGraph({
     const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
     const [position, setPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
-    const [searchNode, setSearchNode] = useState<PathNode>({});
     const [commits, setCommits] = useState<any[]>([]);
     const [nodesCount, setNodesCount] = useState<number>(0);
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
-    const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
-    const [cooldownTime, setCooldownTime] = useState<number>(0)
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -221,32 +232,6 @@ export function CodeGraph({
 
         setSelectedObj(undefined)
         setData({ ...graph.Elements })
-    }
-
-    const handleSearchSubmit = (node: any) => {
-        const chart = chartRef.current
-
-        if (chart) {
-
-            let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
-
-            if (!chartNode?.visible) {
-                if (!chartNode) {
-                    chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
-                } else {
-                    chartNode.visible = true
-                    setCooldownTicks(undefined)
-                    setCooldownTime(1000)
-                }
-                graph.visibleLinks(true, [chartNode!.id])
-                setData({ ...graph.Elements })
-            }
-
-            setSearchNode(chartNode)
-            setTimeout(() => {
-                chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
-            }, 0)
-        }
     }
 
     const handleRemove = (ids: number[]) => {

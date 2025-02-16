@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
 import { Graph, GraphData } from './components/model';
-import { BookOpen, Github, HomeIcon, X } from 'lucide-react';
+import { BookOpen, Github, HomeIcon, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { CodeGraph } from './components/code-graph';
@@ -12,6 +12,10 @@ import { GraphContext } from './components/provider';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { prepareArg } from './utils';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
+import Input from './components/Input';
+import { NodeObject } from 'react-force-graph-2d';
 
 export type PathNode = {
   id?: number
@@ -63,6 +67,10 @@ export default function Home() {
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const chartRef = useRef<any>()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [searchNode, setSearchNode] = useState<PathNode>({});
+  const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
+  const [cooldownTime, setCooldownTime] = useState<number>(0)
 
   useEffect(() => {
     setIsPathResponse(false)
@@ -156,6 +164,32 @@ export default function Home() {
     const json = await result.json()
 
     return graph.extend(json.result.neighbors, true)
+  }
+
+  const handleSearchSubmit = (node: any) => {
+    const chart = chartRef.current
+
+    if (chart) {
+
+      let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
+
+      if (!chartNode?.visible) {
+        if (!chartNode) {
+          chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
+        } else {
+          chartNode.visible = true
+          setCooldownTicks(undefined)
+          setCooldownTime(1000)
+        }
+        graph.visibleLinks(true, [chartNode!.id])
+        setData({ ...graph.Elements })
+      }
+
+      setSearchNode(chartNode)
+      setTimeout(() => {
+        chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
+      }, 0)
+    }
   }
 
   return (
@@ -276,6 +310,13 @@ export default function Home() {
               setSelectedPathId={setSelectedPathId}
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
+              handleSearchSubmit={handleSearchSubmit}
+              searchNode={searchNode}
+              setSearchNode={setSearchNode}
+              cooldownTicks={cooldownTicks}
+              setCooldownTicks={setCooldownTicks}
+              cooldownTime={cooldownTime}
+              setCooldownTime={setCooldownTime}
             />
           </Panel>
           <PanelResizeHandle />
@@ -297,39 +338,99 @@ export default function Home() {
       <div className='flex flex-col md:hidden h-screen'>
         <header className='flex justify-center items-center relative p-4 bg-gray-100'>
           <Image style={{ width: 'auto', height: 'auto' }} src="/logo_02.svg" alt="FalkorDB" width={0} height={0} />
-          <button className='absolute top-4 right-4'>
+          <button className='absolute top-4 right-4' onClick={() => setMenuOpen(prev => !prev)}>
             <p>Menu</p>
           </button>
         </header>
-        <CodeGraph
-          graph={graph}
-          data={data}
-          setData={setData}
-          chartRef={chartRef}
-          options={options}
-          setOptions={setOptions}
-          onFetchGraph={onFetchGraph}
-          onFetchNode={onFetchNode}
-          setPath={setPath}
-          isShowPath={!!path}
-          selectedValue={selectedValue}
-          selectedPathId={selectedPathId}
-          setSelectedPathId={setSelectedPathId}
-          isPathResponse={isPathResponse}
-          setIsPathResponse={setIsPathResponse}
-        />
         {
-          graph.Id &&
-          <div className='flex items-center p-4 gap-4'>
-            <button className='grow bg-blue text-white p-2 rounded-md'>
-              <p>Chat</p>
-            </button>
-            <button className='grow border border-blue text-blue p-2 rounded-md'>
-              <p>Options</p>
-            </button>
-          </div>
+          menuOpen ?
+            <ul className='h-full flex flex-col gap-4 p-4 items-center'>
+              <li>
+                <Link href="https://github.com/FalkorDB/code-graph" target='_blank'>
+                  <p>Github</p>
+                </Link>
+              </li>
+              <li>
+                <Link href="https://discord.gg/falkordb" target='_blank'>
+                  <p>Discord</p>
+                </Link>
+              </li>
+              <li>
+                <Link href="https://www.falkordb.com" target='_blank'>
+                  <p>Main Website</p>
+                </Link>
+              </li>
+              <Carousel
+                className='h-1 grow w-full'
+                opts={{
+                  align: "center",
+                  loop: true,
+                }}
+              >
+                <CarouselContent className='w-full h-full'>
+                  <CarouselItem className='w-full h-full flex justify-center items-center'>
+                    <p>Item 1</p>
+                  </CarouselItem>
+                  <CarouselItem className='w-full h-full flex justify-center items-center'>
+                    <p>Item 2</p>
+                  </CarouselItem>
+                </CarouselContent>
+                <CarouselPrevious />
+                <CarouselNext />
+              </Carousel>
+            </ul>
+            : <>
+              <CodeGraph
+                graph={graph}
+                data={data}
+                setData={setData}
+                chartRef={chartRef}
+                options={options}
+                setOptions={setOptions}
+                onFetchGraph={onFetchGraph}
+                onFetchNode={onFetchNode}
+                setPath={setPath}
+                isShowPath={!!path}
+                selectedValue={selectedValue}
+                selectedPathId={selectedPathId}
+                setSelectedPathId={setSelectedPathId}
+                isPathResponse={isPathResponse}
+                setIsPathResponse={setIsPathResponse}
+                handleSearchSubmit={handleSearchSubmit}
+                setSearchNode={setSearchNode}
+                searchNode={searchNode}
+                cooldownTicks={cooldownTicks}
+                setCooldownTicks={setCooldownTicks}
+                cooldownTime={cooldownTime}
+                setCooldownTime={setCooldownTime}
+              />
+              {
+                graph.Id &&
+                <div className='flex items-center p-4 gap-4'>
+                  <button className='grow bg-blue text-white p-2 rounded-md'>
+                    <p>Chat</p>
+                  </button>
+                  <Drawer>
+                    <DrawerTrigger asChild>
+                      <button className='grow border border-blue text-blue p-2 rounded-md'>
+                        <p>Options</p>
+                      </button>
+                    </DrawerTrigger>
+                    <DrawerContent>
+                      <Input
+                        graph={graph}
+                        onValueChange={(node) => setSearchNode(node)}
+                        icon={<Search />}
+                        handleSubmit={handleSearchSubmit}
+                        node={searchNode}
+                      />
+                    </DrawerContent>
+                  </Drawer>
+                </div>
+              }
+            </>
         }
       </div>
-    </main>
+    </main >
   )
 }
