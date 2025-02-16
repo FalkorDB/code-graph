@@ -12,6 +12,8 @@ import { GraphContext } from './components/provider';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { prepareArg } from './utils';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 
 export type PathNode = {
   id?: number
@@ -92,6 +94,7 @@ export default function Home() {
         title: "Uh oh! Something went wrong.",
         description: await result.text(),
       })
+      setIsSubmit(false)
       return
     }
 
@@ -209,50 +212,53 @@ export default function Home() {
                 }
               </DropdownMenuContent>
             </DropdownMenu>
-            {/* <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-              <DialogTrigger asChild>
-                <button
-                  className="h-full bg-black p-4 text-white rounded-lg"
-                  title="Create new project"
-                >
-                  <p>Create new project</p>
-                </button>
-              </DialogTrigger>
-              <DialogContent className='max-w-[26%] gap-8'>
-                <DialogHeader>
-                  <DialogTitle>{!isSubmit ? "CREATE A NEW PROJECT" : "THANK YOU FOR A NEW REQUEST"}</DialogTitle>
-                </DialogHeader>
-                <DialogDescription className='text-warp'>
+            {
+              process.env.NEXT_PUBLIC_LOCAL_MODE &&
+              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <DialogTrigger asChild>
+                  <button
+                    className="h-full bg-black p-4 text-white rounded-lg"
+                    title="Create new project"
+                  >
+                    <p>Create new project</p>
+                  </button>
+                </DialogTrigger>
+                <DialogContent className='sm:max-w-[500px]'>
+                  <DialogHeader>
+                    <DialogTitle>{!isSubmit ? "CREATE A NEW PROJECT" : "THANK YOU FOR A NEW REQUEST"}</DialogTitle>
+                  </DialogHeader>
+                  <DialogDescription className='text-black'>
+                    {
+                      !isSubmit
+                        ? "Please provide the URL of the project to connect and start querying data"
+                        : "Processing your graph, this could take a while. We appreciate your patience"
+                    }
+                  </DialogDescription>
                   {
-                    !isSubmit
-                      ? "Please provide the URL of the model to connect and start querying data"
-                      : "Processing your graph, this could take a while. We appreciate your patience"
+                    !isSubmit ?
+                      <form className='flex flex-col gap-4'>
+                        <input
+                          className='border p-3 rounded-lg'
+                          type="text"
+                          value={createURL}
+                          onChange={(e) => setCreateURL(e.target.value)}
+                          placeholder="Type Project URL (File:// or https://)"
+                        />
+                        <div className='flex flex-row-reverse'>
+                          <button
+                            className='bg-black p-3 text-white rounded-lg'
+                            type='submit'
+                            title='Create Project'
+                          >
+                            <p>Create</p>
+                          </button>
+                        </div>
+                      </form>
+                      : <Progress value={0} />
                   }
-                </DialogDescription>
-                {
-                  !isSubmit ?
-                    <form className='flex flex-col gap-4' onSubmit={onCreateRepo}>
-                      <input
-                        className='border p-3 rounded-lg'
-                        type="text"
-                        value={createURL}
-                        onChange={(e) => setCreateURL(e.target.value)}
-                        placeholder="Type URL"
-                      />
-                      <div className='flex flex-row-reverse'>
-                        <button
-                          className='bg-black p-3 text-white rounded-lg'
-                          type='submit'
-                          title='Create Project'
-                        >
-                          <p>Create</p>
-                        </button>
-                      </div>
-                    </form>
-                    : <Progress value={0} />
-                }
-              </DialogContent>
-            </Dialog> */}
+                </DialogContent>
+              </Dialog>
+            }
           </ul>
         </div>
         <div className='h-2.5 bg-gradient-to-r from-[#EC806C] via-[#B66EBD] to-[#7568F2]' />
