@@ -15,7 +15,6 @@ import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
 import { NodeObject } from "react-force-graph-2d";
-import { Switch } from "@/components/ui/switch"
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -69,7 +68,6 @@ export function CodeGraph({
     const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
     const [cooldownTime, setCooldownTime] = useState<number>(0)
     const containerRef = useRef<HTMLDivElement>(null);
-    const [isTreeLayout, setIsTreeLayout] = useState(false);
 
     useEffect(() => {
         setData({ ...graph.Elements })
@@ -378,13 +376,6 @@ export function CodeGraph({
                                                 </div>
                                             </div>
                                         }
-                                        <div className="flex items-center gap-2 pointer-events-auto">
-                                            <p className="text-sm text-gray-500">Tree Layout</p>
-                                            <Switch
-                                                checked={isTreeLayout}
-                                                onCheckedChange={setIsTreeLayout}
-                                            />
-                                        </div>
                                         <Toolbar
                                             className="pointer-events-auto"
                                             chartRef={chartRef}
@@ -431,7 +422,6 @@ export function CodeGraph({
                                     setCooldownTicks={setCooldownTicks}
                                     cooldownTime={cooldownTime}
                                     setCooldownTime={setCooldownTime}
-                                    isTreeLayout={isTreeLayout}
                                 />
                             </div>
                             : <div className="flex flex-col items-center justify-center h-full text-gray-400">
