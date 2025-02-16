@@ -31,6 +31,7 @@ interface Props {
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     cooldownTime: number | undefined
     setCooldownTime: Dispatch<SetStateAction<number>>
+    isTreeLayout: boolean
 }
 
 const PATH_COLOR = "#ffde21"
@@ -65,7 +66,8 @@ export default function GraphView({
     cooldownTicks,
     cooldownTime,
     setCooldownTicks,
-    setCooldownTime
+    setCooldownTime,
+    isTreeLayout
 }: Props) {
 
     const parentRef = useRef<HTMLDivElement>(null)
@@ -104,6 +106,18 @@ export default function GraphView({
         setCooldownTime(1000)
         setCooldownTicks(undefined)
     }, [graph.getElements().length])
+
+    useEffect(() => {
+        if (!isTreeLayout && chartRef.current) {
+            data.nodes.forEach(node => {
+                node.x = undefined;
+                node.y = undefined;
+            });
+            setData({...data});
+            
+            chartRef.current.d3ReheatSimulation();
+        }
+    }, [isTreeLayout]);
 
     const unsetSelectedObjects = (evt?: MouseEvent) => {
         if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
@@ -177,16 +191,16 @@ export default function GraphView({
 
     const getRank = (node: Node) => {
         switch (node.category) {
-            case 'file': return RANKS.FILE;
-            case 'class': return RANKS.CLASS;
-            case 'function': return RANKS.FUNCTION;
+            case 'File': return RANKS.FILE;
+            case 'Class': return RANKS.CLASS;
+            case 'Function': return RANKS.FUNCTION;
             default: return RANKS.OTHER;
         }
     }
 
     const getDagreLayout = (graphData: GraphData) => {
         if (!graphData?.nodes?.length) return graphData;
-        // Cache the previous layout if graph data hasn't changed
+        
         const graphKey = JSON.stringify(graphData.nodes.map(n => n.id).join(',') + '|' + graphData.links.map(l => `${l.source.id}-${l.target.id}`).join(','));
         if (layoutCache.current?.key === graphKey) {
             return layoutCache.current.data;
@@ -195,30 +209,47 @@ export default function GraphView({
         const g = new dagre.graphlib.Graph();
         g.setGraph({
             rankdir: 'TB',
-            nodesep: 30,
+            nodesep: 10,
             align: 'UL',
-            ranker: 'tight-tree', // Changed from 'network-simplex' for better performance
+            ranker: 'network-simplex',
             ranksep: 100,
             edgesep: 10,
         });
         g.setDefaultEdgeLabel(() => ({}));
 
-        // Batch node operations
-        const nodeOperations = graphData.nodes.map(node => ({
-            id: node.id.toString(),
-            config: {
+        // Group nodes by their category
+        const nodesByRank: Record<number, string[]> = {
+            [RANKS.FILE]: [],
+            [RANKS.CLASS]: [],
+            [RANKS.FUNCTION]: [],
+            [RANKS.OTHER]: [],
+        };
+
+        // First pass: add nodes and collect them by rank
+        graphData.nodes.forEach(node => {
+            const rank = getRank(node);
+            g.setNode(node.id.toString(), {
                 width: DAGRE_NODE_WIDTH,
                 height: DAGRE_NODE_HEIGHT,
-                rank: getRank(node)
-            }
-        }));
-
-        // Perform batch node setting
-        nodeOperations.forEach(({id, config}) => {
-            g.setNode(id, config);
+                rank: rank
+            });
+            nodesByRank[rank].push(node.id.toString());
         });
 
-        // Batch edge operations
+        // Add same rank constraints
+        Object.values(nodesByRank).forEach(rankNodes => {
+            if (rankNodes.length > 1) {
+                for (let i = 1; i < rankNodes.length; i++) {
+                    g.setEdge(rankNodes[i-1], rankNodes[i], {
+                        weight: 0,
+                        type: 'RANK',
+                        style: 'invisible'
+                    });
+                }
+            }
+        });
+
+        // Add actual edges after rank constraints
         graphData.links.forEach((link) => {
             g.setEdge(
                 link.source.id.toString(),
@@ -230,25 +261,25 @@ export default function GraphView({
         try {
             dagre.layout(g);
 
-            // Batch node position updates
+            // Update node positions
             graphData.nodes.forEach((node) => {
                 const nodeWithPos = g.node(node.id.toString());
                 if (nodeWithPos) {
                     node.x = nodeWithPos.x;
-                    node.y = nodeWithPos.y;
+                    // Force Y position based on rank
+                    const rank = getRank(node);
+                    node.y = rank * 100; // Use fixed Y positions based on rank
                 }
             });
 
-            // Cache the result
             layoutCache.current = {
                 key: graphKey,
                 data: graphData
             };
 
-            // Defer zoom to fit
             requestAnimationFrame(() => {
                 if (chartRef.current) {
-                    chartRef.current.zoomToFit(100, 50);
+                    chartRef.current.zoomToFit(1000, 40);
                 }
             });
 
@@ -265,7 +296,8 @@ export default function GraphView({
                 ref={chartRef}
                 height={parentHeight}
                 width={parentWidth}
-                graphData={getDagreLayout(data)}
+                key={`graph-${isTreeLayout}`}
+                graphData={isTreeLayout ? getDagreLayout(data) : data}
                 nodeVisibility="visible"
                 linkVisibility="visible"
                 linkCurvature="curve"
@@ -404,8 +436,8 @@ export default function GraphView({
                     setCooldownTicks(0)
                     setCooldownTime(0)
                 }}
-                cooldownTicks={cooldownTicks}
-                cooldownTime={cooldownTime}
+                cooldownTicks={isTreeLayout ? 0 : cooldownTicks}
+                cooldownTime={isTreeLayout ? 0 : cooldownTime}
             />
         </div>
     )
