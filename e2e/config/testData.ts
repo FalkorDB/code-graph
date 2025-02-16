@@ -27,3 +27,8 @@ export const nodes: { nodeName: string; }[] = [
 ];
 
 export const categories: string[] = ['File', 'Class', 'Function'];
+
+export const graphs: { graphName: string; }[] = [
+  { graphName: "GraphRAG-SDK" },
+  { graphName: "click" },
+];

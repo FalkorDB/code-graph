@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
-import { NodeObject } from "react-force-graph-2d";
+import { NodeObject, ForceGraphMethods } from "react-force-graph-2d";
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -27,7 +27,7 @@ interface Props {
     setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
-    chartRef: RefObject<any>
+    chartRef: React.MutableRefObject<ForceGraphMethods<Node, Link>>
     selectedValue: string
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
@@ -178,8 +178,6 @@ export function CodeGraph({
                 
                 const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
                 
-                debugger
-
                 if (!isTarget) return true
 
                 const deleted = graph.NodesMap.delete(Number(node.id))
