@@ -4,12 +4,12 @@ import Image from "next/image";
 import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Path } from "../page";
 import Input from "./Input";
-import { Graph, GraphData } from "./model";
+import { Graph, GraphData, Link } from "./model";
 import { cn } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
-import { NodeObject } from "react-force-graph-2d";
+import { NodeObject, ForceGraphMethods } from "react-force-graph-2d";
 
 type PathData = {
     nodes: any[]
@@ -24,50 +24,6 @@ enum MessageTypes {
     Pending,
     Text,
 }
-
-const EDGE_STYLE = {
-    "line-color": "gray",
-    "target-arrow-color": "gray",
-    "opacity": 0.5,
-}
-
-
-const PATH_EDGE_STYLE = {
-    width: 0.5,
-    "line-style": "dashed",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.3,
-    "target-arrow-color": "#FF66B3",
-    "opacity": 1
-}
-
-const SELECTED_PATH_EDGE_STYLE = {
-    width: 1,
-    "line-style": "solid",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.6,
-    "target-arrow-color": "#FF66B3",
-};
-
-const NODE_STYLE = {
-    "border-width": 0.5,
-    "color": "gray",
-    "border-color": "black",
-    "background-color": "gray",
-    "opacity": 0.5
-}
-
-const PATH_NODE_STYLE = {
-    "border-width": 0.5,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-}
-
-const SELECTED_PATH_NODE_STYLE = {
-    "border-width": 1,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-};
 
 interface Message {
     type: MessageTypes;
@@ -85,7 +41,7 @@ interface Props {
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
-    chartRef: any
+    chartRef: React.MutableRefObject<ForceGraphMethods<Node, Link>>
 }
 
 const SUGGESTIONS = [

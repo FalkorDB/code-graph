@@ -1,5 +1,5 @@
 
-import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
@@ -13,7 +13,7 @@ interface Props {
     data: GraphData
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
-    chartRef: RefObject<any>
+    chartRef: React.MutableRefObject<ForceGraphMethods<Node, Link>>
     selectedObj: Node | Link | undefined
     setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
