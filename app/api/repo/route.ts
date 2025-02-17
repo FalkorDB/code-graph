@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
 		const isLocal = repo_url.startsWith("file://")
 
-		const result = await fetch(`${url}/${isLocal ? "analyze_folder" : "process_repo"}`, {
+		const result = await fetch(`${url}/${isLocal ? "analyze_folder" : "analyze_repo"}`, {
 			method: 'POST',
 			body: JSON.stringify({ repo_url, ignore: ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"] }),
 			headers: {

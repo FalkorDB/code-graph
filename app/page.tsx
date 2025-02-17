@@ -236,7 +236,7 @@ export default function Home() {
                   </DialogDescription>
                   {
                     !isSubmit ?
-                      <form className='flex flex-col gap-4'>
+                      <form onSubmit={onCreateRepo} className='flex flex-col gap-4'>
                         <input
                           className='border p-3 rounded-lg'
                           type="text"
