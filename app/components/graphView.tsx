@@ -1,9 +1,10 @@
+'use client'
 
 import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
-import { CircleDot } from 'lucide-react';
+import { CircleDot, Fullscreen } from 'lucide-react';
 import { handleZoomToFit } from '@/lib/utils';
 
 export interface Position {
@@ -40,7 +41,6 @@ const PADDING = 2;
 
 export default function GraphView({
     data,
-    setData,
     graph,
     chartRef,
     selectedObj,
@@ -149,8 +149,8 @@ export default function GraphView({
     return (
         <div ref={parentRef} className="relative w-full md:h-full h-1 grow">
             <div className="md:hidden absolute bottom-4 right-4 z-10">
-                <button onClick={() => handleZoomToFit(chartRef)}>
-                    <CircleDot />
+                <button className='control-button' onClick={() => handleZoomToFit(chartRef)}>
+                    <Fullscreen />
                 </button>
             </div>
             <ForceGraph2D

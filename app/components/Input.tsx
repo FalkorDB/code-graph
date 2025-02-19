@@ -133,7 +133,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
 
     return (
         <div
-            className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            className={cn("w-full md:w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
             data-name='search-bar'
         >
             <input
@@ -144,6 +144,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                 }}
                 onKeyDown={handleKeyDown}
                 className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
+                placeholder="Search for nodes in the graph"
                 value={node?.name || ""}
                 onChange={(e) => {
                     const newVal = e.target.value

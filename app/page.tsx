@@ -1,21 +1,29 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react';
+import { MutableRefObject, useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, GraphData } from './components/model';
-import { BookOpen, Github, HomeIcon, Search, X } from 'lucide-react';
+import { Graph, GraphData, Link as LinkType, Node} from './components/model';
+import { AlignRight, BookOpen, BoomBox, Download, Github, HomeIcon, Search, X } from 'lucide-react';
 import Link from 'next/link';
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { CodeGraph } from './components/code-graph';
 import { toast } from '@/components/ui/use-toast';
-import { GraphContext } from './components/provider';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { prepareArg } from './utils';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
-import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import Input from './components/Input';
-import { NodeObject } from 'react-force-graph-2d';
+import { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
+import { Labels } from './components/labels';
+import { Toolbar } from './components/toolbar';
+import { cn } from '@/lib/utils';
+
+export type PathData = {
+  nodes: any[]
+  links: any[]
+}
 
 export type PathNode = {
   id?: number
@@ -31,6 +39,22 @@ type Tip = {
   title: string
   description: string
   keyboardCommand: string
+}
+
+export enum MessageTypes {
+  Query,
+  Response,
+  Path,
+  PathResponse,
+  Pending,
+  Text,
+}
+
+export interface Message {
+  type: MessageTypes;
+  text?: string;
+  paths?: { nodes: any[], links: any[] }[];
+  graphName?: string;
 }
 
 const TIPS: Tip[] = [
@@ -66,15 +90,26 @@ export default function Home() {
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
-  const chartRef = useRef<any>()
+  const desktopChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
+  const mobileChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const [searchNode, setSearchNode] = useState<PathNode>({});
   const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
   const [cooldownTime, setCooldownTime] = useState<number>(0)
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [query, setQuery] = useState('');
+  const [selectedPath, setSelectedPath] = useState<PathData>();
+  const [paths, setPaths] = useState<PathData[]>([]);
+  const chatPanel = useRef<ImperativePanelHandle>(null)
 
   useEffect(() => {
-    setIsPathResponse(false)
-  }, [graph.Id])
+    if (path?.start?.id && path?.end?.id) {
+      console.log(path?.start?.id, path?.end?.id)
+      setChatOpen(true)
+    }
+  }, [path])
 
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -137,6 +172,8 @@ export default function Home() {
     const json = await result.json()
     const g = Graph.create(json.result.entities, graphName)
     setGraph(g)
+    setIsPathResponse(false)
+    chatPanel.current?.expand()
     // @ts-ignore
     window.graph = g
   }
@@ -166,7 +203,7 @@ export default function Home() {
     return graph.extend(json.result.neighbors, true)
   }
 
-  const handleSearchSubmit = (node: any) => {
+  const handleSearchSubmit = (node: any, chartRef: MutableRefObject<ForceGraphMethods<Node, LinkType> | undefined>) => {
     const chart = chartRef.current
 
     if (chart) {
@@ -189,11 +226,71 @@ export default function Home() {
       setTimeout(() => {
         chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
       }, 0)
+      setOptionsOpen(false)
     }
   }
 
+  function onCategoryClick(name: string, show: boolean) {
+    graph.Categories.find(c => c.name === name)!.show = show
+
+    graph.Elements.nodes.forEach(node => {
+      if (!(node.category === name)) return
+      node.visible = show
+    })
+
+    graph.visibleLinks(show)
+
+    setData({ ...graph.Elements })
+  }
+
+  const handleDownloadImage = async () => {
+    try {
+      const canvases = document.querySelectorAll('.force-graph-container canvas') as NodeListOf<HTMLCanvasElement>;
+      if (!canvases) {
+        toast({
+          title: "Error",
+          description: "Canvas not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const canvas = Array.from(canvases).find(canvas => {
+        const container = canvas.parentElement;
+
+        if (!container) return false;
+
+        // Check if element is actually in viewport
+        const rect = container.getBoundingClientRect();
+        const isInViewport = rect.width > 0 &&
+          rect.height > 0 &&
+          rect.top >= 0 &&
+          rect.left >= 0 &&
+          rect.bottom <= window.innerHeight &&
+          rect.right <= window.innerWidth;
+
+        return isInViewport;
+      })
+
+      if (!canvas) return;
+
+      const dataURL = canvas.toDataURL('image/webp');
+      const link = document.createElement('a');
+      link.href = dataURL;
+      link.download = `${graph.Id}.webp`;
+      link.click();
+    } catch (error) {
+      console.error('Error downloading graph image:', error);
+      toast({
+        title: "Error",
+        description: "Failed to download image. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
-    <main className="h-screen">
+    <main className="h-[100dvh]">
       <div className='md:flex md:flex-col hidden h-screen'>
         <header className="flex flex-col text-xl">
           <div className="flex items-center justify-between py-4 px-8">
@@ -208,11 +305,15 @@ export default function Home() {
             <ul className="flex gap-4 items-center font-medium">
               <Link title="Home" className="flex gap-2.5 items-center p-4" href="https://www.falkordb.com" target='_blank'>
                 <HomeIcon />
-                <p>Home</p>
+                <p>Main Website</p>
               </Link>
               <Link title="Github" className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
                 <Github />
                 <p>Github</p>
+              </Link>
+              <Link title="Discord" className="flex gap-2.5 items-center p-4" href="https://discord.gg/falkordb" target='_blank'>
+                <BoomBox />
+                <p>Discord</p>
               </Link>
               <DropdownMenu open={tipOpen} onOpenChange={setTipOpen}>
                 <DropdownMenuTrigger asChild>
@@ -293,12 +394,16 @@ export default function Home() {
           <div className='h-2.5 bg-gradient-to-r from-[#EC806C] via-[#B66EBD] to-[#7568F2]' />
         </header>
         <PanelGroup direction="horizontal" className="w-full h-full">
-          <Panel defaultSize={70} className="flex flex-col" minSize={50}>
+          <Panel
+            defaultSize={graph.Id ? 70 : 100}
+            maxSize={100}
+            minSize={50}
+          >
             <CodeGraph
               graph={graph}
               data={data}
               setData={setData}
-              chartRef={chartRef}
+              chartRef={desktopChartRef}
               options={options}
               setOptions={setOptions}
               onFetchGraph={onFetchGraph}
@@ -310,19 +415,34 @@ export default function Home() {
               setSelectedPathId={setSelectedPathId}
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
-              handleSearchSubmit={handleSearchSubmit}
+              handleSearchSubmit={(node) => handleSearchSubmit(node, desktopChartRef)}
               searchNode={searchNode}
               setSearchNode={setSearchNode}
               cooldownTicks={cooldownTicks}
               setCooldownTicks={setCooldownTicks}
               cooldownTime={cooldownTime}
               setCooldownTime={setCooldownTime}
+              onCategoryClick={onCategoryClick}
+              handleDownloadImage={handleDownloadImage}
             />
           </Panel>
-          <PanelResizeHandle />
-          <Panel className="border-l min-w-[420px]" defaultSize={30} >
+          <PanelResizeHandle className={cn(!graph.Id && 'hidden')} />
+          <Panel
+            ref={chatPanel}
+            className="border-l"
+            defaultSize={graph.Id ? 30 : 0}
+            minSize={30}
+            maxSize={50}
+            collapsible
+          >
             <Chat
-              chartRef={chartRef}
+              messages={messages}
+              setMessages={setMessages}
+              query={query}
+              setQuery={setQuery}
+              selectedPath={selectedPath}
+              setSelectedPath={setSelectedPath}
+              chartRef={desktopChartRef}
               setPath={setPath}
               path={path}
               repo={graph.Id}
@@ -331,20 +451,25 @@ export default function Home() {
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
               setData={setData}
+              paths={paths}
+              setPaths={setPaths}
             />
           </Panel>
         </PanelGroup>
       </div>
-      <div className='flex flex-col md:hidden h-screen'>
+      <div className='flex flex-col md:hidden h-full overflow-hidden'>
         <header className='flex justify-center items-center relative p-4 bg-gray-100'>
-          <Image style={{ width: 'auto', height: 'auto' }} src="/logo_02.svg" alt="FalkorDB" width={0} height={0} />
-          <button className='absolute top-4 right-4' onClick={() => setMenuOpen(prev => !prev)}>
-            <p>Menu</p>
+          <Link href="https://www.falkordb.com" target='_blank'>
+            <Image priority style={{ width: 'auto', height: '70px', background: "transparent" }} src="/code-graph-logo.svg" alt="FalkorDB" width={0} height={0} />
+          </Link>
+          <button className='absolute top-10 right-4' onClick={() => setMenuOpen(prev => !prev)}>
+            <AlignRight />
           </button>
         </header>
-        {
-          menuOpen ?
-            <ul className='h-full flex flex-col gap-4 p-4 items-center'>
+
+        {menuOpen && (
+          <div className='absolute bottom-0 top-[94px] left-0 right-0 z-20 bg-white shadow-lg'>
+            <ul className='h-full flex flex-col gap-16 p-8 items-center'>
               <li>
                 <Link href="https://github.com/FalkorDB/code-graph" target='_blank'>
                   <p>Github</p>
@@ -361,10 +486,9 @@ export default function Home() {
                 </Link>
               </li>
               <Carousel
-                className='h-1 grow w-full'
+                className='h-1 grow'
                 opts={{
                   align: "center",
-                  loop: true,
                 }}
               >
                 <CarouselContent className='w-full h-full'>
@@ -379,57 +503,108 @@ export default function Home() {
                 <CarouselNext />
               </Carousel>
             </ul>
-            : <>
-              <CodeGraph
-                graph={graph}
-                data={data}
-                setData={setData}
-                chartRef={chartRef}
-                options={options}
-                setOptions={setOptions}
-                onFetchGraph={onFetchGraph}
-                onFetchNode={onFetchNode}
-                setPath={setPath}
-                isShowPath={!!path}
-                selectedValue={selectedValue}
-                selectedPathId={selectedPathId}
-                setSelectedPathId={setSelectedPathId}
-                isPathResponse={isPathResponse}
-                setIsPathResponse={setIsPathResponse}
-                handleSearchSubmit={handleSearchSubmit}
-                setSearchNode={setSearchNode}
-                searchNode={searchNode}
-                cooldownTicks={cooldownTicks}
-                setCooldownTicks={setCooldownTicks}
-                cooldownTime={cooldownTime}
-                setCooldownTime={setCooldownTime}
-              />
-              {
-                graph.Id &&
-                <div className='flex items-center p-4 gap-4'>
+          </div>
+        )}
+        <div className='flex flex-col grow'>
+          <CodeGraph
+            graph={graph}
+            data={data}
+            setData={setData}
+            chartRef={mobileChartRef}
+            options={options}
+            setOptions={setOptions}
+            onFetchGraph={onFetchGraph}
+            onFetchNode={onFetchNode}
+            setPath={setPath}
+            isShowPath={!!path}
+            selectedValue={selectedValue}
+            selectedPathId={selectedPathId}
+            setSelectedPathId={setSelectedPathId}
+            isPathResponse={isPathResponse}
+            setIsPathResponse={setIsPathResponse}
+            handleSearchSubmit={(node) => handleSearchSubmit(node, mobileChartRef)}
+            setSearchNode={setSearchNode}
+            searchNode={searchNode}
+            cooldownTicks={cooldownTicks}
+            setCooldownTicks={setCooldownTicks}
+            cooldownTime={cooldownTime}
+            setCooldownTime={setCooldownTime}
+            onCategoryClick={onCategoryClick}
+            handleDownloadImage={handleDownloadImage}
+          />
+          {graph.Id && (
+            <div className='flex items-center p-4 gap-4'>
+              <Drawer open={chatOpen} onOpenChange={setChatOpen}>
+                <DrawerTrigger asChild>
                   <button className='grow bg-blue text-white p-2 rounded-md'>
                     <p>Chat</p>
                   </button>
-                  <Drawer>
-                    <DrawerTrigger asChild>
-                      <button className='grow border border-blue text-blue p-2 rounded-md'>
-                        <p>Options</p>
-                      </button>
-                    </DrawerTrigger>
-                    <DrawerContent>
-                      <Input
-                        graph={graph}
-                        onValueChange={(node) => setSearchNode(node)}
-                        icon={<Search />}
-                        handleSubmit={handleSearchSubmit}
-                        node={searchNode}
-                      />
-                    </DrawerContent>
-                  </Drawer>
-                </div>
-              }
-            </>
-        }
+                </DrawerTrigger>
+                <DrawerContent handleClassName='bg-gray-500 h-1' className='flex flex-col h-[80dvh]'>
+                  <VisuallyHidden>
+                    <DrawerTitle />
+                    <DrawerDescription />
+                  </VisuallyHidden>
+                  <Chat
+                    messages={messages}
+                    setMessages={setMessages}
+                    query={query}
+                    setQuery={setQuery}
+                    selectedPath={selectedPath}
+                    setSelectedPath={setSelectedPath}
+                    chartRef={mobileChartRef}
+                    setPath={setPath}
+                    path={path}
+                    repo={graph.Id}
+                    graph={graph}
+                    selectedPathId={selectedPathId}
+                    isPathResponse={isPathResponse}
+                    setIsPathResponse={setIsPathResponse}
+                    setData={setData}
+                    setChatOpen={setChatOpen}
+                    paths={paths}
+                    setPaths={setPaths}
+                  />
+                </DrawerContent>
+              </Drawer>
+              <Drawer open={optionsOpen} onOpenChange={setOptionsOpen}>
+                <DrawerTrigger asChild>
+                  <button className='grow border border-blue text-blue p-2 rounded-md'>
+                    <p>Options</p>
+                  </button>
+                </DrawerTrigger>
+                <DrawerContent handleClassName='mt-0 bg-gray-500 h-1' overlayClassName='bg-transparent' className='flex flex-col gap-8 p-4 items-center bg-gray-300 border-2 border-gray-500'>
+                  <VisuallyHidden>
+                    <DrawerTitle />
+                    <DrawerDescription />
+                  </VisuallyHidden>
+                  <Toolbar
+                    className='bg-transparent absolute -top-14 left-0 w-full justify-between px-4'
+                    chartRef={mobileChartRef}
+                  />
+                  <Input
+                    className='border-2 border-gray-500'
+                    graph={graph}
+                    onValueChange={(node) => setSearchNode(node)}
+                    icon={<Search />}
+                    handleSubmit={(node) => handleSearchSubmit(node, mobileChartRef)}
+                    node={searchNode}
+                  />
+                  <Labels categories={graph.Categories} onClick={onCategoryClick} />
+                  <div className='flex flex-col gap-2 items-center'>
+                    <button
+                      className='control-button'
+                      onClick={handleDownloadImage}
+                    >
+                      <Download size={30} />
+                    </button>
+                    <p className='text-white bg-gray-500 py-1 px-2 rounded-full'>Take Screenshot</p>
+                  </div>
+                </DrawerContent>
+              </Drawer>
+            </div>
+          )}
+        </div>
       </div>
     </main >
   )

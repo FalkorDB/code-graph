@@ -13,7 +13,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
-import { NodeObject } from "react-force-graph-2d";
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -40,6 +39,8 @@ interface Props {
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     cooldownTime: number
     setCooldownTime: Dispatch<SetStateAction<number>>
+    onCategoryClick: (name: string, show: boolean) => void
+    handleDownloadImage: () => void
 }
 
 export function CodeGraph({
@@ -64,7 +65,9 @@ export function CodeGraph({
     cooldownTicks,
     setCooldownTicks,
     cooldownTime,
-    setCooldownTime
+    setCooldownTime,
+    onCategoryClick,
+    handleDownloadImage
 }: Props) {
 
     const [url, setURL] = useState("");
@@ -163,19 +166,6 @@ export function CodeGraph({
         onFetchGraph(value)
     }
 
-    function onCategoryClick(name: string, show: boolean) {
-        graph.Categories.find(c => c.name === name)!.show = show
-
-        graph.Elements.nodes.forEach(node => {
-            if (!(node.category === name)) return
-            node.visible = show
-        })
-
-        graph.visibleLinks(show)
-
-        setData({ ...graph.Elements })
-    }
-
     const deleteNeighbors = (nodes: Node[]) => {
 
         if (nodes.length === 0) return;
@@ -245,35 +235,8 @@ export function CodeGraph({
         setData({ ...graph.Elements })
     }
 
-    const handleDownloadImage = async () => {
-        try {
-            const canvas = document.querySelector('.force-graph-container canvas') as HTMLCanvasElement;
-            if (!canvas) {
-                toast({
-                    title: "Error",
-                    description: "Canvas not found",
-                    variant: "destructive",
-                });
-                return;
-            }
-
-            const dataURL = canvas.toDataURL('image/webp');
-            const link = document.createElement('a');
-            link.href = dataURL;
-            link.download = `${graphName}.webp`;
-            link.click();
-        } catch (error) {
-            console.error('Error downloading graph image:', error);
-            toast({
-                title: "Error",
-                description: "Failed to download image. Please try again.",
-                variant: "destructive",
-            });
-        }
-    };
-
     return (
-        <div className="h-full w-full flex flex-col gap-4 p-4 md:p-8 md:bg-gray-100">
+        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 md:p-8 md:bg-gray-100">
             <header className="flex flex-col gap-4 relative">
                 <div className="absolute md:hidden inset-x-0 top-0 h-[130%] bg-gray-100 -mx-8 -mt-8 px-8 border-b border-gray-400" />
                 <Combobox
@@ -288,8 +251,8 @@ export function CodeGraph({
                     {
                         graph.Id ?
                             <div className="h-full relative border flex flex-col md:block">
-                                <div className="hidden md:flex w-full absolute top-0 left-0 justify-between p-4 z-10 pointer-events-none">
-                                    <div className='flex gap-4'>
+                                <div className="flex w-full absolute top-0 left-0 justify-between p-4 z-10 pointer-events-none">
+                                    <div className='hidden md:flex gap-4'>
                                         <Input
                                             graph={graph}
                                             onValueChange={(node) => setSearchNode(node)}
@@ -398,11 +361,11 @@ export function CodeGraph({
                                             </div>
                                         }
                                         <Toolbar
-                                            className="pointer-events-auto"
+                                            className="gap-4"
                                             chartRef={chartRef}
                                         />
                                         <button
-                                            className="pointer-events-auto bg-white p-2 rounded-md"
+                                            className="control-button"
                                             onClick={handleDownloadImage}
                                         >
                                             <Download />

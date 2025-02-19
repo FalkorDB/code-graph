@@ -94,19 +94,7 @@
 }
 
 .Tip {
-  @apply flex gap-2 p-4 border border-[#0000001A] bg-[#F9F9F9] hover:bg-[#ECECEC] rounded-md text-left;
-
-  .label {
-    @apply text-[16px] font-bold leading-[14px]
-  }
-
-  .text {
-    @apply text-[16px] font-normal leading-[20px] text-[#7D7D7D]
-  }
-
-  div {
-    @apply flex flex-col gap-2 text-start
-  }
+  @apply text-blue flex gap-2 p-2 border border-blue hover:opacity-80 rounded-lg text-left w-fit;
 }
 
 .font-roberto {
@@ -115,6 +103,10 @@
 
 .font-oswald {
   font-family: 'Oswald', sans-serif;
+}
+
+.control-button {
+  @apply bg-white p-2 rounded-md pointer-events-auto;
 }
 
 ::-webkit-scrollbar {
