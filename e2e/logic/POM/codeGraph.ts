@@ -476,14 +476,6 @@ export default class CodeGraph extends BasePage {
 
         throw new Error("Tooltip not visible after multiple attempts!");
     }
-
-    async nodeClicktest(x: number, y: number): Promise<void> {
-        console.log(`Clicking node at (${x}, ${y})`);
-        await this.page.waitForTimeout(500);
-        await this.canvasElement.hover({ position: { x, y } });
-        await this.canvasElement.click({ position: { x, y }, button: 'right' });
-        await this.page.waitForTimeout(5000);
-    }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await this.codeGraphCheckbox(checkbox).click();
