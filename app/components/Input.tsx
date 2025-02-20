@@ -169,7 +169,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                 open &&
                 <div
                     ref={containerRef}
-                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md md:max-h-[50dvh] h-[25dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
                     data-name='search-bar-list'
                     style={{
                         top: inputHeight + 16

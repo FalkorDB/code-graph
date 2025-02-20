@@ -211,11 +211,11 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         if (!chart) return
 
         setSelectedPath(undefined)
-        
+
         if (!path?.start?.id || !path.end?.id) return
-        
+
         setPath(undefined)
-        
+
         const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
         })
@@ -431,27 +431,24 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                     })
                 }
             </main>
-            {
-                repo &&
-                <footer className="flex gap-4 px-4 overflow-hidden min-h-fit">
-                    <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
-                        <DropdownMenuTrigger asChild>
-                            <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
-                                <Lightbulb />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="flex flex-col gap-2 mb-4 w-[81.51dvw] md:w-[20dvw] overflow-y-auto" side="top">
-                            {getTip("!w-full")}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
-                        <input className="w-1 grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                        <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
-                            <ArrowRight color="white" />
+            <footer className="flex gap-4 px-4 overflow-hidden min-h-fit">
+                <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
+                    <DropdownMenuTrigger asChild>
+                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                            <Lightbulb />
                         </button>
-                    </form>
-                </footer>
-            }
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="flex flex-col gap-2 mb-4 w-[81.51dvw] md:w-[20dvw] overflow-y-auto" side="top">
+                        {getTip("!w-full")}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
+                    <input className="w-1 grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                    <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                        <ArrowRight color="white" />
+                    </button>
+                </form>
+            </footer>
         </div>
     );
 }

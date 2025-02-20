@@ -65,6 +65,19 @@ export default function GraphView({
     const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
     const [parentWidth, setParentWidth] = useState(0)
     const [parentHeight, setParentHeight] = useState(0)
+    const [screenSize, setScreenSize] = useState<number>(0)
+
+    useEffect(() => {
+        const handleResize = () => {
+            setScreenSize(window.innerWidth)
+        }
+
+        window.addEventListener('resize', handleResize)
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+        }
+    }, [])
 
     useEffect(() => {
         const handleResize = () => {
@@ -103,19 +116,19 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handleRightClick = (node: Node | Link, evt: MouseEvent) => {
-        if (evt.ctrlKey && "category" in node) {
-            if (selectedObjects.some(obj => obj.id === node.id)) {
-                setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
+    const handleRightClick = (element: Node | Link, evt: MouseEvent) => {
+        if (evt.ctrlKey && "category" in element) {
+            if (selectedObjects.some(obj => obj.id === element.id)) {
+                setSelectedObjects(selectedObjects.filter(obj => obj.id !== element.id))
                 return
             } else {
-                setSelectedObjects([...selectedObjects, node as Node])
+                setSelectedObjects([...selectedObjects, element as Node])
             }
         } else {
             setSelectedObjects([])
         }
 
-        setSelectedObj(node)
+        setSelectedObj(element)
         setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
@@ -272,7 +285,7 @@ export default function GraphView({
                     ctx.fillText(link.label, 0, 0);
                     ctx.restore()
                 }}
-                onNodeClick={handleNodeClick}
+                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) ? handleNodeClick : handleRightClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
                     return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
                 })}

@@ -363,13 +363,8 @@ export function CodeGraph({
                                         <Toolbar
                                             className="gap-4"
                                             chartRef={chartRef}
+                                            handleDownloadImage={handleDownloadImage}
                                         />
-                                        <button
-                                            className="control-button"
-                                            onClick={handleDownloadImage}
-                                        >
-                                            <Download />
-                                        </button>
                                     </div>
                                 </div>
                             </div>

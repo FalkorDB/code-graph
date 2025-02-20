@@ -1,4 +1,4 @@
-import { CircleDot, Fullscreen, Minus, Plus, ZoomIn, ZoomOut } from "lucide-react";
+import { CircleDot, Download, Fullscreen, Minus, Plus, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils"
 import { MutableRefObject } from "react";
 import { ForceGraphMethods } from "react-force-graph-2d";
@@ -6,12 +6,12 @@ import { Link, Node } from "./model";
 interface Props {
     chartRef: MutableRefObject<ForceGraphMethods<Node, Link> | undefined>
     className?: string
+    handleDownloadImage?: () => void
 }
 
-export function Toolbar({ chartRef, className }: Props) {
+export function Toolbar({ chartRef, className, handleDownloadImage }: Props) {
 
     const handleZoomClick = (changefactor: number) => {
-        debugger
         const chart = chartRef.current
         if (chart) {
             chart.zoom(chart.zoom() * changefactor)
@@ -19,10 +19,8 @@ export function Toolbar({ chartRef, className }: Props) {
     }
 
     const handleCenterClick = () => {
-        debugger
         const chart = chartRef.current
         if (chart) {
-            console.log(chart.getGraphBbox())
             chart.zoomToFit(1000, 40)
         }
     }
@@ -49,6 +47,12 @@ export function Toolbar({ chartRef, className }: Props) {
                 title="Zoom In"
             >
                 <ZoomIn />
+            </button>
+            <button
+                className="hidden md:block control-button"
+                onClick={handleDownloadImage}
+            >
+                <Download />
             </button>
         </div>
     )
