@@ -11,6 +11,11 @@ export interface Category {
   show: boolean,
 }
 
+export interface Label {
+  name: string,
+  textWidth: number,
+}
+
 export type Node = NodeObject<{
   id: number,
   name: string,
@@ -62,18 +67,21 @@ export class Graph {
 
   private id: string;
   private categories: Category[];
+  private labels: Label[];
   private elements: GraphData;
-
   private categoriesMap: Map<string, Category>;
+  private labelsMap: Map<string, Label>;
   private nodesMap: Map<number, Node>;
   private linksMap: Map<number, Link>;
 
-  private constructor(id: string, categories: Category[], elements: GraphData,
-    categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Link>) {
+  private constructor(id: string, categories: Category[], labels: Label[], elements: GraphData,
+    categoriesMap: Map<string, Category>, labelsMap: Map<string, Label>, nodesMap: Map<number, Node>, edgesMap: Map<number, Link>) {
     this.id = id;
     this.categories = categories;
+    this.labels = labels;
     this.elements = elements;
     this.categoriesMap = categoriesMap;
+    this.labelsMap = labelsMap;
     this.nodesMap = nodesMap;
     this.linksMap = edgesMap;
   }
@@ -88,6 +96,14 @@ export class Graph {
 
   get CategoriesMap(): Map<string, Category> {
     return this.categoriesMap;
+  }
+
+  get Labels(): Label[] {
+    return this.labels;
+  }
+
+  get LabelsMap(): Map<string, Label> {
+    return this.labelsMap;
   }
 
   get Elements(): GraphData {
@@ -111,7 +127,7 @@ export class Graph {
   }
 
   public static empty(): Graph {
-    return new Graph("", [], { nodes: [], links: [] }, new Map<string, Category>(), new Map<number, Node>(), new Map<number, Link>())
+    return new Graph("", [], [], { nodes: [], links: [] }, new Map<string, Category>(), new Map<string, Label>(), new Map<number, Node>(), new Map<number, Link>())
   }
 
   public static create(results: any, graphName: string): Graph {
@@ -205,6 +221,13 @@ export class Graph {
           isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node
         }
         this.nodesMap.set(edgeData.dest_node, target)
+      }
+
+      let label = this.labelsMap.get(edgeData.relation)
+      if (!label) {
+        label = { name: edgeData.relation, textWidth: 0 }
+        this.labelsMap.set(edgeData.relation, label)
+        this.labels.push(label)
       }
 
       link = {

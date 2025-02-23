@@ -232,7 +232,7 @@ export default function GraphView({
                     if (!start.x || !start.y || !end.x || !end.y) return
 
                     let textX, textY, angle;
-                    
+
                     if (start.id === end.id) {
                         const radius = NODE_SIZE * link.curve * 6.2;
                         const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
@@ -243,9 +243,9 @@ export default function GraphView({
                         const midX = (start.x + end.x) / 2;
                         const midY = (start.y + end.y) / 2;
                         const offset = link.curve / 2;
-                        
+
                         angle = Math.atan2(end.y - start.y, end.x - start.x);
-                        
+
                         // maintain label vertical orientation for legibility
                         if (angle > Math.PI / 2) angle = -(Math.PI - angle);
                         if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
@@ -265,20 +265,31 @@ export default function GraphView({
                         textY = rotatedY;
                     }
 
+                    // Get text width
+                    const label = graph.LabelsMap.get(link.label)!
+                    let { textWidth } = label
+
+                    if (!textWidth) {
+                        textWidth = ctx.measureText(link.label).width;
+                        graph.LabelsMap.set(link.label, { ...label, textWidth })
+                    }
+
                     // Setup text properties to measure background size
                     ctx.font = '2px Arial';
                     const padding = 0.5;
-                    const textWidth = ctx.measureText(link.label).width;
                     const textHeight = 2; // Approximate height for 2px font
+
+                    // Save the current context state
+                    ctx.save();
 
                     // add label with background and rotation
                     ctx.rotate(angle);
-                    
+
                     // Draw background
                     ctx.fillStyle = 'white';
                     ctx.fillRect(
-                        textX - textWidth/2 - padding,
-                        textY - textHeight/2 - padding,
+                        textX - textWidth / 2 - padding,
+                        textY - textHeight / 2 - padding,
                         textWidth + padding * 2,
                         textHeight + padding * 2
                     );
@@ -289,8 +300,8 @@ export default function GraphView({
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(link.label, textX, textY);
-                    
-                    ctx.rotate(-angle); // reset rotation
+
+                    ctx.restore(); // reset rotation
                 }}
                 onNodeClick={handleNodeClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
