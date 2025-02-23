@@ -95,7 +95,7 @@ export function CodeGraph({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Delete') {
                 if (selectedObj && selectedObjects.length === 0) return
-                handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined));
+                handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined), "nodes");
             }
         };
 
@@ -224,13 +224,16 @@ export function CodeGraph({
         setData({ ...graph.Elements })
     }
 
-    const handleRemove = (ids: number[]) => {
-        graph.Elements.nodes.forEach(node => {
-            if (!ids.includes(node.id)) return
-            node.visible = false
+    const handleRemove = (ids: number[], type: "nodes" | "links") => {
+        graph.Elements[type].forEach(element => {
+            if (!ids.includes(element.id)) return
+            element.visible = false
         })
 
         graph.visibleLinks(false, ids)
+
+        setSelectedObj(undefined)
+        setSelectedObjects([])
 
         setData({ ...graph.Elements })
     }
@@ -280,15 +283,14 @@ export function CodeGraph({
                                             </button>
                                         }
                                         {
-                                            (graph.Elements.nodes.some(e => !e.visible)) &&
+                                            (graph.getElements().some(e => !e.visible)) &&
                                             <button
                                                 className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
                                                 onClick={() => {
                                                     graph.Categories.forEach(c => c.show = true)
-                                                    graph.Elements.nodes.forEach((element) => {
+                                                    graph.getElements().forEach((element) => {
                                                         element.visible = true
                                                     })
-                                                    graph.visibleLinks(true)
 
                                                     setData({ ...graph.Elements })
                                                 }}

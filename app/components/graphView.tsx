@@ -4,7 +4,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
-import { CircleDot, Fullscreen } from 'lucide-react';
+import { Fullscreen } from 'lucide-react';
 import { handleZoomToFit } from '@/lib/utils';
 
 export interface Position {
@@ -286,12 +286,12 @@ export default function GraphView({
                     ctx.restore()
                 }}
                 onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) ? handleNodeClick : handleRightClick}
+                onNodeRightClick={handleRightClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
                     return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
                 })}
-                onNodeRightClick={handleRightClick}
+                onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isShowPath ? handleLinkClick : handleRightClick}
                 onLinkRightClick={handleRightClick}
-                onLinkClick={handleLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}
