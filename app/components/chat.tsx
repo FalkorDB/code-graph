@@ -1,15 +1,15 @@
 import { toast } from "@/components/ui/use-toast";
-import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Message, MessageTypes, Path, PathData } from "../page";
 import Input from "./Input";
-import { Graph, GraphData } from "./model";
-import { cn } from "@/lib/utils";
+import { Graph, GraphData, Link, Node } from "./model";
+import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
-import { NodeObject } from "react-force-graph-2d";
+import { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
 
 interface Props {
     repo: string
@@ -20,7 +20,7 @@ interface Props {
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
-    chartRef: any
+    chartRef: GraphRef
     messages: Message[]
     setMessages: Dispatch<SetStateAction<Message[]>>
     query: string

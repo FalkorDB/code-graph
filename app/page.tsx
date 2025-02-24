@@ -540,7 +540,7 @@ export default function Home() {
                     <p>Chat</p>
                   </button>
                 </DrawerTrigger>
-                <DrawerContent handleClassName='bg-gray-500 h-1' className='flex flex-col h-[80dvh]'>
+                <DrawerContent handleClassName='bg-gray-500 h-1' className='md:hidden flex flex-col h-[80dvh]'>
                   <VisuallyHidden>
                     <DrawerTitle />
                     <DrawerDescription />
@@ -573,7 +573,7 @@ export default function Home() {
                     <p>Options</p>
                   </button>
                 </DrawerTrigger>
-                <DrawerContent handleClassName='mt-0 bg-gray-500 h-1' overlayClassName='bg-transparent' className='flex flex-col gap-8 p-4 items-center bg-gray-300 border-2 border-gray-500'>
+                <DrawerContent handleClassName='mt-0 bg-gray-500 h-1' overlayClassName='bg-transparent' className='md:hidden flex flex-col gap-8 p-4 items-center bg-gray-300 border-2 border-gray-500'>
                   <VisuallyHidden>
                     <DrawerTitle />
                     <DrawerDescription />

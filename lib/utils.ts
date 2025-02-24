@@ -1,5 +1,10 @@
+import { Link, Node } from "@/app/components/model"
 import { type ClassValue, clsx } from "clsx"
+import { MutableRefObject } from "react"
 import { twMerge } from "tailwind-merge"
+import { ForceGraphMethods } from "react-force-graph-2d"
+
+export type GraphRef = MutableRefObject<ForceGraphMethods<Node, Link> | undefined>
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

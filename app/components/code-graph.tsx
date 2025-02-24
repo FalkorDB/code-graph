@@ -1,4 +1,4 @@
-import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
 import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
@@ -13,6 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
+import { ForceGraphMethods } from "react-force-graph-2d";
+import { GraphRef } from "@/lib/utils";
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -26,7 +28,7 @@ interface Props {
     setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
-    chartRef: RefObject<any>
+    chartRef: GraphRef
     selectedValue: string
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
@@ -178,8 +180,6 @@ export function CodeGraph({
 
                 const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
 
-                debugger
-
                 if (!isTarget) return true
 
                 const deleted = graph.NodesMap.delete(Number(node.id))
@@ -324,7 +324,6 @@ export function CodeGraph({
                                     setSelectedObj={setSelectedObj}
                                     setSelectedObjects={setSelectedObjects}
                                     setPosition={setPosition}
-                                    onFetchNode={onFetchNode}
                                     handleExpand={handleExpand}
                                     isShowPath={isShowPath}
                                     setPath={setPath}

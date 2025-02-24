@@ -1,11 +1,11 @@
 'use client'
 
-import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
+import { Dispatch, MutableRefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
 import { Fullscreen } from 'lucide-react';
-import { handleZoomToFit } from '@/lib/utils';
+import { GraphRef, handleZoomToFit } from '@/lib/utils';
 
 export interface Position {
     x: number,
@@ -16,13 +16,12 @@ interface Props {
     data: GraphData
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
-    chartRef: RefObject<any>
+    chartRef: GraphRef
     selectedObj: Node | Link | undefined
     setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
-    onFetchNode: (nodeIds: number[]) => Promise<GraphData>
     handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
@@ -48,7 +47,6 @@ export default function GraphView({
     selectedObjects,
     setSelectedObjects,
     setPosition,
-    onFetchNode,
     handleExpand,
     isShowPath,
     setPath,
@@ -71,6 +69,8 @@ export default function GraphView({
         const handleResize = () => {
             setScreenSize(window.innerWidth)
         }
+
+        handleResize()
 
         window.addEventListener('resize', handleResize)
 
@@ -285,12 +285,12 @@ export default function GraphView({
                     ctx.fillText(link.label, 0, 0);
                     ctx.restore()
                 }}
-                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) ? handleNodeClick : handleRightClick}
+                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? handleNodeClick : handleRightClick}
                 onNodeRightClick={handleRightClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
-                    return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
+                    return prev && { x: prev.x + translate.x * (chartRef.current?.zoom() ?? 1), y: prev.y + translate.y * (chartRef.current?.zoom() ?? 1) }
                 })}
-                onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isShowPath ? handleLinkClick : handleRightClick}
+                onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isPathResponse ? handleLinkClick : handleRightClick}
                 onLinkRightClick={handleRightClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
