@@ -25,7 +25,7 @@ export function Toolbar({ chartRef, className, handleDownloadImage }: Props) {
     }
 
     return (
-        <div className={cn("flex flex-row rounded overflow-hidden", className)}>
+        <div className={cn("flex flex-row rounded overflow-hidden p-1", className)}>
             <button
                 className="control-button"
                 onClick={() => handleZoomClick(0.9)}
