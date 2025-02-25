@@ -38,9 +38,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
         const timeout = setTimeout(async () => {
 
             if (!node?.name) {
-                if (!node?.name) {
-                    setOptions([])
-                }
+                setOptions([])
                 setOpen(false)
                 return
             }
