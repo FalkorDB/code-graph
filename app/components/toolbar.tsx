@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { MutableRefObject } from "react";
 import { ForceGraphMethods } from "react-force-graph-2d";
 import { Link, Node } from "./model";
+
 interface Props {
     chartRef: GraphRef
     className?: string

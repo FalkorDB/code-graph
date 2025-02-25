@@ -4,7 +4,7 @@ import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPH_ID, PROJECT_NAME } from "../config/constants";
 import { findNodeByName } from "../logic/utils";
-import { nodesPath, categories, nodes } from "../config/testData";
+import { nodesPath, categories, nodes, graphs } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
 
 test.describe("Canvas tests", () => {
@@ -117,16 +117,15 @@ test.describe("Canvas tests", () => {
     });
   })
 
-  for (let index = 0; index < 2; index++) {
-    const checkboxIndex = index + 1;
-    test(`Verify selecting different graphs displays nodes in canvas - Iteration ${index + 1}`, async () => {
+  graphs.forEach(({graphName}) => {
+    test(`Verify selecting different graphs displays nodes in canvas - grpah: ${graphName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(checkboxIndex);
+      await codeGraph.selectGraph(graphName);
       const result = await codeGraph.getGraphDetails();
       expect(result.elements.nodes.length).toBeGreaterThan(1);
       expect(result.elements.links.length).toBeGreaterThan(1);
     });
-  }
+  })
   
   for (let index = 0; index < 3; index++) {
     const nodeIndex: number = index + 1;
