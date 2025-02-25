@@ -106,7 +106,7 @@
 }
 
 .control-button {
-  @apply bg-white p-2 rounded-md pointer-events-auto;
+  @apply bg-white p-2 rounded-md pointer-events-auto shadow-lg;
 }
 
 ::-webkit-scrollbar {

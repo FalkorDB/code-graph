@@ -239,9 +239,9 @@ export function CodeGraph({
     }
 
     return (
-        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 md:p-8 md:bg-gray-100">
+        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 pt-0 md:p-8 md:bg-gray-100">
             <header className="flex flex-col gap-4 relative">
-                <div className="absolute md:hidden inset-x-0 top-0 h-[130%] bg-gray-100 -mx-8 -mt-8 px-8 border-b border-gray-400" />
+                <div className="absolute md:hidden inset-x-0 top-8 h-[50%] bg-gray-100 -mx-8 -mt-8 px-8 border-b border-gray-400" />
                 <Combobox
                     options={options}
                     setOptions={setOptions}

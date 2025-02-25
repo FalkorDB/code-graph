@@ -458,11 +458,11 @@ export default function Home() {
         </PanelGroup>
       </div>
       <div className='flex flex-col md:hidden h-full overflow-hidden'>
-        <header className='flex justify-center items-center relative p-4 bg-gray-100'>
+        <header className='flex justify-center items-center relative bg-gray-100'>
           <Link href="https://www.falkordb.com" target='_blank'>
             <Image priority style={{ width: 'auto', height: '70px', background: "transparent" }} src="/code-graph-logo.svg" alt="FalkorDB" width={0} height={0} />
           </Link>
-          <button className='absolute top-10 right-4' onClick={() => setMenuOpen(prev => !prev)}>
+          <button className='absolute top-6 right-4' onClick={() => setMenuOpen(prev => !prev)}>
             <AlignRight />
           </button>
         </header>
@@ -579,7 +579,7 @@ export default function Home() {
                     <DrawerDescription />
                   </VisuallyHidden>
                   <Toolbar
-                    className='bg-transparent absolute -top-14 left-0 w-full justify-between px-4'
+                    className='bg-transparent absolute -top-14 left-0 w-full justify-between px-6'
                     chartRef={mobileChartRef}
                   />
                   <Input
@@ -598,7 +598,7 @@ export default function Home() {
                     >
                       <Download size={30} />
                     </button>
-                    <p className='text-white bg-gray-500 py-1 px-2 rounded-full'>Take Screenshot</p>
+                    <p className=''>Take Screenshot</p>
                   </div>
                 </DrawerContent>
               </Drawer>

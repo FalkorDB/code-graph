@@ -1,8 +1,7 @@
-import { CircleDot, Download, Fullscreen, Minus, Plus, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, Fullscreen, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils"
-import { MutableRefObject } from "react";
-import { ForceGraphMethods } from "react-force-graph-2d";
-import { Link, Node } from "./model";
+import { GraphRef } from "@/lib/utils";
+
 interface Props {
     chartRef: GraphRef
     className?: string
