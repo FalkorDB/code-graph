@@ -4,7 +4,7 @@ import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react"
 import { Link, Node } from "./model";
 import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
-import { Path } from "../page";
+import { Path } from "@/lib/utils";
 import { Position } from "./graphView";
 
 interface Props {

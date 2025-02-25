@@ -2,7 +2,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
-import { Message, MessageTypes, Path, PathData } from "../page";
+import { Message, MessageTypes, Path, PathData } from "@/lib/utils";
 import Input from "./Input";
 import { Graph, GraphData, Link, Node } from "./model";
 import { cn, GraphRef } from "@/lib/utils";

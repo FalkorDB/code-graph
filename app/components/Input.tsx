@@ -1,7 +1,7 @@
 import { toast } from "@/components/ui/use-toast"
 import { getCategoryColorName, getCategoryColorValue, Graph } from "./model"
 import { useEffect, useRef, useState } from "react"
-import { PathNode } from "../page"
+import { PathNode } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import { prepareArg } from "../utils"
 

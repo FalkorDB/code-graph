@@ -4,6 +4,37 @@ import { MutableRefObject } from "react"
 import { twMerge } from "tailwind-merge"
 import { ForceGraphMethods } from "react-force-graph-2d"
 
+export type PathData = {
+  nodes: any[]
+  links: any[]
+}
+
+export type PathNode = {
+  id?: number
+  name?: string
+}
+
+export type Path = {
+  start?: PathNode,
+  end?: PathNode
+}
+
+export enum MessageTypes {
+  Query,
+  Response,
+  Path,
+  PathResponse,
+  Pending,
+  Text,
+}
+
+export interface Message {
+  type: MessageTypes;
+  text?: string;
+  paths?: { nodes: any[], links: any[] }[];
+  graphName?: string;
+}
+
 export type GraphRef = MutableRefObject<ForceGraphMethods<Node, Link> | undefined>
 
 export function cn(...inputs: ClassValue[]) {

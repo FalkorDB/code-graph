@@ -18,43 +18,12 @@ import Input from './components/Input';
 import { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
 import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
-import { cn } from '@/lib/utils';
-
-export type PathData = {
-  nodes: any[]
-  links: any[]
-}
-
-export type PathNode = {
-  id?: number
-  name?: string
-}
-
-export type Path = {
-  start?: PathNode,
-  end?: PathNode
-}
+import { cn, Message, Path, PathData, PathNode } from '@/lib/utils';
 
 type Tip = {
   title: string
   description: string
   keyboardCommand: string
-}
-
-export enum MessageTypes {
-  Query,
-  Response,
-  Path,
-  PathResponse,
-  Pending,
-  Text,
-}
-
-export interface Message {
-  type: MessageTypes;
-  text?: string;
-  paths?: { nodes: any[], links: any[] }[];
-  graphName?: string;
 }
 
 const TIPS: Tip[] = [
