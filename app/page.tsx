@@ -26,7 +26,7 @@ type Tip = {
   keyboardCommand: string
 }
 
-const TIPS: Tip[] = [
+const DESKTOP_TIPS: Tip[] = [
   {
     title: "Select Items in Specific Area",
     description: `Click and drag your mouse over an area to create a selection box.
@@ -44,6 +44,11 @@ const TIPS: Tip[] = [
     description: `Press delete to remove the selected object.`,
     keyboardCommand: "Delete"
   },
+]
+const MOBILE_TIPS: string[] = [
+  "By representing data as interconnected nodes and edges, FalkorDB facilitates efficient storage and rapid retrieval",
+  "We use an OpenCypher query language with proprietary enhancements that streamline interactions with graph data.",
+  "FalkorDB delivers an accurate, multi-tenant RAG solution powered by a low-latency, scalable graph database technology.",
 ]
 
 export default function Home() {
@@ -302,7 +307,7 @@ export default function Home() {
                     </button>
                   </div>
                   {
-                    TIPS.map((tip, index) => (
+                    DESKTOP_TIPS.map((tip, index) => (
                       <div key={index} className='flex flex-col gap-4 text-[#7D7D7D]'>
                         <div className='flex gap-3 items-center'>
                           <h1 className='text-black font-bold'>{tip.title}</h1>
@@ -463,9 +468,6 @@ export default function Home() {
                 <CarouselContent className='w-full h-full'>
                   <CarouselItem className='w-full h-full flex justify-center items-center'>
                     <p>Item 1</p>
-                  </CarouselItem>
-                  <CarouselItem className='w-full h-full flex justify-center items-center'>
-                    <p>Item 2</p>
                   </CarouselItem>
                 </CarouselContent>
                 <CarouselPrevious />
