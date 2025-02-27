@@ -2,7 +2,7 @@
 
 import { MutableRefObject, useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, GraphData, Link as LinkType, Node} from './components/model';
+import { Graph, GraphData, Link as LinkType, Node } from './components/model';
 import { AlignRight, BookOpen, BoomBox, Download, Github, HomeIcon, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -12,7 +12,7 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { prepareArg } from './utils';
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
+import { Carousel, CarouselApi, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import Input from './components/Input';
 import { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
@@ -77,6 +77,8 @@ export default function Home() {
   const [selectedPath, setSelectedPath] = useState<PathData>();
   const [paths, setPaths] = useState<PathData[]>([]);
   const chatPanel = useRef<ImperativePanelHandle>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>()
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -84,6 +86,14 @@ export default function Home() {
       setChatOpen(true)
     }
   }, [path])
+
+  useEffect(() => {
+    if (!carouselApi) return
+
+    carouselApi.on('select', () => {
+      setActiveIndex(carouselApi.selectedScrollSnap())
+    })
+  }, [carouselApi])
 
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -442,7 +452,7 @@ export default function Home() {
         </header>
 
         {menuOpen && (
-          <div className='absolute bottom-0 top-[94px] left-0 right-0 z-20 bg-white shadow-lg'>
+          <div className='absolute bottom-0 top-[70px] left-0 right-0 z-20 bg-white shadow-lg'>
             <ul className='h-full flex flex-col gap-16 p-8 items-center'>
               <li>
                 <Link href="https://github.com/FalkorDB/code-graph" target='_blank'>
@@ -460,18 +470,32 @@ export default function Home() {
                 </Link>
               </li>
               <Carousel
-                className='h-1 grow'
+                className='w-[85%]'
                 opts={{
                   align: "center",
                 }}
+                setApi={setCarouselApi}
               >
-                <CarouselContent className='w-full h-full'>
-                  <CarouselItem className='w-full h-full flex justify-center items-center'>
-                    <p>Item 1</p>
-                  </CarouselItem>
+                <CarouselContent className='w-full'>
+                  {MOBILE_TIPS.map((tip, index) => (
+                    <CarouselItem key={index} className='text-center'>
+                      <p>{tip}</p>
+                    </CarouselItem>
+                  ))}
                 </CarouselContent>
-                <CarouselPrevious />
-                <CarouselNext />
+                <div className="flex justify-center gap-2 mt-4">
+                  {MOBILE_TIPS.map((_, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "h-2 w-2 rounded-full bg-gray-300",
+                        index === activeIndex && "bg-gray-600"
+                      )}
+                    />
+                  ))}
+                </div>
+                <CarouselPrevious className='-left-10' />
+                <CarouselNext className='-right-10' />
               </Carousel>
             </ul>
           </div>
