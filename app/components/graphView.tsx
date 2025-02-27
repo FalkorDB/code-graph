@@ -63,14 +63,9 @@ export default function GraphView({
     const parentRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        setCooldownTime(4000)
+        setCooldownTime(2000)
         setCooldownTicks(undefined)
-    }, [graph.Id])
-
-    useEffect(() => {
-        setCooldownTime(1000)
-        setCooldownTicks(undefined)
-    }, [graph.getElements().length])
+    }, [graph.Id, graph.getElements().length])
 
     const unsetSelectedObjects = (evt?: MouseEvent) => {
         if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
@@ -133,6 +128,33 @@ export default function GraphView({
         setData({ ...graph.Elements })
     }
 
+    const avoidOverlap = (nodes: Array<{ x?: number; y?: number }>) => {
+        const spacing = NODE_SIZE * 2.5;
+        const validNodes = nodes.filter(node => node.x !== undefined && node.y !== undefined) as Array<{ x: number; y: number }>;
+    
+        for (let i = 0; i < validNodes.length; i++) {
+            for (let j = i + 1; j < validNodes.length; j++) {
+                const nodeA = validNodes[i];
+                const nodeB = validNodes[j];
+    
+                const dx = nodeA.x - nodeB.x;
+                const dy = nodeA.y - nodeB.y;
+                const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+    
+                if (distance < spacing) {
+                    const pushStrength = (spacing - distance) / distance * 0.5;
+                    const moveX = dx * pushStrength;
+                    const moveY = dy * pushStrength;
+    
+                    nodeA.x += moveX;
+                    nodeA.y += moveY;
+                    nodeB.x -= moveX;
+                    nodeB.y -= moveY;
+                }
+            }
+        }
+    };    
+
     return (
         <div ref={parentRef} className="relative w-fill h-full">
             <ForceGraph2D
@@ -140,6 +162,7 @@ export default function GraphView({
                 height={parentRef.current?.clientHeight || 0}
                 width={parentRef.current?.clientWidth || 0}
                 graphData={data}
+                onEngineTick={() => avoidOverlap(data.nodes)}
                 nodeVisibility="visible"
                 linkVisibility="visible"
                 linkCurvature="curve"
