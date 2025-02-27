@@ -4,7 +4,7 @@ import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPH_ID, PROJECT_NAME } from "../config/constants";
 import { findNodeByName } from "../logic/utils";
-import { nodesPath, categories, nodes } from "../config/testData";
+import { nodesPath, categories, nodes, graphs } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
 
 test.describe("Canvas tests", () => {
@@ -43,15 +43,14 @@ test.describe("Canvas tests", () => {
   test(`Verify center graph button centers nodes in canvas`, async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await codeGraph.selectGraph(GRAPH_ID);
+    await codeGraph.clickCenter();
     const initialGraph = await codeGraph.getCanvasScaling();
-    
     await codeGraph.clickZoomOut();
     await codeGraph.clickZoomOut();
     await codeGraph.clickCenter();
     const updatedGraph = await codeGraph.getCanvasScaling();
     expect(Math.abs(initialGraph.scaleX - updatedGraph.scaleX)).toBeLessThanOrEqual(0.1);
     expect(Math.abs(initialGraph.scaleY - updatedGraph.scaleY)).toBeLessThanOrEqual(0.1);
-
   })
 
   nodes.slice(0,2).forEach((node) => {
@@ -101,7 +100,7 @@ test.describe("Canvas tests", () => {
     test(`Verify "Clear graph" button resets canvas view for path ${path.firstNode} and ${path.secondNode}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn();
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const initialGraph = await codeGraph.getGraphDetails();
@@ -118,16 +117,15 @@ test.describe("Canvas tests", () => {
     });
   })
 
-  for (let index = 0; index < 2; index++) {
-    const checkboxIndex = index + 1;
-    test(`Verify selecting different graphs displays nodes in canvas - Iteration ${index + 1}`, async () => {
+  graphs.forEach(({graphName}) => {
+    test(`Verify selecting different graphs displays nodes in canvas - grpah: ${graphName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(checkboxIndex);
+      await codeGraph.selectGraph(graphName);
       const result = await codeGraph.getGraphDetails();
       expect(result.elements.nodes.length).toBeGreaterThan(1);
       expect(result.elements.links.length).toBeGreaterThan(1);
     });
-  }
+  })
   
   for (let index = 0; index < 3; index++) {
     const nodeIndex: number = index + 1;
@@ -186,7 +184,7 @@ test.describe("Canvas tests", () => {
     test(`Verify successful node path connection in canvas between ${firstNode} and ${secondNode} via UI`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn();
       await codeGraph.insertInputForShowPath("1", firstNode);
       await codeGraph.insertInputForShowPath("2", secondNode);
       const result = await codeGraph.getGraphDetails();
@@ -201,7 +199,7 @@ test.describe("Canvas tests", () => {
     test(`Validate node path connection in canvas ui and confirm via api for path ${path.firstNode} and ${path.secondNode}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPH_ID);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn();
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const result = await codeGraph.getGraphDetails();
