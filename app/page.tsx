@@ -535,7 +535,7 @@ export default function Home() {
                     <p>Chat</p>
                   </button>
                 </DrawerTrigger>
-                <DrawerContent handleClassName='bg-gray-500 h-1' className='md:hidden flex flex-col h-[80dvh]'>
+                <DrawerContent handleClassName='bg-gray-500 h-1' className='md:hidden flex flex-col h-[90dvh]'>
                   <VisuallyHidden>
                     <DrawerTitle />
                     <DrawerDescription />
