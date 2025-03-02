@@ -139,31 +139,25 @@ export default function GraphView({
         }
     }
 
-    const avoidOverlap = (nodes: Array<{ x?: number; y?: number }>) => {
+    const avoidOverlap = (nodes: Position[]) => {
         const spacing = NODE_SIZE * 2.5;
-        const validNodes = nodes.filter(node => node.x !== undefined && node.y !== undefined) as Array<{ x: number; y: number }>;
+        nodes.forEach((nodeA, i) => {
+            nodes.forEach((nodeB, j) => {
+                if (i !== j) {
+                    const dx = nodeA.x - nodeB.x;
+                    const dy = nodeA.y - nodeB.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
     
-        for (let i = 0; i < validNodes.length; i++) {
-            for (let j = i + 1; j < validNodes.length; j++) {
-                const nodeA = validNodes[i];
-                const nodeB = validNodes[j];
-    
-                const dx = nodeA.x - nodeB.x;
-                const dy = nodeA.y - nodeB.y;
-                const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-    
-                if (distance < spacing) {
-                    const pushStrength = (spacing - distance) / distance * 0.5;
-                    const moveX = dx * pushStrength;
-                    const moveY = dy * pushStrength;
-    
-                    nodeA.x += moveX;
-                    nodeA.y += moveY;
-                    nodeB.x -= moveX;
-                    nodeB.y -= moveY;
+                    if (distance < spacing) {
+                        const pushStrength = (spacing - distance) / distance * 0.5;
+                        nodeA.x += dx * pushStrength;
+                        nodeA.y += dy * pushStrength;
+                        nodeB.x -= dx * pushStrength;
+                        nodeB.y -= dy * pushStrength;
+                    }
                 }
-            }
-        }
+            });
+        });
     };    
 
     return (
@@ -173,7 +167,7 @@ export default function GraphView({
                 height={parentHeight}
                 width={parentWidth}
                 graphData={data}
-                onEngineTick={() => avoidOverlap(data.nodes)}
+                onEngineTick={() => avoidOverlap(data.nodes as Position[])}
                 nodeVisibility="visible"
                 linkVisibility="visible"
                 linkCurvature="curve"
