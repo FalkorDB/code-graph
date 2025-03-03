@@ -1,4 +1,4 @@
-import { Locator, Page } from "playwright";
+import { Download, Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
 import { waitForElementToBeVisible, waitForStableText, waitToBeEnabled } from "../utils";
 
@@ -231,6 +231,10 @@ export default class CodeGraph extends BasePage {
     
     private get nodeToolTip(): Locator {
         return this.page.locator("//div[contains(@class, 'graph-tooltip')]");
+    }
+
+    private get downloadImageBtn(): Locator {
+        return this.page.locator("//button[@title='downloadImage']");
     }
 
     /* NavBar functionality */
@@ -637,4 +641,21 @@ export default class CodeGraph extends BasePage {
         return { scaleX, scaleY };
     }
 
+    async downloadImage(): Promise<Download> {
+        await this.page.waitForLoadState('networkidle');
+        const [download] = await Promise.all([
+            this.page.waitForEvent('download'),
+            this.downloadImageBtn.click(),
+        ]);
+
+        return download;
+    }
+
+    async rightClickAtCanvasCenter(): Promise<void> {
+        const boundingBox = await this.canvasElement.boundingBox();
+        if (!boundingBox) throw new Error('Canvas bounding box not found');
+        const centerX = boundingBox.x + boundingBox.width / 2;
+        const centerY = boundingBox.y + boundingBox.height / 2;
+        await this.page.mouse.click(centerX, centerY, { button: 'right' });
+    }
 }

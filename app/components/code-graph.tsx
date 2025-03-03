@@ -380,6 +380,7 @@ export function CodeGraph({
                                         />
                                         <button
                                             className="pointer-events-auto bg-white p-2 rounded-md"
+                                            title='downloadImage'
                                             onClick={handleDownloadImage}
                                         >
                                             <Download />
