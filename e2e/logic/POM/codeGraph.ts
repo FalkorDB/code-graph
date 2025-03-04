@@ -474,12 +474,12 @@ export default class CodeGraph extends BasePage {
             
             await this.page.waitForTimeout(1000);
     
-            if (await waitForElementToBeVisible(this.nodeToolTip)) {
+            // if (await waitForElementToBeVisible(this.nodeToolTip)) {
                 console.log("tooltip visible: ",this.nodeToolTip.isVisible());
                 console.log("x: ", x, "  y: ", y);
                 await this.canvasElement.click({ position: { x, y }, button: 'right' });
-                return;
-            }
+            //     return;
+            // }
             await this.page.waitForTimeout(1000);
         }
 
