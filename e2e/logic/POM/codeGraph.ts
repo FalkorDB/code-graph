@@ -659,10 +659,9 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.click(centerX, centerY, { button: 'right' });
     }
 
-    async validateToolTipVisibility(x: number, y: number): Promise<boolean>{
+    async isToolTipVisible(x: number, y: number): Promise<boolean>{
         await this.canvasElement.hover({ position: { x, y } });
-        const isToolTipVisible = await waitForElementToBeVisible(this.nodeToolTip);
-        if (!isToolTipVisible) throw new Error("'View Node' button is not visible!");
-        return isToolTipVisible
+        await this.page.waitForTimeout(500);
+        return await this.nodeToolTip.isVisible();
     }
 }

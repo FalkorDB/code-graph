@@ -210,11 +210,13 @@ test.describe("Canvas tests", () => {
   nodes.forEach((node) => {
     test(`Verify tooltip appears when hovering over node: ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPH_ID);
       const initialGraph = await codeGraph.getGraphDetails();
       const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
       const targetNode = findNodeByName(convertCoordinates, node.nodeName);
-      expect(await codeGraph.validateToolTipVisibility(targetNode.screenX, targetNode.screenY))
+      const isVisible = await codeGraph.isToolTipVisible(targetNode.screenX, targetNode.screenY);
+      expect(isVisible).toBe(true);
     })
   })
   
