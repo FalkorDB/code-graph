@@ -206,5 +206,16 @@ test.describe("Canvas tests", () => {
     const downloadPath = await download.path();
     expect(fs.existsSync(downloadPath)).toBe(true);
   })
+
+  nodes.forEach((node) => {
+    test(`Verify tooltip appears when hovering over node: ${node.nodeName}`, async () => {
+      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await codeGraph.selectGraph(GRAPH_ID);
+      const initialGraph = await codeGraph.getGraphDetails();
+      const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
+      const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      expect(await codeGraph.validateToolTipVisibility(targetNode.screenX, targetNode.screenY))
+    })
+  })
   
 });

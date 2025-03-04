@@ -658,4 +658,11 @@ export default class CodeGraph extends BasePage {
         const centerY = boundingBox.y + boundingBox.height / 2;
         await this.page.mouse.click(centerX, centerY, { button: 'right' });
     }
+
+    async validateToolTipVisibility(x: number, y: number): Promise<boolean>{
+        await this.canvasElement.hover({ position: { x, y } });
+        const isToolTipVisible = await waitForElementToBeVisible(this.nodeToolTip);
+        if (!isToolTipVisible) throw new Error("'View Node' button is not visible!");
+        return isToolTipVisible
+    }
 }
