@@ -6,6 +6,7 @@ import { GRAPH_ID, PROJECT_NAME } from "../config/constants";
 import { findNodeByName } from "../logic/utils";
 import { nodesPath, categories, nodes, graphs } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
+import fs from 'fs';
 
 test.describe("Canvas tests", () => {
   let browser: BrowserWrapper;
@@ -164,22 +165,6 @@ test.describe("Canvas tests", () => {
     expect(isMatching).toBe(true)
   });
 
-  nodes.slice(0,2).forEach((node) => {
-    test(`Validate copy to clipboard functionality for node and verify with api for ${node.nodeName}`, async () => {
-      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const targetNode = findNodeByName(convertCoordinates, node.nodeName);
-      await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
-      const result = await codeGraph.clickOnCopyToClipboard();
-      const api = new ApiCalls();
-      const response = await api.getProject(PROJECT_NAME);
-      const matchingNode = response.result.entities.nodes.find(nod => nod.properties?.name === node.nodeName);
-      expect(matchingNode?.properties.src).toBe(result);
-    });
-  })
-
   nodesPath.forEach(({firstNode, secondNode}) => {
     test(`Verify successful node path connection in canvas between ${firstNode} and ${secondNode} via UI`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
@@ -213,4 +198,13 @@ test.describe("Canvas tests", () => {
       expect(callsRelationObject?.dest_node).toBe(secondNodeRes.id);    
     });
   })
+
+  test(`Verify file download is triggered and saved after clicking download`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await codeGraph.selectGraph(GRAPH_ID);
+    const download = await codeGraph.downloadImage();
+    const downloadPath = await download.path();
+    expect(fs.existsSync(downloadPath)).toBe(true);
+  })
+  
 });

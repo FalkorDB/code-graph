@@ -48,4 +48,9 @@ export const waitForElementToBeVisible = async (locator:Locator,time=400,retry=5
 
 export function findNodeByName(nodes: { name: string }[], nodeName: string): any {
     return nodes.find((node) => node.name === nodeName);
-  }
+}
+
+export function findFirstNodeWithSrc(nodes: { src?: string }[]): any {
+    return nodes.find((node) => node.src !== undefined);
+}
+
