@@ -468,24 +468,18 @@ export default class CodeGraph extends BasePage {
 
     async nodeClick(x: number, y: number): Promise<void> {  
         for (let attempt = 1; attempt <= 3; attempt++) {
-            
             await this.canvasElement.hover({ position: { x, y } });
-            console.log("hover completed");
-            
-            await this.page.waitForTimeout(1000);
-    
-            // if (await waitForElementToBeVisible(this.nodeToolTip)) {
-                const tooltip = await this.nodeToolTip.isVisible();
-                console.log("tooltip visible: ",tooltip);
-                console.log("x: ", x, "  y: ", y);
-                await this.canvasElement.click({ position: { x, y }, button: 'right' });
-                // return;
-            // }
+            await this.page.waitForTimeout(500);
+            await this.canvasElement.click({ position: { x, y }, button: 'right' });
+            if (await this.elementMenu.isVisible()) {
+                return;
+            }
             await this.page.waitForTimeout(1000);
         }
-
-        // throw new Error("Tooltip not visible after multiple attempts!");
+    
+        throw new Error(`Failed to click, elementMenu not visible after multiple attempts.`);
     }
+    
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await this.codeGraphCheckbox(checkbox).click();
