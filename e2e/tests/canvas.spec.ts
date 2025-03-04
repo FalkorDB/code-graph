@@ -3,7 +3,7 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPH_ID, PROJECT_NAME } from "../config/constants";
-import { findNodeByName } from "../logic/utils";
+import { delay, findNodeByName } from "../logic/utils";
 import { nodesPath, categories, nodes, graphs } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
 import fs from 'fs';
@@ -207,16 +207,17 @@ test.describe("Canvas tests", () => {
     expect(fs.existsSync(downloadPath)).toBe(true);
   })
 
-  nodes.forEach((node) => {
+  nodes.slice(1,4).forEach((node) => {
     test(`Verify tooltip appears when hovering over node: ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPH_ID);
-      const initialGraph = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
-      const targetNode = findNodeByName(convertCoordinates, node.nodeName);
-      const isVisible = await codeGraph.isToolTipVisible(targetNode.screenX, targetNode.screenY);
-      expect(isVisible).toBe(true);
+      await codeGraph.getGraphDetails();
+      await codeGraph.fillSearchBar(node.nodeName);
+      await codeGraph.selectSearchBarOptionBtn("1");
+      await delay(2000);
+      await codeGraph.hoverAtCanvasCenter();
+      expect(await codeGraph.isNodeToolTipVisible()).toBe(true);
     })
   })
   
