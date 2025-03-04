@@ -207,6 +207,9 @@ export default function Home() {
       }
 
       setSearchNode(chartNode)
+      setTimeout(() => {
+        chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
+      }, 0)
       setOptionsOpen(false)
     }
   }
