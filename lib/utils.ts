@@ -2,7 +2,7 @@ import { Link, Node } from "@/app/components/model"
 import { type ClassValue, clsx } from "clsx"
 import { MutableRefObject } from "react"
 import { twMerge } from "tailwind-merge"
-import { ForceGraphMethods, NodeObject } from "react-force-graph-2d"
+import { ForceGraphMethods } from "react-force-graph-2d"
 
 export type PathData = {
   nodes: any[]
@@ -41,7 +41,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function handleZoomToFit(chartRef: GraphRef, filter?: (node: NodeObject<Node>) => boolean) {
+export function handleZoomToFit(chartRef?: any) {
   const chart = chartRef.current
   if (chart) {
     // Find the currently visible canvas by checking display property
@@ -69,6 +69,6 @@ export function handleZoomToFit(chartRef: GraphRef, filter?: (node: NodeObject<N
     const minDimension = Math.min(container.clientWidth, container.clientHeight);
     const padding = minDimension * 0.1;
 
-    chart.zoomToFit(1000, padding, filter);
+    chart.zoomToFit(1000, padding);
   }
 }
