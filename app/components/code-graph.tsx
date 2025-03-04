@@ -6,7 +6,7 @@ import { GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { Path } from "@/lib/utils";
+import { handleZoomToFit, Path } from "@/lib/utils";
 import Input from './Input';
 // import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,6 +14,7 @@ import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
 import { GraphRef } from "@/lib/utils";
+import { NodeObject } from "react-force-graph-2d";
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -259,7 +260,12 @@ export function CodeGraph({
                                             graph={graph}
                                             onValueChange={(node) => setSearchNode(node)}
                                             icon={<Search />}
-                                            handleSubmit={handleSearchSubmit}
+                                            handleSubmit={(node) => {
+                                                handleSearchSubmit(node)
+                                                setTimeout(() => {
+                                                    handleZoomToFit(chartRef, (n: NodeObject<Node>) => n.id === node.id);
+                                                }, 1000);
+                                            }}
                                             node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
