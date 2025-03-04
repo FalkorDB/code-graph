@@ -467,7 +467,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async nodeClick(x: number, y: number): Promise<void> {  
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
             await this.canvasElement.hover({ position: { x, y } });
             await this.page.waitForTimeout(500);
     
