@@ -659,9 +659,15 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.click(centerX, centerY, { button: 'right' });
     }
 
+    async isNodeToolTipVisible(): Promise<boolean> {
+        return await this.nodeToolTip.evaluate(el => 
+            window.getComputedStyle(el).visibility === 'visible'
+        );
+    }    
+
     async isToolTipVisible(x: number, y: number): Promise<boolean>{
         await this.canvasElement.hover({ position: { x, y } });
         await this.page.waitForTimeout(500);
-        return await this.nodeToolTip.isVisible();
+        return await this.isNodeToolTipVisible();
     }
 }
