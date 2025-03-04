@@ -471,10 +471,10 @@ export default class CodeGraph extends BasePage {
             await this.canvasElement.hover({ position: { x, y } });
             await this.page.waitForTimeout(500);
     
-            if (await waitForElementToBeVisible(this.nodeToolTip)) {
+            // if (await waitForElementToBeVisible(this.nodeToolTip)) {
                 await this.canvasElement.click({ position: { x, y }, button: 'right' });
-                return;
-            }
+                // return;
+            // }
             await this.page.waitForTimeout(1000);
         }
 
