@@ -265,19 +265,19 @@ export default function GraphView({
                         textY = rotatedY;
                     }
 
-                    // Get text width
-                    const label = graph.LabelsMap.get(link.label)!
-                    let { textWidth } = label
-
-                    if (!textWidth) {
-                        textWidth = ctx.measureText(link.label).width;
-                        graph.LabelsMap.set(link.label, { ...label, textWidth })
-                    }
-
                     // Setup text properties to measure background size
                     ctx.font = '2px Arial';
                     const padding = 0.5;
-                    const textHeight = 2; // Approximate height for 2px font
+                    // Get text width and height
+                    const label = graph.LabelsMap.get(link.label)!
+                    let { textWidth, textHeight } = label
+
+                    if (!textWidth || !textHeight) {
+                        const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(link.label)
+                        textWidth = width
+                        textHeight = actualBoundingBoxAscent + actualBoundingBoxDescent
+                        graph.LabelsMap.set(link.label, { ...label, textWidth, textHeight })
+                    }
 
                     // Save the current context state
                     ctx.save();

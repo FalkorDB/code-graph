@@ -14,6 +14,7 @@ export interface Category {
 export interface Label {
   name: string,
   textWidth: number,
+  textHeight: number,
 }
 
 export type Node = NodeObject<{
@@ -225,7 +226,7 @@ export class Graph {
 
       let label = this.labelsMap.get(edgeData.relation)
       if (!label) {
-        label = { name: edgeData.relation, textWidth: 0 }
+        label = { name: edgeData.relation, textWidth: 0, textHeight: 0 }
         this.labelsMap.set(edgeData.relation, label)
         this.labels.push(label)
       }
