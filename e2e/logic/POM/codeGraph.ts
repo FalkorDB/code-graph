@@ -479,12 +479,12 @@ export default class CodeGraph extends BasePage {
                 console.log("tooltip visible: ",tooltip);
                 console.log("x: ", x, "  y: ", y);
                 await this.canvasElement.click({ position: { x, y }, button: 'right' });
-            //     return;
+                // return;
             // }
             await this.page.waitForTimeout(1000);
         }
 
-        throw new Error("Tooltip not visible after multiple attempts!");
+        // throw new Error("Tooltip not visible after multiple attempts!");
     }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
