@@ -667,8 +667,29 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.move(centerX, centerY);
     }
 
-    async getTooltipVisibility(): Promise<string> {
-        return await this.nodeToolTip.evaluate(el => getComputedStyle(el).visibility);
+    async isNodeToolTipVisible(): Promise<boolean> {
+        try {
+            const count = await this.nodeToolTip.count();
+            if (count === 0) {
+                console.error("Tooltip not found");
+                return false;
+            }
+
+            const box = await this.nodeToolTip.boundingBox();
+            if (box && box.width > 0 && box.height > 0) {
+                return true;
+            }
+    
+            return await this.nodeToolTip.evaluate(el => {
+                const style = getComputedStyle(el);
+                return style.visibility === 'visible' && parseFloat(style.opacity) > 0;
+            });
+        } catch (error) {
+            console.error("Tooltip visibility check failed:", error);
+            return false;
+        }
     }
+    
+    
     
 }
