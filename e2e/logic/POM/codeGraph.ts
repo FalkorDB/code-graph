@@ -228,9 +228,9 @@ export default class CodeGraph extends BasePage {
     private get copyToClipboardNodePanelDetails(): Locator {
         return this.page.locator(`//div[@data-name='node-details-panel']//button[@title='Copy src to clipboard']`);
     }
-    
-    private get nodeToolTip(): Locator {
-        return this.page.locator("//div[contains(@class, 'graph-tooltip')]");
+
+    private get nodeToolTip(): (node: string) => Locator {
+        return (node: string) => this.page.locator(`//div[contains(@class, 'force-graph-container')]/div[contains(text(), '${node}')]`);
     }
 
     private get downloadImageBtn(): Locator {
@@ -667,21 +667,21 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.move(centerX, centerY);
     }
 
-    async isNodeToolTipVisible(): Promise<boolean> {
+    async isNodeToolTipVisible(node: string): Promise<boolean> {
         try {
             await this.page.waitForTimeout(10000);
-            const count = await this.nodeToolTip.count();
+            const count = await this.nodeToolTip(node).count();
             if (count === 0) {
                 console.error("Tooltip not found");
                 return false;
             }
 
-            const box = await this.nodeToolTip.boundingBox();
+            const box = await this.nodeToolTip(node).boundingBox();
             if (box && box.width > 0 && box.height > 0) {
                 return true;
             }
     
-            return await this.nodeToolTip.evaluate(el => {
+            return await this.nodeToolTip(node).evaluate(el => {
                 const style = getComputedStyle(el);
                 return style.visibility === 'visible' && parseFloat(style.opacity) > 0;
             });
