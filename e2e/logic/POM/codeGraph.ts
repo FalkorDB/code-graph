@@ -667,15 +667,8 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.move(centerX, centerY);
     }
 
-    async isNodeToolTipVisible(): Promise<boolean> {
-        try {
-            await this.nodeToolTip.waitFor({ state: 'visible', timeout: 7000 });
-            return await this.nodeToolTip.evaluate(el => getComputedStyle(el).visibility === 'visible');
-        } catch (error) {
-            console.error("Tooltip visibility check failed:", error);
-            return false;
-        }
+    async getTooltipVisibility(): Promise<string> {
+        return await this.nodeToolTip.evaluate(el => getComputedStyle(el).visibility);
     }
-    
     
 }

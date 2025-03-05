@@ -217,7 +217,7 @@ test.describe("Canvas tests", () => {
       await codeGraph.selectSearchBarOptionBtn("1");
       await delay(2000);
       await codeGraph.hoverAtCanvasCenter();
-      expect(await codeGraph.isNodeToolTipVisible()).toBe(true);
+      expect(await codeGraph.getTooltipVisibility()).toBe("visible");
     })
   })
   
