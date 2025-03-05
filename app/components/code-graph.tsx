@@ -15,6 +15,7 @@ import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
 import { NodeObject, ForceGraphMethods } from "react-force-graph-2d";
+import { handleZoomToFit } from "@/lib/utils";
 
 const GraphView = dynamic(() => import('./graphView'));
 
@@ -68,6 +69,7 @@ export function CodeGraph({
     const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
     const [cooldownTime, setCooldownTime] = useState<number>(0)
     const containerRef = useRef<HTMLDivElement>(null);
+    const [zoomedNodes, setZoomedNodes] = useState<Node[]>([]);
 
     useEffect(() => {
         setData({ ...graph.Elements })
@@ -167,17 +169,17 @@ export function CodeGraph({
     }
 
     const deleteNeighbors = (nodes: Node[]) => {
-        
+
         if (nodes.length === 0) return;
-        
+
         const expandedNodes: Node[] = []
-        
+
         graph.Elements = {
             nodes: graph.Elements.nodes.filter(node => {
                 if (!node.collapsed) return true
-                
+
                 const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
-                
+
                 if (!isTarget) return true
 
                 const deleted = graph.NodesMap.delete(Number(node.id))
@@ -190,7 +192,7 @@ export function CodeGraph({
             }),
             links: graph.Elements.links
         }
-        
+
         deleteNeighbors(expandedNodes)
 
         graph.removeLinks()
@@ -239,12 +241,12 @@ export function CodeGraph({
                 }
                 graph.visibleLinks(true, [chartNode!.id])
                 setData({ ...graph.Elements })
+                setZoomedNodes([node])
+                return
             }
-          
+
+            handleZoomToFit(chartRef, 4, (n: NodeObject<Node>) => n.id === node.id)
             setSearchNode(chartNode)
-            setTimeout(() => {
-                chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
-            }, 0)
         }
     }
 
@@ -307,7 +309,9 @@ export function CodeGraph({
                                             graph={graph}
                                             onValueChange={(node) => setSearchNode(node)}
                                             icon={<Search />}
-                                            handleSubmit={handleSearchSubmit}
+                                            handleSubmit={(node) => {
+                                                handleSearchSubmit(node)
+                                            }}
                                             node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
@@ -421,6 +425,8 @@ export function CodeGraph({
                                     setCooldownTicks={setCooldownTicks}
                                     cooldownTime={cooldownTime}
                                     setCooldownTime={setCooldownTime}
+                                    setZoomedNodes={setZoomedNodes}
+                                    zoomedNodes={zoomedNodes}
                                 />
                             </div>
                             : <div className="flex flex-col items-center justify-center h-full text-gray-400">

@@ -1,8 +1,9 @@
 
-import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
+import ForceGraph2D, { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
+import { handleZoomToFit } from '@/lib/utils';
 
 export interface Position {
     x: number,
@@ -30,6 +31,8 @@ interface Props {
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     cooldownTime: number | undefined
     setCooldownTime: Dispatch<SetStateAction<number>>
+    setZoomedNodes: Dispatch<SetStateAction<Node[]>>
+    zoomedNodes: Node[]
 }
 
 const PATH_COLOR = "#ffde21"
@@ -56,7 +59,9 @@ export default function GraphView({
     cooldownTicks,
     cooldownTime,
     setCooldownTicks,
-    setCooldownTime
+    setCooldownTime,
+    zoomedNodes,
+    setZoomedNodes
 }: Props) {
 
     const parentRef = useRef<HTMLDivElement>(null)
@@ -295,6 +300,8 @@ export default function GraphView({
                 onEngineStop={() => {
                     setCooldownTicks(0)
                     setCooldownTime(0)
+                    handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: NodeObject<Node>) => zoomedNodes.some(node => node.id === n.id))
+                    setZoomedNodes([])
                 }}
                 cooldownTicks={cooldownTicks}
                 cooldownTime={cooldownTime}
