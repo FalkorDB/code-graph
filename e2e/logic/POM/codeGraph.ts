@@ -680,25 +680,22 @@ export default class CodeGraph extends BasePage {
         }
     
         await this.page.waitForFunction(
-            (canvas: HTMLElement) => {
-                const canvasElement = canvas as HTMLCanvasElement;
-                if (!canvasElement) return false;
-    
-                const ctx = canvasElement.getContext('2d');
+            (canvas) => {
+                const ctx = (canvas as HTMLCanvasElement).getContext('2d');
                 if (!ctx) return false;
     
-                const getPixelData = () => ctx.getImageData(0, 0, canvasElement.width, canvasElement.height).data;
-                const imageData1 = getPixelData();
+                const imageData1 = ctx.getImageData(0, 0, (canvas as HTMLCanvasElement).width, (canvas as HTMLCanvasElement).height).data;
     
                 return new Promise<boolean>((resolve) => {
                     setTimeout(() => {
-                        const imageData2 = getPixelData();
+                        const imageData2 = ctx.getImageData(0, 0, (canvas as HTMLCanvasElement).width, (canvas as HTMLCanvasElement).height).data;
                         resolve(JSON.stringify(imageData1) === JSON.stringify(imageData2));
                     }, 500);
                 });
             },
-            canvasHandle as unknown as HTMLElement,
+            canvasHandle as any,
             { timeout }
         );
-    } 
+    }
+    
 }
