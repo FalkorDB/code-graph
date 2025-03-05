@@ -668,8 +668,6 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeToolTipVisible(): Promise<boolean> {
-        return await this.nodeToolTip.evaluate(el => 
-            window.getComputedStyle(el).visibility === 'visible'
-        );
+       return await this.nodeToolTip.isVisible();
     }
 }
