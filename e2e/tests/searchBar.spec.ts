@@ -83,7 +83,7 @@ test.describe("search bar tests", () => {
       await codeGraph.getGraphDetails();
       await codeGraph.fillSearchBar(nodeName);
       await codeGraph.selectSearchBarOptionBtn("1");
-      await delay(4000);
+      await codeGraph.waitForCanvasAnimationToEnd();
       await codeGraph.rightClickAtCanvasCenter();
       expect(await codeGraph.getNodeDetailsHeader()).toContain(nodeName.toUpperCase());
     });

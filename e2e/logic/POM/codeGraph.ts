@@ -427,6 +427,7 @@ export default class CodeGraph extends BasePage {
         const button = this.searchBarOptionBtn(buttonNum);
         await button.waitFor({ state : "visible"})
         await button.click();
+        await this.page.waitForTimeout(4000);
     }
 
     async getSearchBarInputValue(): Promise<string> {
@@ -668,29 +669,36 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeToolTipVisible(node: string): Promise<boolean> {
-        try {
-            await this.page.waitForTimeout(10000);
-            const count = await this.nodeToolTip(node).count();
-            if (count === 0) {
-                console.error("Tooltip not found");
-                return false;
-            }
-
-            const box = await this.nodeToolTip(node).boundingBox();
-            if (box && box.width > 0 && box.height > 0) {
-                return true;
-            }
-    
-            return await this.nodeToolTip(node).evaluate(el => {
-                const style = getComputedStyle(el);
-                return style.visibility === 'visible' && parseFloat(style.opacity) > 0;
-            });
-        } catch (error) {
-            console.error("Tooltip visibility check failed:", error);
-            return false;
-        }
+        return await this.nodeToolTip(node).isVisible();
     }
+
+    async waitForCanvasAnimationToEnd(timeout = 5000): Promise<void> {
+        const canvasHandle = await this.canvasElement.elementHandle();
     
+        if (!canvasHandle) {
+            throw new Error("Canvas element not found!");
+        }
     
+        await this.page.waitForFunction(
+            (canvas: HTMLElement) => {
+                const canvasElement = canvas as HTMLCanvasElement;
+                if (!canvasElement) return false;
     
+                const ctx = canvasElement.getContext('2d');
+                if (!ctx) return false;
+    
+                const getPixelData = () => ctx.getImageData(0, 0, canvasElement.width, canvasElement.height).data;
+                const imageData1 = getPixelData();
+    
+                return new Promise<boolean>((resolve) => {
+                    setTimeout(() => {
+                        const imageData2 = getPixelData();
+                        resolve(JSON.stringify(imageData1) === JSON.stringify(imageData2));
+                    }, 500);
+                });
+            },
+            canvasHandle as unknown as HTMLElement,
+            { timeout }
+        );
+    } 
 }
