@@ -34,7 +34,7 @@ export const waitForStableText = async (locator: Locator, timeout: number = 5000
     return stableText;
 };
 
-export const waitForElementToBeVisible = async (locator:Locator,time=500,retry=5):Promise<boolean> => {
+export const waitForElementToBeVisible = async (locator:Locator,time=500,retry=10):Promise<boolean> => {
 
     while(retry > 0){
        if(await locator.isVisible()){

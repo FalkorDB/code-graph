@@ -669,7 +669,7 @@ export default class CodeGraph extends BasePage {
 
     async isNodeToolTipVisible(): Promise<boolean> {
         try {
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(10000);
             const count = await this.nodeToolTip.count();
             if (count === 0) {
                 console.error("Tooltip not found");
