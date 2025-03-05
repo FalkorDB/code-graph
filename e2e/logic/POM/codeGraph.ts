@@ -668,6 +668,14 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeToolTipVisible(): Promise<boolean> {
-       return await this.nodeToolTip.isVisible();
+        try {
+            await this.nodeToolTip.waitFor({ state: 'attached', timeout: 5000 });
+            const box = await this.nodeToolTip.boundingBox();
+            return box !== null;
+        } catch (error) {
+            console.error("Error checking tooltip visibility:", error);
+            return false;
+        }
     }
+    
 }
