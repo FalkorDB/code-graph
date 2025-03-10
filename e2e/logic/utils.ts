@@ -34,7 +34,7 @@ export const waitForStableText = async (locator: Locator, timeout: number = 5000
     return stableText;
 };
 
-export const waitForElementToBeVisible = async (locator:Locator,time=400,retry=5):Promise<boolean> => {
+export const waitForElementToBeVisible = async (locator:Locator,time=500,retry=10):Promise<boolean> => {
 
     while(retry > 0){
        if(await locator.isVisible()){
@@ -48,4 +48,9 @@ export const waitForElementToBeVisible = async (locator:Locator,time=400,retry=5
 
 export function findNodeByName(nodes: { name: string }[], nodeName: string): any {
     return nodes.find((node) => node.name === nodeName);
-  }
+}
+
+export function findFirstNodeWithSrc(nodes: { src?: string }[]): any {
+    return nodes.find((node) => node.src !== undefined);
+}
+
