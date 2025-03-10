@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { GitFork, Search, X } from "lucide-react";
+import { Download, GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
@@ -301,43 +301,6 @@ export function CodeGraph({
                                                 <p>Unhide Nodes</p>
                                             </button>
                                         }
-                                    </div>
-                                </div>
-                                <div data-name="canvas-info-panel" className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
-                                    <div data-name="metrics-panel" className="flex flex-col md:flex-row gap-4 text-gray-500">
-                                        <p>{nodesCount} Nodes</p>
-                                        <p>{edgesCount} Edges</p>
-                                    </div>
-                                    <div className='flex gap-4 flex-row'>
-                                        {
-                                            commitIndex !== commits.length &&
-                                            <div className='bg-white flex flex-col md:flex-row gap-2 border rounded-md p-2 pointer-events-auto'>
-                                                <div className='flex gap-2 items-center'>
-                                                    <Checkbox
-                                                        className='h-5 w-5 bg-gray-500 data-[state true]'
-                                                    />
-                                                    <p className='text-bold'>Display Changes</p>
-                                                </div>
-                                                <div className='flex gap-2 items-center'>
-                                                    <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full' />
-                                                    <p className='text-pink-500'>Were added</p>
-                                                </div>
-                                                <div className='flex gap-2 items-center'>
-                                                    <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full' />
-                                                    <p className='text-blue-500'>Were edited</p>
-                                                </div>
-                                            </div>
-                                        }
-                                        <Toolbar
-                                            className="pointer-events-auto"
-                                            chartRef={chartRef}
-                                        />
-                                        <button
-                                            className="pointer-events-auto bg-white p-2 rounded-md"
-                                            onClick={handleDownloadImage}
-                                        >
-                                            <Download />
-                                        </button>
                                     </div>
                                 </div>
                                 <ElementMenu
