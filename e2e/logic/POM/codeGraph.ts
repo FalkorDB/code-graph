@@ -1,4 +1,4 @@
-import { Locator, Page } from "playwright";
+import { Download, Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
 import { waitForElementToBeVisible, waitForStableText, waitToBeEnabled } from "../utils";
 
@@ -228,9 +228,13 @@ export default class CodeGraph extends BasePage {
     private get copyToClipboardNodePanelDetails(): Locator {
         return this.page.locator(`//div[@data-name='node-details-panel']//button[@title='Copy src to clipboard']`);
     }
-    
-    private get nodeToolTip(): Locator {
-        return this.page.locator("//div[contains(@class, 'graph-tooltip')]");
+
+    private get nodeToolTip(): (node: string) => Locator {
+        return (node: string) => this.page.locator(`//div[contains(@class, 'force-graph-container')]/div[contains(text(), '${node}')]`);
+    }
+
+    private get downloadImageBtn(): Locator {
+        return this.page.locator("//button[@title='downloadImage']");
     }
 
     /* NavBar functionality */
@@ -423,6 +427,7 @@ export default class CodeGraph extends BasePage {
         const button = this.searchBarOptionBtn(buttonNum);
         await button.waitFor({ state : "visible"})
         await button.click();
+        await this.page.waitForTimeout(4000);
     }
 
     async getSearchBarInputValue(): Promise<string> {
@@ -463,19 +468,19 @@ export default class CodeGraph extends BasePage {
     }
 
     async nodeClick(x: number, y: number): Promise<void> {  
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
             await this.canvasElement.hover({ position: { x, y } });
             await this.page.waitForTimeout(500);
-    
-            if (await waitForElementToBeVisible(this.nodeToolTip)) {
-                await this.canvasElement.click({ position: { x, y }, button: 'right' });
+            await this.canvasElement.click({ position: { x, y }, button: 'right' });
+            if (await this.elementMenu.isVisible()) {
                 return;
             }
             await this.page.waitForTimeout(1000);
         }
-
-        throw new Error("Tooltip not visible after multiple attempts!");
+    
+        throw new Error(`Failed to click, elementMenu not visible after multiple attempts.`);
     }
+    
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await this.codeGraphCheckbox(checkbox).click();
@@ -637,4 +642,60 @@ export default class CodeGraph extends BasePage {
         return { scaleX, scaleY };
     }
 
+    async downloadImage(): Promise<Download> {
+        await this.page.waitForLoadState('networkidle');
+        const [download] = await Promise.all([
+            this.page.waitForEvent('download'),
+            this.downloadImageBtn.click(),
+        ]);
+
+        return download;
+    }
+
+    async rightClickAtCanvasCenter(): Promise<void> {
+        const boundingBox = await this.canvasElement.boundingBox();
+        if (!boundingBox) throw new Error('Canvas bounding box not found');
+        const centerX = boundingBox.x + boundingBox.width / 2;
+        const centerY = boundingBox.y + boundingBox.height / 2;
+        await this.page.mouse.click(centerX, centerY, { button: 'right' });
+    }
+
+    async hoverAtCanvasCenter(): Promise<void> {
+        const boundingBox = await this.canvasElement.boundingBox();
+        if (!boundingBox) throw new Error('Canvas bounding box not found');
+        const centerX = boundingBox.x + boundingBox.width / 2;
+        const centerY = boundingBox.y + boundingBox.height / 2;
+        await this.page.mouse.move(centerX, centerY);
+    }
+
+    async isNodeToolTipVisible(node: string): Promise<boolean> {
+        return await this.nodeToolTip(node).isVisible();
+    }
+
+    async waitForCanvasAnimationToEnd(timeout = 5000): Promise<void> {
+        const canvasHandle = await this.canvasElement.elementHandle();
+    
+        if (!canvasHandle) {
+            throw new Error("Canvas element not found!");
+        }
+    
+        await this.page.waitForFunction(
+            (canvas) => {
+                const ctx = (canvas as HTMLCanvasElement).getContext('2d');
+                if (!ctx) return false;
+    
+                const imageData1 = ctx.getImageData(0, 0, (canvas as HTMLCanvasElement).width, (canvas as HTMLCanvasElement).height).data;
+    
+                return new Promise<boolean>((resolve) => {
+                    setTimeout(() => {
+                        const imageData2 = ctx.getImageData(0, 0, (canvas as HTMLCanvasElement).width, (canvas as HTMLCanvasElement).height).data;
+                        resolve(JSON.stringify(imageData1) === JSON.stringify(imageData2));
+                    }, 500);
+                });
+            },
+            canvasHandle as any,
+            { timeout }
+        );
+    }
+    
 }

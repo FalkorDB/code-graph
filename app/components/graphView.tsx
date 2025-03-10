@@ -1,7 +1,8 @@
-import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
+import ForceGraph2D, { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '../page';
+import { handleZoomToFit } from '@/lib/utils';
 
 export interface Position {
     x: number,
@@ -29,6 +30,8 @@ interface Props {
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     cooldownTime: number | undefined
     setCooldownTime: Dispatch<SetStateAction<number>>
+    setZoomedNodes: Dispatch<SetStateAction<Node[]>>
+    zoomedNodes: Node[]
 }
 
 const PATH_COLOR = "#ffde21"
@@ -55,7 +58,9 @@ export default function GraphView({
     cooldownTicks,
     cooldownTime,
     setCooldownTicks,
-    setCooldownTime
+    setCooldownTime,
+    zoomedNodes,
+    setZoomedNodes
 }: Props) {
 
     const parentRef = useRef<HTMLDivElement>(null)
@@ -85,14 +90,9 @@ export default function GraphView({
     }, [parentRef])
 
     useEffect(() => {
-        setCooldownTime(4000)
+        setCooldownTime(2000)
         setCooldownTicks(undefined)
-    }, [graph.Id])
-
-    useEffect(() => {
-        setCooldownTime(1000)
-        setCooldownTicks(undefined)
-    }, [graph.getElements().length])
+    }, [graph.Id, graph.getElements().length])
 
     const unsetSelectedObjects = (evt?: MouseEvent) => {
         if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
@@ -143,6 +143,27 @@ export default function GraphView({
         }
     }
 
+    const avoidOverlap = (nodes: Position[]) => {
+        const spacing = NODE_SIZE * 2.5;
+        nodes.forEach((nodeA, i) => {
+            nodes.forEach((nodeB, j) => {
+                if (i !== j) {
+                    const dx = nodeA.x - nodeB.x;
+                    const dy = nodeA.y - nodeB.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+    
+                    if (distance < spacing) {
+                        const pushStrength = (spacing - distance) / distance * 0.5;
+                        nodeA.x += dx * pushStrength;
+                        nodeA.y += dy * pushStrength;
+                        nodeB.x -= dx * pushStrength;
+                        nodeB.y -= dy * pushStrength;
+                    }
+                }
+            });
+        });
+    };    
+
     return (
         <div ref={parentRef} className="relative w-fill h-full">
             <ForceGraph2D
@@ -150,6 +171,7 @@ export default function GraphView({
                 height={parentHeight}
                 width={parentWidth}
                 graphData={data}
+                onEngineTick={() => avoidOverlap(data.nodes as Position[])}
                 nodeVisibility="visible"
                 linkVisibility="visible"
                 linkCurvature="curve"
@@ -316,6 +338,8 @@ export default function GraphView({
                 onEngineStop={() => {
                     setCooldownTicks(0)
                     setCooldownTime(0)
+                    handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: NodeObject<Node>) => zoomedNodes.some(node => node.id === n.id))
+                    setZoomedNodes([])
                 }}
                 cooldownTicks={cooldownTicks}
                 cooldownTime={cooldownTime}
