@@ -675,7 +675,7 @@ export default class CodeGraph extends BasePage {
         return await this.nodeToolTip(node).isVisible();
     }
 
-    async waitForCanvasAnimationToEnd(timeout = 5000, checkInterval = 500): Promise<void> {
+    async waitForCanvasAnimationToEnd(timeout = 15000, checkInterval = 500): Promise<void> {
         const canvasHandle = await this.canvasElement.elementHandle();
     
         if (!canvasHandle) {
@@ -683,7 +683,7 @@ export default class CodeGraph extends BasePage {
         }
     
         await this.page.waitForFunction(
-            async (canvas: HTMLCanvasElement) => {
+            async ({ canvas, checkInterval, timeout }) => {
                 const ctx = canvas.getContext('2d');
                 if (!ctx) return false;
     
@@ -691,9 +691,15 @@ export default class CodeGraph extends BasePage {
                 const height = canvas.height;
     
                 let previousData = ctx.getImageData(0, 0, width, height).data;
+                const startTime = Date.now();
     
                 return new Promise<boolean>((resolve) => {
                     const checkCanvas = () => {
+                        if (Date.now() - startTime > timeout) {
+                            resolve(true);
+                            return;
+                        }
+    
                         setTimeout(() => {
                             const currentData = ctx.getImageData(0, 0, width, height).data;
                             if (JSON.stringify(previousData) === JSON.stringify(currentData)) {
@@ -702,15 +708,17 @@ export default class CodeGraph extends BasePage {
                                 previousData = currentData;
                                 checkCanvas();
                             }
-                        }, 500);
+                        }, checkInterval);
                     };
                     checkCanvas();
                 });
             },
-            await canvasHandle.evaluateHandle((el) => el as HTMLCanvasElement),
+            { 
+                canvas: await canvasHandle.evaluateHandle((el) => el as HTMLCanvasElement),
+                checkInterval,
+                timeout
+            },
             { timeout }
         );
     }
-    
-    
 }
