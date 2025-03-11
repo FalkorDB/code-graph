@@ -49,6 +49,7 @@ export function Toolbar({ chartRef, className, handleDownloadImage }: Props) {
             </button>
             <button
                 className="hidden md:block control-button"
+                title="downloadImage"
                 onClick={handleDownloadImage}
             >
                 <Download />
