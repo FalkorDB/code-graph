@@ -83,7 +83,6 @@ export default function Home() {
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
-      console.log(path?.start?.id, path?.end?.id)
       setChatOpen(true)
     }
   }, [path])
