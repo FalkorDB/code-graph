@@ -42,6 +42,8 @@ interface Props {
     setCooldownTime: Dispatch<SetStateAction<number>>
     onCategoryClick: (name: string, show: boolean) => void
     handleDownloadImage: () => void
+    zoomedNodes: Node[]
+    setZoomedNodes: Dispatch<SetStateAction<Node[]>>
 }
 
 export function CodeGraph({
@@ -68,7 +70,9 @@ export function CodeGraph({
     cooldownTime,
     setCooldownTime,
     onCategoryClick,
-    handleDownloadImage
+    handleDownloadImage,
+    zoomedNodes,
+    setZoomedNodes
 }: Props) {
 
     const [url, setURL] = useState("");
@@ -82,7 +86,6 @@ export function CodeGraph({
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [zoomedNodes, setZoomedNodes] = useState<Node[]>([]);
 
     useEffect(() => {
         setData({ ...graph.Elements })

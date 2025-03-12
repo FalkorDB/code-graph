@@ -79,6 +79,7 @@ export default function Home() {
   const chatPanel = useRef<ImperativePanelHandle>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
+  const [zoomedNodes, setZoomedNodes] = useState<Node[]>([])
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -205,11 +206,9 @@ export default function Home() {
         graph.visibleLinks(true, [chartNode!.id])
         setData({ ...graph.Elements })
       }
-
+      
+      setZoomedNodes([chartNode])
       setSearchNode(chartNode)
-      setTimeout(() => {
-        chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => n.id === chartNode!.id);
-      }, 0)
       setOptionsOpen(false)
     }
   }
@@ -408,6 +407,8 @@ export default function Home() {
               setCooldownTime={setCooldownTime}
               onCategoryClick={onCategoryClick}
               handleDownloadImage={handleDownloadImage}
+              zoomedNodes={zoomedNodes}
+              setZoomedNodes={setZoomedNodes}
             />
           </Panel>
           <PanelResizeHandle className={cn(!graph.Id && 'hidden')} />
@@ -526,6 +527,8 @@ export default function Home() {
             setCooldownTime={setCooldownTime}
             onCategoryClick={onCategoryClick}
             handleDownloadImage={handleDownloadImage}
+            zoomedNodes={zoomedNodes}
+            setZoomedNodes={setZoomedNodes}
           />
           {graph.Id && (
             <div className='flex items-center p-4 gap-4'>
