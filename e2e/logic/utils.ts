@@ -34,17 +34,20 @@ export const waitForStableText = async (locator: Locator, timeout: number = 5000
     return stableText;
 };
 
-export const waitForElementToBeVisible = async (locator:Locator,time=500,retry=10):Promise<boolean> => {
-
-    while(retry > 0){
-       if(await locator.isVisible()){
-        return true
-       }
-       retry = retry-1
-       await delay(time)
+export const waitForElementToBeVisible = async (locator: Locator, time = 500, retry = 10): Promise<boolean> => {
+    for (let i = 0; i < retry; i++) {
+        try {
+            if (await locator.isVisible()) {
+                return true;
+            }
+        } catch (error) {
+            console.error(`Error checking element visibility: ${error}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, time)); // Delay
     }
-    return false
-}
+    return false;
+};
+
 
 export function findNodeByName(nodes: { name: string }[], nodeName: string): any {
     return nodes.find((node) => node.name === nodeName);

@@ -274,7 +274,7 @@ export default function Home() {
 
   return (
     <main className="h-[100dvh]">
-      <div className='md:flex md:flex-col hidden h-screen'>
+      <div className='md:flex md:flex-col hidden h-screen' id='desktop'>
         <header className="flex flex-col text-xl">
           <div className="flex items-center justify-between py-4 px-8">
             <div className="flex gap-4 items-center">
@@ -442,7 +442,7 @@ export default function Home() {
           </Panel>
         </PanelGroup>
       </div>
-      <div className='flex flex-col md:hidden h-full overflow-hidden'>
+      <div className='flex flex-col md:hidden h-full overflow-hidden' id='mobile'>
         <header className='flex justify-center items-center relative bg-gray-100'>
           <Link href="https://www.falkordb.com" target='_blank'>
             <Image priority style={{ width: 'auto', height: '70px', background: "transparent" }} src="/code-graph-logo.svg" alt="FalkorDB" width={0} height={0} />

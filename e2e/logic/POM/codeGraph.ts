@@ -9,13 +9,28 @@ declare global {
 }
 
 export default class CodeGraph extends BasePage {
+
+    private isMobile: boolean = false;
+
+    public setMobileState(isMobile: boolean): void {
+        this.isMobile = isMobile;
+    }
+
+    private get container(): Locator {
+        return this.page.locator(this.isMobile ? "#mobile" : "#desktop");
+    }
+
+    private get scopedLocator(): (selector: string) => Locator {
+        return (selector: string) => this.container.locator(selector);
+    }
+    
     /* NavBar Locators*/
     private get falkorDBLogo(): Locator {
-        return this.page.locator("//*[img[@alt='FalkorDB']]")
+        return this.scopedLocator("//*[img[@alt='FalkorDB']]")
     }
 
     private get navBaritem(): (navItem: string) => Locator {
-        return (navItem: string) => this.page.locator(`//a[p[text() = '${navItem}']]`);
+        return (navItem: string) => this.scopedLocator(`//a[p[text() = '${navItem}']]`);
     }
 
     private get createNewProjectBtn(): Locator {
@@ -23,11 +38,11 @@ export default class CodeGraph extends BasePage {
     }
 
     private get createNewProjectDialog(): Locator {
-        return this.page.locator("//div[@role='dialog']")
+        return this.scopedLocator("//div[@role='dialog']")
     }
 
     private get tipBtn(): Locator {
-        return this.page.locator("//button[@title='Tip']")
+        return this.scopedLocator("//button[@title='Tip']")
     }
 
     private get genericMenu(): Locator {
@@ -40,7 +55,7 @@ export default class CodeGraph extends BasePage {
 
     /* CodeGraph Locators*/
     private get comboBoxbtn(): Locator {
-        return this.page.locator("//button[@role='combobox']")
+        return this.scopedLocator("//button[@role='combobox']")
     }
 
     private get selectGraphInComboBoxByName(): (graph: string) => Locator {
@@ -52,84 +67,85 @@ export default class CodeGraph extends BasePage {
     }
 
     private get lastElementInChat(): Locator {
-        return this.page.locator("//main[@data-name='main-chat']/*[last()]/span");
+        return this.scopedLocator("//main[@data-name='main-chat']/*[last()]/span");
     }
 
     private get typeUrlInput(): Locator {
-        return this.page.locator("//div[@role='dialog']/form/input");
+        return this.scopedLocator("//div[@role='dialog']/form/input");
     }
 
     private get createBtnInCreateProjectDialog(): Locator {
-        return this.page.locator("//div[@role='dialog']/form//following::button//p[contains(text(), 'Create')]")
+        return this.scopedLocator("//div[@role='dialog']/form//following::button//p[contains(text(), 'Create')]")
     }
 
     private get createProjectWaitDialog(): Locator {
-        return this.page.locator("//div[@role='dialog']//div//h2[contains(text(), 'THANK YOU FOR A NEW REQUEST')]")
+        return this.scopedLocator("//div[@role='dialog']//div//h2[contains(text(), 'THANK YOU FOR A NEW REQUEST')]")
     }
 
     private get dialogCreatedGraphsList(): (graph: string) => Locator {
-        return (graph: string) => this.page.locator(`//div[@role='presentation']/div//span[2][contains(text(), '${graph}')]`);
+        return (graph: string) => this.scopedLocator(`//div[@role='presentation']/div//span[2][contains(text(), '${graph}')]`);
     }
 
     private get searchBarInput(): Locator {
-        return this.page.locator("//div[@data-name='search-bar']/input");
+        return this.scopedLocator("//div[@data-name='search-bar']/input");
     }
 
     private get searchBarAutoCompleteOptions(): Locator {
-        return this.page.locator("//div[@data-name='search-bar']/div/button");
+        return this.scopedLocator("//div[@data-name='search-bar']/div/button");
     }
 
     private get searchBarElements(): Locator {
-        return this.page.locator("//div[@data-name='search-bar']/div/button/div/p[1]");
+        return this.scopedLocator("//div[@data-name='search-bar']/div/button/div/p[1]");
     }
 
     private get searchBarOptionBtn(): (buttonNum: string) => Locator {
-        return (buttonNum: string) => this.page.locator(`//div[@data-name='search-bar']//button[${buttonNum}]`);
+        return (buttonNum: string) => this.scopedLocator(`//div[@data-name='search-bar']//button[${buttonNum}]`);
     }
 
     private get searchBarList(): Locator {
-        return this.page.locator("//div[@data-name='search-bar-list']");
+        return this.scopedLocator("//div[@data-name='search-bar-list']");
     }
 
     /* Chat Locators */
-    private get showPathBtn(): Locator {
-        return this.page.locator("//button[contains(@class, 'Tip')]");
+
+    private get showPathBtn(): (selection: string) => Locator {
+        return (selection: string) => this.page.locator(`//button[contains(@class, 'Tip')]//p[contains(text(), '${selection}')]`);
     }
 
     private get askquestionInput(): Locator {
-        return this.page.locator("//input[contains(@placeholder, 'Ask your question')]");
+        return this.scopedLocator("//input[contains(@placeholder, 'Ask your question')]");
     }
 
     private get askquestionBtn(): Locator {
-        return this.page.locator("//input[contains(@placeholder, 'Ask your question')]/following::button[1]");
+        return this.scopedLocator("//input[contains(@placeholder, 'Ask your question')]/following::button[1]");
     }
 
     private get lightbulbBtn(): Locator {
-        return this.page.locator("//button[@data-name='lightbulb']");
+        return this.scopedLocator("//button[@data-name='lightbulb']");
     }
 
     private get lastChatElementButtonCount(): Locator {
-        return this.page.locator("//main[@data-name='main-chat']/*[last()]/button");
+        return this.scopedLocator("//main[@data-name='main-chat']/*[last()]/button");
     }
 
     private get chatContainer(): Locator {
-        return this.page.locator("//main[@data-name='main-chat']");
+        return this.scopedLocator("//main[@data-name='main-chat']");
     }
 
     private get previousQuestionLoadingImage(): Locator {
-        return this.page.locator("//main[@data-name='main-chat']/*[last()-2]//img[@alt='Waiting for response']")
+        return this.scopedLocator("//main[@data-name='main-chat']/*[last()-2]//img[@alt='Waiting for response']")
     }
 
     private get selectInputForShowPath(): (inputNum: string) => Locator {
-        return (inputNum: string) => this.page.locator(`(//main[@data-name='main-chat']//input)[${inputNum}]`);
+        return (inputNum: string) => this.scopedLocator(`(//main[@data-name='main-chat']//input)[${inputNum}]`);
     }
 
     private get locateNodeInLastChatPath(): (node: string) => Locator {
-        return (node: string) => this.page.locator(`(//main[@data-name='main-chat']//span[contains(text(), '${node}')])[last()]`);
+        return (node: string) => this.page.locator(`(//main[@data-name='main-chat']//button//span[contains(text(), ${node})])[last()]`);
     }
 
     private get selectFirstPathOption(): (inputNum: string) => Locator {
-        return (inputNum: string) => this.page.locator(`(//main[@data-name='main-chat']//input)[1]/following::div[${inputNum}]//button[1]`);
+        return (inputNum: string) => this.scopedLocator(`(//main[@data-name='main-chat']//input)[1]/following::div[${inputNum}]//button[1]`);
     }
 
     private get notificationError(): Locator {
@@ -140,54 +156,50 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//div[@role='region']//ol//li/button");
     }
 
-    private get questionOptionsMenu(): Locator {
-        return this.page.locator("//button[@data-name='questionOptionsMenu']");
-    }
-
     private get selectQuestionInMenu(): (questionNumber: string) => Locator {
         return (questionNumber: string) => this.page.locator(`//div[contains(@role, 'menu')]/button[${questionNumber}]`);
     }
 
     private get lastQuestionInChat(): Locator {
-        return this.page.locator("//main[@data-name='main-chat']/*[last()-1]/p");
+        return this.scopedLocator("//main[@data-name='main-chat']/*[last()-1]/p");
     }
 
     private get responseLoadingImg(): Locator {
-        return this.page.locator("//img[@alt='Waiting for response']");
+        return this.scopedLocator("//img[@alt='Waiting for response']");
     }
 
     private get waitingForResponseIndicator(): Locator {
-        return this.page.locator('img[alt="Waiting for response"]');
+        return this.scopedLocator('img[alt="Waiting for response"]');
     }
 
     /* Canvas Locators*/
 
     private get canvasElement(): Locator {
-        return this.page.locator("//canvas");
+        return this.scopedLocator("//canvas");
     }
 
     private get zoomInBtn(): Locator {
-        return this.page.locator("//button[@title='Zoom In']");
+        return this.scopedLocator("//button[@title='Zoom In']");
     }
 
     private get zoomOutBtn(): Locator {
-        return this.page.locator("//button[@title='Zoom Out']");
+        return this.scopedLocator("//button[@title='Zoom Out']");
     }
 
     private get centerBtn(): Locator {
-        return this.page.locator("//button[@title='Center']");
+        return this.scopedLocator("//button[@title='Center']");
     }
 
     private get codeGraphCheckbox(): (checkbox: string) => Locator {
-        return (checkbox: string) => this.page.locator(`(//button[@role='checkbox'])[${checkbox}]`);
+        return (checkbox: string) => this.scopedLocator(`(//button[@role='checkbox'])[${checkbox}]`);
     }
 
     private get clearGraphBtn(): Locator {
-        return this.page.locator("//button[p[text()='Reset Graph']]");
+        return this.scopedLocator("//button[p[text()='Reset Graph']]");
     }
 
     private get unhideNodesBtn(): Locator {
-        return this.page.locator("//button[p[text()='Unhide Nodes']]");
+        return this.scopedLocator("//button[p[text()='Unhide Nodes']]");
     }
 
     private get elementMenuButton(): (buttonID: string) => Locator {
@@ -195,38 +207,38 @@ export default class CodeGraph extends BasePage {
     }
 
     private get nodeDetailsPanel(): Locator {
-        return this.page.locator("//div[@data-name='node-details-panel']");
+        return this.scopedLocator("//div[@data-name='node-details-panel']");
     }
 
     private get elementMenu(): Locator {
-        return this.page.locator("//div[@id='elementMenu']");
+        return this.scopedLocator("//div[@id='elementMenu']");
     }
     
     private get nodedetailsPanelHeader(): Locator {
-        return this.page.locator("//div[@data-name='node-details-panel']/header/p");
+        return this.scopedLocator("//div[@data-name='node-details-panel']/header/p");
     }
     
     private get nodedetailsPanelcloseBtn(): Locator {
-        return this.page.locator("//div[@data-name='node-details-panel']/header/button");
+        return this.scopedLocator("//div[@data-name='node-details-panel']/header/button");
     }
     private get canvasMetricsPanel(): (itemId: string) => Locator {
-        return (itemId: string) => this.page.locator(`//div[@data-name='metrics-panel']/p[${itemId}]`);
+        return (itemId: string) => this.scopedLocator(`//div[@data-name='metrics-panel']/p[${itemId}]`);
     }
 
     private get nodedetailsPanelID(): Locator {
-        return this.page.locator("//div[@data-name='node-details-panel']/main/div[1]/p[2]");
+        return this.scopedLocator("//div[@data-name='node-details-panel']/main/div[1]/p[2]");
     }
 
     private get nodedetailsPanelElements(): Locator {
-        return this.page.locator("//div[@data-name='node-details-panel']/main/div/p[1]");
+        return this.scopedLocator("//div[@data-name='node-details-panel']/main/div/p[1]");
     }
 
     private get canvasElementBeforeGraphSelection(): Locator {
-        return this.page.locator("//h1[contains(text(), 'Select a repo to show its graph here')]");
+        return this.scopedLocator("//h1[contains(text(), 'Select a repo to show its graph here')]");
     }
 
     private get copyToClipboardNodePanelDetails(): Locator {
-        return this.page.locator(`//div[@data-name='node-details-panel']//button[@title='Copy src to clipboard']`);
+        return this.scopedLocator(`//div[@data-name='node-details-panel']//button[@title='Copy src to clipboard']`);
     }
 
     private get nodeToolTip(): (node: string) => Locator {
@@ -234,12 +246,12 @@ export default class CodeGraph extends BasePage {
     }
 
     private get downloadImageBtn(): Locator {
-        return this.page.locator("//button[@title='downloadImage']");
+        return this.scopedLocator("//button[@title='downloadImage']");
     }
 
     /* NavBar functionality */
     async clickOnFalkorDbLogo(): Promise<Page> {
-        await this.page.waitForLoadState('networkidle'); 
+        await this.page.waitForLoadState('networkidle');
         const [newPage] = await Promise.all([
             this.page.waitForEvent('popup'),
             this.falkorDBLogo.click(),
@@ -272,7 +284,7 @@ export default class CodeGraph extends BasePage {
 
     async isTipMenuVisible(): Promise<boolean> {
         await this.page.waitForTimeout(500);
-        return await waitForElementToBeVisible(this.genericMenu);
+        return await this.genericMenu.isVisible();
     }
     
     async clickOnTipMenuCloseBtn(): Promise<void> {
@@ -283,8 +295,8 @@ export default class CodeGraph extends BasePage {
     
 
     /* Chat functionality */
-    async clickOnShowPathBtn(): Promise<void> {
-        await this.showPathBtn.click();
+    async clickOnShowPathBtn(selection: string): Promise<void> {
+        await this.showPathBtn(selection).click();
     }
     
     async clickAskQuestionBtn(): Promise<void> {
@@ -309,8 +321,6 @@ export default class CodeGraph extends BasePage {
     }
 
     async getLastChatElementButtonCount(): Promise<number | null> {
-        const isVisible = await waitForElementToBeVisible(this.lastChatElementButtonCount);
-        if (!isVisible) return null;
         return await this.lastChatElementButtonCount.count();
     }
 
@@ -349,6 +359,7 @@ export default class CodeGraph extends BasePage {
     }
     
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
+        await this.page.mouse.click(10, 10);
         const nodeLocator = this.locateNodeInLastChatPath(node);
         return await waitForElementToBeVisible(nodeLocator);
     }
@@ -364,25 +375,16 @@ export default class CodeGraph extends BasePage {
         await this.notificationErrorCloseBtn.click();
     }
     
-    async clickOnQuestionOptionsMenu(): Promise<void> {
-        const isVisible = await waitForElementToBeVisible(this.questionOptionsMenu);
-        if (!isVisible) throw new Error("Question options menu is not visible!");
-        await this.questionOptionsMenu.click();
-    }
-    
     async selectAndGetQuestionInOptionsMenu(questionNumber: string): Promise<string> {
         const question = this.selectQuestionInMenu(questionNumber);
-        const isVisible = await waitForElementToBeVisible(question);
-        if (!isVisible) throw new Error(`Question ${questionNumber} in menu is not visible!`);
-        
         await question.click();
-        return await question.innerHTML();
+        return await question.innerText();
     }
     
     async getLastQuestionInChat(): Promise<string> {
         const isVisible = await waitForElementToBeVisible(this.lastQuestionInChat);
         if (!isVisible) throw new Error("Last question in chat is not visible!");
-        return await this.lastQuestionInChat.innerText();
+        return (await this.lastQuestionInChat.innerText()) ?? "";
     }    
 
     /* CodeGraph functionality */
@@ -427,7 +429,6 @@ export default class CodeGraph extends BasePage {
         const button = this.searchBarOptionBtn(buttonNum);
         await button.waitFor({ state : "visible"})
         await button.click();
-        await this.page.waitForTimeout(4000);
     }
 
     async getSearchBarInputValue(): Promise<string> {
@@ -487,6 +488,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnClearGraphBtn(): Promise<void> {
+        await this.page.mouse.click(10, 10);
         await this.clearGraphBtn.click();
     }
 
@@ -538,7 +540,7 @@ export default class CodeGraph extends BasePage {
 
     async getMetricsPanelInfo(): Promise<{nodes: string, edges: string}> {
         const nodes = await this.canvasMetricsPanel("1").innerHTML();
-        const edges = await this.canvasMetricsPanel("2").innerHTML();
+        const edges = await this.canvasMetricsPanel("3").innerHTML();
         return { nodes, edges }
     }
 
@@ -669,10 +671,11 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeToolTipVisible(node: string): Promise<boolean> {
+        await this.page.waitForTimeout(500);
         return await this.nodeToolTip(node).isVisible();
     }
 
-    async waitForCanvasAnimationToEnd(timeout = 5000): Promise<void> {
+    async waitForCanvasAnimationToEnd(timeout = 15000, checkInterval = 500): Promise<void> {
         const canvasHandle = await this.canvasElement.elementHandle();
     
         if (!canvasHandle) {
@@ -680,22 +683,42 @@ export default class CodeGraph extends BasePage {
         }
     
         await this.page.waitForFunction(
-            (canvas) => {
-                const ctx = (canvas as HTMLCanvasElement).getContext('2d');
+            async ({ canvas, checkInterval, timeout }) => {
+                const ctx = canvas.getContext('2d');
                 if (!ctx) return false;
     
-                const imageData1 = ctx.getImageData(0, 0, (canvas as HTMLCanvasElement).width, (canvas as HTMLCanvasElement).height).data;
+                const width = canvas.width;
+                const height = canvas.height;
+    
+                let previousData = ctx.getImageData(0, 0, width, height).data;
+                const startTime = Date.now();
     
                 return new Promise<boolean>((resolve) => {
-                    setTimeout(() => {
-                        const imageData2 = ctx.getImageData(0, 0, (canvas as HTMLCanvasElement).width, (canvas as HTMLCanvasElement).height).data;
-                        resolve(JSON.stringify(imageData1) === JSON.stringify(imageData2));
-                    }, 500);
+                    const checkCanvas = () => {
+                        if (Date.now() - startTime > timeout) {
+                            resolve(true);
+                            return;
+                        }
+    
+                        setTimeout(() => {
+                            const currentData = ctx.getImageData(0, 0, width, height).data;
+                            if (JSON.stringify(previousData) === JSON.stringify(currentData)) {
+                                resolve(true);
+                            } else {
+                                previousData = currentData;
+                                checkCanvas();
+                            }
+                        }, checkInterval);
+                    };
+                    checkCanvas();
                 });
             },
-            canvasHandle as any,
+            { 
+                canvas: await canvasHandle.evaluateHandle((el) => el as HTMLCanvasElement),
+                checkInterval,
+                timeout
+            },
             { timeout }
         );
     }
-    
 }
