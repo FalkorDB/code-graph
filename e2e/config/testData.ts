@@ -20,7 +20,7 @@ export const nodesPath: { firstNode: string; secondNode: string }[] = [
 ];
 
 export const nodes: { nodeName: string; }[] = [
-  // { nodeName: "ask"},
+  { nodeName: "ask"},
   { nodeName: "add_edge" },
   { nodeName: "test_kg_delete"},
   { nodeName: "list_graphs"}
