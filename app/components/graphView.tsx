@@ -1,4 +1,3 @@
-
 import ForceGraph2D, { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
@@ -254,38 +253,77 @@ export default function GraphView({
 
                     if (!start.x || !start.y || !end.x || !end.y) return
 
+                    let textX, textY, angle;
+
                     if (start.id === end.id) {
                         const radius = NODE_SIZE * link.curve * 6.2;
                         const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
-                        const textX = start.x + radius * Math.cos(angleOffset);
-                        const textY = start.y + radius * Math.sin(angleOffset);
-
-                        ctx.save();
-                        ctx.translate(textX, textY);
-                        ctx.rotate(-angleOffset);
+                        textX = start.x + radius * Math.cos(angleOffset);
+                        textY = start.y + radius * Math.sin(angleOffset);
+                        angle = -angleOffset;
                     } else {
-                        const midX = (start.x + end.x) / 2 + (end.y - start.y) * (link.curve / 2);
-                        const midY = (start.y + end.y) / 2 + (start.x - end.x) * (link.curve / 2);
+                        const midX = (start.x + end.x) / 2;
+                        const midY = (start.y + end.y) / 2;
+                        const offset = link.curve / 2;
 
-                        let textAngle = Math.atan2(end.y - start.y, end.x - start.x)
+                        angle = Math.atan2(end.y - start.y, end.x - start.x);
 
                         // maintain label vertical orientation for legibility
-                        if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
-                        if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
+                        if (angle > Math.PI / 2) angle = -(Math.PI - angle);
+                        if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
 
-                        ctx.save();
-                        ctx.translate(midX, midY);
-                        ctx.rotate(textAngle);
+                        // Calculate perpendicular offset
+                        const perpX = -Math.sin(angle) * offset;
+                        const perpY = Math.cos(angle) * offset;
+
+                        // Adjust position to compensate for rotation around origin
+                        const cos = Math.cos(angle);
+                        const sin = Math.sin(angle);
+                        textX = midX + perpX;
+                        textY = midY + perpY;
+                        const rotatedX = textX * cos + textY * sin;
+                        const rotatedY = -textX * sin + textY * cos;
+                        textX = rotatedX;
+                        textY = rotatedY;
                     }
 
-                    // add label
+                    // Setup text properties to measure background size
+                    ctx.font = '2px Arial';
+                    const padding = 0.5;
+                    // Get text width and height
+                    const label = graph.LabelsMap.get(link.label)!
+                    let { textWidth, textHeight } = label
+
+                    if (!textWidth || !textHeight) {
+                        const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(link.label)
+                        textWidth = width
+                        textHeight = actualBoundingBoxAscent + actualBoundingBoxDescent
+                        graph.LabelsMap.set(link.label, { ...label, textWidth, textHeight })
+                    }
+
+                    // Save the current context state
+                    ctx.save();
+
+                    // add label with background and rotation
+                    ctx.rotate(angle);
+
+                    // Draw background
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(
+                        textX - textWidth / 2 - padding,
+                        textY - textHeight / 2 - padding,
+                        textWidth + padding * 2,
+                        textHeight + padding * 2
+                    );
+
+                    // Draw text
                     ctx.globalAlpha = 1;
                     ctx.fillStyle = 'black';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.font = '2px Arial';
-                    ctx.fillText(link.label, 0, 0);
-                    ctx.restore()
+                    ctx.fillText(link.label, textX, textY);
+
+                    ctx.restore(); // reset rotation
                 }}
                 onNodeClick={handleNodeClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
