@@ -30,8 +30,6 @@ interface Props {
     setSelectedPathId: (selectedPathId: number) => void
     cooldownTicks: number | undefined
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
-    cooldownTime: number | undefined
-    setCooldownTime: Dispatch<SetStateAction<number>>
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
     zoomedNodes: Node[]
 }
@@ -56,9 +54,7 @@ export default function GraphView({
     selectedPathId,
     setSelectedPathId,
     cooldownTicks,
-    cooldownTime,
     setCooldownTicks,
-    setCooldownTime,
     zoomedNodes,
     setZoomedNodes
 }: Props) {
@@ -105,7 +101,6 @@ export default function GraphView({
     }, [parentRef])
 
     useEffect(() => {
-        setCooldownTime(2000)
         setCooldownTicks(undefined)
     }, [graph.Id, graph.getElements().length])
 
@@ -357,12 +352,12 @@ export default function GraphView({
                 onZoom={() => unsetSelectedObjects()}
                 onEngineStop={() => {
                     setCooldownTicks(0)
-                    setCooldownTime(0)
+                    debugger
                     handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: NodeObject<Node>) => zoomedNodes.some(node => node.id === n.id))
                     setZoomedNodes([])
                 }}
                 cooldownTicks={cooldownTicks}
-                cooldownTime={cooldownTime}
+                cooldownTime={6000}
             />
         </div>
     )

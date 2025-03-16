@@ -38,8 +38,6 @@ interface Props {
     setSearchNode: Dispatch<SetStateAction<any>>
     cooldownTicks: number | undefined
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
-    cooldownTime: number
-    setCooldownTime: Dispatch<SetStateAction<number>>
     onCategoryClick: (name: string, show: boolean) => void
     handleDownloadImage: () => void
     zoomedNodes: Node[]
@@ -67,8 +65,6 @@ export function CodeGraph({
     setSearchNode,
     cooldownTicks,
     setCooldownTicks,
-    cooldownTime,
-    setCooldownTime,
     onCategoryClick,
     handleDownloadImage,
     zoomedNodes,
@@ -337,8 +333,6 @@ export function CodeGraph({
                                     setSelectedPathId={setSelectedPathId}
                                     cooldownTicks={cooldownTicks}
                                     setCooldownTicks={setCooldownTicks}
-                                    cooldownTime={cooldownTime}
-                                    setCooldownTime={setCooldownTime}
                                     setZoomedNodes={setZoomedNodes}
                                     zoomedNodes={zoomedNodes}
                                 />
