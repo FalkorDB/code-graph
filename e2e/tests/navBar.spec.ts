@@ -21,7 +21,7 @@ test.describe(' Navbar tests', () => {
   })
 
   const navitems: { navItem: string; expectedRes: string }[] = [
-    { navItem: "Home", expectedRes: urls.falkorDBUrl },
+    { navItem: "Main Website", expectedRes: urls.falkorDBUrl },
     { navItem: "Github", expectedRes: urls.falkorDbGithubUrl }
   ];  
 

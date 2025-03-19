@@ -1,36 +1,15 @@
 import { toast } from "@/components/ui/use-toast";
-import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
-import { Path } from "../page";
+import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
+import { Message, MessageTypes, Path, PathData } from "@/lib/utils";
 import Input from "./Input";
-import { Graph, GraphData, Link } from "./model";
-import { cn } from "@/lib/utils";
+import { Graph, GraphData, Link, Node } from "./model";
+import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
-import { NodeObject, ForceGraphMethods } from "react-force-graph-2d";
-
-type PathData = {
-    nodes: any[]
-    links: any[]
-}
-
-enum MessageTypes {
-    Query,
-    Response,
-    Path,
-    PathResponse,
-    Pending,
-    Text,
-}
-
-interface Message {
-    type: MessageTypes;
-    text?: string;
-    paths?: { nodes: any[], links: any[] }[];
-    graphName?: string;
-}
+import { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
 
 interface Props {
     repo: string
@@ -41,7 +20,16 @@ interface Props {
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
-    chartRef: React.MutableRefObject<ForceGraphMethods<Node, Link>>
+    chartRef: GraphRef
+    messages: Message[]
+    setMessages: Dispatch<SetStateAction<Message[]>>
+    query: string
+    setQuery: Dispatch<SetStateAction<string>>
+    selectedPath: PathData | undefined
+    setSelectedPath: Dispatch<SetStateAction<PathData | undefined>>
+    setChatOpen?: Dispatch<SetStateAction<boolean>>
+    paths: PathData[]
+    setPaths: Dispatch<SetStateAction<PathData[]>>
 }
 
 const SUGGESTIONS = [
@@ -63,20 +51,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, chartRef }: Props) {
-
-    // Holds the messages in the chat
-    const [messages, setMessages] = useState<Message[]>([]);
-
-    // Holds the messages in the chat
-    const [paths, setPaths] = useState<PathData[]>([]);
-
-    const [selectedPath, setSelectedPath] = useState<PathData>();
-
-    // Holds the user input while typing
-    const [query, setQuery] = useState('');
-
-    const [tipOpen, setTipOpen] = useState(false);
+export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, chartRef, paths, setPaths }: Props) {
 
     const [sugOpen, setSugOpen] = useState(false);
 
@@ -94,9 +69,14 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
     // Scroll to the bottom of the chat on new message
     useEffect(() => {
-        setTimeout(() => {
+        if (messages.length === 0) return
+        const timeout = setTimeout(() => {
             containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
         }, 300)
+
+        return () => {
+            clearTimeout(timeout)
+        }
     }, [messages]);
 
     useEffect(() => {
@@ -112,7 +92,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
     const handleSetSelectedPath = (p: PathData) => {
         const chart = chartRef.current
-        
+
         if (!chart) return
         setSelectedPath(prev => {
             if (prev) {
@@ -169,6 +149,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setTimeout(() => {
             chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => p.nodes.some(node => node.id === n.id));
         }, 0)
+        setChatOpen && setChatOpen(false)
     }
 
     // A function that handles the change event of the url input box
@@ -233,6 +214,8 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
         if (!path?.start?.id || !path.end?.id) return
 
+        setPath(undefined)
+
         const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
         })
@@ -261,7 +244,6 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
 
         setPaths(formattedPaths)
         setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
-        setPath(undefined)
         setIsPathResponse(true)
         setData({ ...graph.Elements })
         setTimeout(() => {
@@ -269,13 +251,13 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         }, 0)
     }
 
-    const getTip = (disabled = false) =>
+    const getTip = (className?: string) =>
         <>
             <button
-                disabled={disabled}
-                className="Tip"
+                disabled={isSendMessage}
+                className={cn("Tip", className)}
                 onClick={() => {
-                    setTipOpen(false)
+                    setSugOpen(false)
                     setMessages(prev => [
                         ...RemoveLastPath(prev),
                         { type: MessageTypes.Query, text: "Create a path" },
@@ -299,12 +281,24 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                     }, 4000)
                 }}
             >
-                <Lightbulb />
-                <div>
-                    <h1 className="label">Show the path</h1>
-                    <p className="text">Fetch, update, batch, and navigate data efficiently</p>
-                </div>
+                <p className="text-center w-full">Show the path</p>
             </button>
+            {
+                SUGGESTIONS.map((s, i) => (
+                    <button
+                        disabled={isSendMessage}
+                        type="submit"
+                        key={i}
+                        className={cn("Tip", className)}
+                        onClick={() => {
+                            sendQuery(undefined, s)
+                            setSugOpen(false)
+                        }}
+                    >
+                        <p className="text-center w-full">{s}</p>
+                    </button>
+                ))
+            }
         </>
 
     const getMessage = (message: Message, index?: number) => {
@@ -390,10 +384,10 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                     }
 
                                     if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
-                                    
+
                                     if (!isPathResponse) {
                                         setIsPathResponse(undefined)
-                                    
+
                                     }
                                     handleSetSelectedPath(p)
                                 }}
@@ -420,18 +414,15 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }
 
     return (
-        <div className="relative h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
+        <div className="relative h-1 grow md:h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
             <main data-name="main-chat" ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
                 {
                     messages.length === 0 &&
                     <>
-                        <h1 className="font-oswald text-[20px] font-semibold leading-[32px] text-left text-[#13343B]">WELCOME TO OUR ASSISTANCE SERVICE</h1>
-                        <span className="text-base font-normal leading-5 text-left text-[#7D7D7D]">
-                            We can help you access and update only the needed
-                            data via paths, optimizing network requests with
-                            batching and catching for better performance.
-                        </span>
-                        {getTip()}
+                        <h1 className="text-center text-2xl">What would you like to analyze?</h1>
+                        <div className="flex flex-row flex-wrap gap-2 justify-center">
+                            {getTip()}
+                        </div>
                     </>
                 }
                 {
@@ -439,54 +430,25 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                         return getMessage(message, index)
                     })
                 }
-                {
-                    tipOpen &&
-                    <div ref={ref => ref?.focus()} className="bg-white absolute bottom-24 border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onBlur={() => setTipOpen(false)}>
-                        {getTip(isSendMessage)}
-                    </div>
-                }
             </main>
-            <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
-                <footer>
-                    {
-                        repo &&
-                        <div className="flex gap-4 px-4">
-                            <button data-name="lightbulb" onClick={() => setTipOpen(true)} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
-                                <Lightbulb />
-                            </button>
-                            <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
-                                <DropdownMenuTrigger asChild>
-                                    <button data-name="questionOptionsMenu" className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
-                                        <ArrowDown color="white" />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <input className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                                <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
-                                    <ArrowRight color="white" />
-                                </button>
-                            </form>
-                        </div>
-                    }
-                </footer>
-                <DropdownMenuContent className="flex flex-col mb-4 w-[20dvw]" side="top">
-                    {
-                        SUGGESTIONS.map((s, i) => (
-                            <button
-                                disabled={isSendMessage}
-                                type="submit"
-                                key={i}
-                                className="p-2 text-left hover:bg-gray-200"
-                                onClick={() => {
-                                    sendQuery(undefined, s)
-                                    setSugOpen(false)
-                                }}
-                            >
-                                {s}
-                            </button>
-                        ))
-                    }
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <footer className="flex gap-4 px-4 overflow-hidden min-h-fit">
+                <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
+                    <DropdownMenuTrigger asChild>
+                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                            <Lightbulb />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="flex flex-col gap-2 mb-4 w-[81.51dvw] md:w-[20dvw] overflow-y-auto" side="top">
+                        {getTip("!w-full")}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
+                    <input className="w-1 grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                    <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                        <ArrowRight color="white" />
+                    </button>
+                </form>
+            </footer>
         </div>
     );
 }

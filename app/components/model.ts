@@ -1,5 +1,5 @@
 import { LinkObject, NodeObject } from 'react-force-graph-2d'
-import { Path } from '../page'
+import { Path } from '@/lib/utils'
 
 export interface GraphData {
   nodes: Node[],
