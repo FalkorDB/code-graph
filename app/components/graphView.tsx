@@ -1,9 +1,11 @@
+'use client'
 
-import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph2D, { NodeObject } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, RefObject, SetStateAction, useEffect, useRef } from 'react';
-import { toast } from '@/components/ui/use-toast';
-import { Path } from '../page';
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
+import { Path } from '@/lib/utils';
+import { Fullscreen } from 'lucide-react';
+import { GraphRef, handleZoomToFit } from '@/lib/utils';
 
 export interface Position {
     x: number,
@@ -14,14 +16,13 @@ interface Props {
     data: GraphData
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
-    chartRef: RefObject<any>
-    selectedObj: Node | undefined
-    setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
+    chartRef: GraphRef
+    selectedObj: Node | Link | undefined
+    setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
-    onFetchNode: (nodeIds: number[]) => Promise<GraphData>
-    deleteNeighbors: (nodes: Node[]) => void
+    handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     isPathResponse: boolean | undefined
@@ -29,8 +30,8 @@ interface Props {
     setSelectedPathId: (selectedPathId: number) => void
     cooldownTicks: number | undefined
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
-    cooldownTime: number | undefined
-    setCooldownTime: Dispatch<SetStateAction<number>>
+    setZoomedNodes: Dispatch<SetStateAction<Node[]>>
+    zoomedNodes: Node[]
 }
 
 const PATH_COLOR = "#ffde21"
@@ -39,7 +40,6 @@ const PADDING = 2;
 
 export default function GraphView({
     data,
-    setData,
     graph,
     chartRef,
     selectedObj,
@@ -47,30 +47,62 @@ export default function GraphView({
     selectedObjects,
     setSelectedObjects,
     setPosition,
-    onFetchNode,
-    deleteNeighbors,
+    handleExpand,
     isShowPath,
     setPath,
     isPathResponse,
     selectedPathId,
     setSelectedPathId,
     cooldownTicks,
-    cooldownTime,
     setCooldownTicks,
-    setCooldownTime
+    zoomedNodes,
+    setZoomedNodes
 }: Props) {
 
     const parentRef = useRef<HTMLDivElement>(null)
+    const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
+    const [parentWidth, setParentWidth] = useState(0)
+    const [parentHeight, setParentHeight] = useState(0)
+    const [screenSize, setScreenSize] = useState<number>(0)
 
     useEffect(() => {
-        setCooldownTime(4000)
-        setCooldownTicks(undefined)
-    }, [graph.Id])
+        const handleResize = () => {
+            setScreenSize(window.innerWidth)
+        }
+
+        handleResize()
+
+        window.addEventListener('resize', handleResize)
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+        }
+    }, [])
 
     useEffect(() => {
-        setCooldownTime(1000)
+        const handleResize = () => {
+            if (!parentRef.current) return
+            setParentWidth(parentRef.current.clientWidth)
+            setParentHeight(parentRef.current.clientHeight)
+        }
+
+        window.addEventListener('resize', handleResize)
+
+        const observer = new ResizeObserver(handleResize)
+
+        if (parentRef.current) {
+            observer.observe(parentRef.current)
+        }
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            observer.disconnect()
+        }
+    }, [parentRef])
+
+    useEffect(() => {
         setCooldownTicks(undefined)
-    }, [graph.getElements().length])
+    }, [graph.Id, graph.getElements().length])
 
     const unsetSelectedObjects = (evt?: MouseEvent) => {
         if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
@@ -78,8 +110,38 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handelNodeClick = (node: Node, evt: MouseEvent) => {
-        if (isShowPath) {
+    const handleRightClick = (element: Node | Link, evt: MouseEvent) => {
+        if (evt.ctrlKey && "category" in element) {
+            if (selectedObjects.some(obj => obj.id === element.id)) {
+                setSelectedObjects(selectedObjects.filter(obj => obj.id !== element.id))
+                return
+            } else {
+                setSelectedObjects([...selectedObjects, element as Node])
+            }
+        } else {
+            setSelectedObjects([])
+        }
+
+        setSelectedObj(element)
+        setPosition({ x: evt.clientX, y: evt.clientY })
+    }
+
+    const handleLinkClick = (link: Link, evt: MouseEvent) => {
+        unsetSelectedObjects(evt)
+        if (!isPathResponse || link.id === selectedPathId) return
+        setSelectedPathId(link.id)
+    }
+
+    const handleNodeClick = async (node: Node) => {
+        const now = new Date()
+        const { date, name } = lastClick.current
+
+        const isDoubleClick = now.getTime() - date.getTime() < 1000 && name === node.name
+        lastClick.current = { date: now, name: node.name }
+
+        if (isDoubleClick) {
+            handleExpand([node], !node.expand)
+        } else if (isShowPath) {
             setPath(prev => {
                 if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
                     return ({ start: { id: Number(node.id), name: node.name } })
@@ -89,57 +151,42 @@ export default function GraphView({
             })
             return
         }
-
-        if (evt.ctrlKey) {
-            if (selectedObjects.some(obj => obj.id === node.id)) {
-                setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
-                return
-            } else {
-                setSelectedObjects([...selectedObjects, node])
-            }
-        } else {
-            setSelectedObjects([])
-        }
-
-        setSelectedObj(node)
-        setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
-    const handelLinkClick = (link: Link, evt: MouseEvent) => {
-        unsetSelectedObjects(evt)
-        if (!isPathResponse || link.id === selectedPathId) return
-        setSelectedPathId(link.id)
-    }
-
-    const handelNodeRightClick = async (node: Node) => {
-        const expand = !node.expand
-        if (expand) {
-            const elements = await onFetchNode([node.id])
-
-            if (elements.nodes.length === 0) {
-                toast({
-                    title: `No neighbors found`,
-                    description: `No neighbors found`,
-                })
-                return
-            }
-        } else {
-            deleteNeighbors([node]);
-        }
-
-        node.expand = expand
-
-        setSelectedObj(undefined)
-        setData({ ...graph.Elements })
-    }
+    const avoidOverlap = (nodes: Position[]) => {
+        const spacing = NODE_SIZE * 2.5;
+        nodes.forEach((nodeA, i) => {
+            nodes.forEach((nodeB, j) => {
+                if (i !== j) {
+                    const dx = nodeA.x - nodeB.x;
+                    const dy = nodeA.y - nodeB.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+    
+                    if (distance < spacing) {
+                        const pushStrength = (spacing - distance) / distance * 0.5;
+                        nodeA.x += dx * pushStrength;
+                        nodeA.y += dy * pushStrength;
+                        nodeB.x -= dx * pushStrength;
+                        nodeB.y -= dy * pushStrength;
+                    }
+                }
+            });
+        });
+    };    
 
     return (
-        <div ref={parentRef} className="relative w-fill h-full">
+        <div ref={parentRef} className="relative w-full md:h-full h-1 grow">
+            <div className="md:hidden absolute bottom-4 right-4 z-10">
+                <button className='control-button' onClick={() => handleZoomToFit(chartRef)}>
+                    <Fullscreen />
+                </button>
+            </div>
             <ForceGraph2D
                 ref={chartRef}
-                height={parentRef.current?.clientHeight || 0}
-                width={parentRef.current?.clientWidth || 0}
+                height={parentHeight}
+                width={parentWidth}
                 graphData={data}
+                onEngineTick={() => avoidOverlap(data.nodes as Position[])}
                 nodeVisibility="visible"
                 linkVisibility="visible"
                 linkCurvature="curve"
@@ -197,7 +244,7 @@ export default function GraphView({
                     ctx.fillStyle = 'black';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.font = '4px Arial';
+                    ctx.font = '2px Arial';
                     const textWidth = ctx.measureText(node.name).width;
                     const ellipsis = '...';
                     const ellipsisWidth = ctx.measureText(ellipsis).width;
@@ -221,75 +268,96 @@ export default function GraphView({
 
                     if (!start.x || !start.y || !end.x || !end.y) return
 
-                    const sameNodesLinks = graph.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
-                    const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
-                    const even = index % 2 === 0
-                    let curve
+                    let textX, textY, angle;
 
                     if (start.id === end.id) {
-                        if (even) {
-                            curve = Math.floor(-(index / 2)) - 3
-                        } else {
-                            curve = Math.floor((index + 1) / 2) + 2
-                        }
-
-                        link.curve = curve * 0.1
-                        
                         const radius = NODE_SIZE * link.curve * 6.2;
                         const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
-                        const textX = start.x + radius * Math.cos(angleOffset);
-                        const textY = start.y + radius * Math.sin(angleOffset);
-
-                        ctx.save();
-                        ctx.translate(textX, textY);
-                        ctx.rotate(-angleOffset);
+                        textX = start.x + radius * Math.cos(angleOffset);
+                        textY = start.y + radius * Math.sin(angleOffset);
+                        angle = -angleOffset;
                     } else {
-                        if (even) {
-                            curve = Math.floor(-(index / 2))
-                        } else {
-                            curve = Math.floor((index + 1) / 2)
-                        }
+                        const midX = (start.x + end.x) / 2;
+                        const midY = (start.y + end.y) / 2;
+                        const offset = link.curve / 2;
 
-                        link.curve = curve * 0.1
-                        
-                        const midX = (start.x + end.x) / 2 + (end.y - start.y) * (link.curve / 2);
-                        const midY = (start.y + end.y) / 2 + (start.x - end.x) * (link.curve / 2);
-
-                        let textAngle = Math.atan2(end.y - start.y, end.x - start.x)
+                        angle = Math.atan2(end.y - start.y, end.x - start.x);
 
                         // maintain label vertical orientation for legibility
-                        if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
-                        if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
+                        if (angle > Math.PI / 2) angle = -(Math.PI - angle);
+                        if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
 
-                        ctx.save();
-                        ctx.translate(midX, midY);
-                        ctx.rotate(textAngle);
+                        // Calculate perpendicular offset
+                        const perpX = -Math.sin(angle) * offset;
+                        const perpY = Math.cos(angle) * offset;
+
+                        // Adjust position to compensate for rotation around origin
+                        const cos = Math.cos(angle);
+                        const sin = Math.sin(angle);
+                        textX = midX + perpX;
+                        textY = midY + perpY;
+                        const rotatedX = textX * cos + textY * sin;
+                        const rotatedY = -textX * sin + textY * cos;
+                        textX = rotatedX;
+                        textY = rotatedY;
                     }
 
-                    // add label
+                    // Setup text properties to measure background size
+                    ctx.font = '2px Arial';
+                    const padding = 0.5;
+                    // Get text width and height
+                    const label = graph.LabelsMap.get(link.label)!
+                    let { textWidth, textHeight } = label
+
+                    if (!textWidth || !textHeight) {
+                        const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(link.label)
+                        textWidth = width
+                        textHeight = actualBoundingBoxAscent + actualBoundingBoxDescent
+                        graph.LabelsMap.set(link.label, { ...label, textWidth, textHeight })
+                    }
+
+                    // Save the current context state
+                    ctx.save();
+
+                    // add label with background and rotation
+                    ctx.rotate(angle);
+
+                    // Draw background
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(
+                        textX - textWidth / 2 - padding,
+                        textY - textHeight / 2 - padding,
+                        textWidth + padding * 2,
+                        textHeight + padding * 2
+                    );
+
+                    // Draw text
                     ctx.globalAlpha = 1;
                     ctx.fillStyle = 'black';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.font = '2px Arial';
-                    ctx.fillText(link.label, 0, 0);
-                    ctx.restore()
+                    ctx.fillText(link.label, textX, textY);
+
+                    ctx.restore(); // reset rotation
                 }}
-                onNodeClick={handelNodeClick}
+                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? handleNodeClick : handleRightClick}
+                onNodeRightClick={handleRightClick}
                 onNodeDragEnd={(n, translate) => setPosition(prev => {
-                    return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
+                    return prev && { x: prev.x + translate.x * (chartRef.current?.zoom() ?? 1), y: prev.y + translate.y * (chartRef.current?.zoom() ?? 1) }
                 })}
-                onNodeRightClick={handelNodeRightClick}
-                onLinkClick={handelLinkClick}
+                onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isPathResponse ? handleLinkClick : handleRightClick}
+                onLinkRightClick={handleRightClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}
                 onEngineStop={() => {
                     setCooldownTicks(0)
-                    setCooldownTime(0)
+                    debugger
+                    handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: NodeObject<Node>) => zoomedNodes.some(node => node.id === n.id))
+                    setZoomedNodes([])
                 }}
                 cooldownTicks={cooldownTicks}
-                cooldownTime={cooldownTime}
+                cooldownTime={6000}
             />
         </div>
     )

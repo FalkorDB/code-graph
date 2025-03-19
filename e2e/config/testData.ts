@@ -1,7 +1,7 @@
 export const searchData: { searchInput: string; completedSearchInput?: string; }[] = [
     { searchInput: "test"},
     { searchInput: "set"},
-    { searchInput: "low", completedSearchInput: "lower" },
+    { searchInput: "low", completedSearchInput: "lower_items" },
     { searchInput: "as", completedSearchInput:  "ask"},
 ];
 
@@ -20,10 +20,15 @@ export const nodesPath: { firstNode: string; secondNode: string }[] = [
 ];
 
 export const nodes: { nodeName: string; }[] = [
-  { nodeName: "import_data"},
+  // { nodeName: "ask"},
   { nodeName: "add_edge" },
   { nodeName: "test_kg_delete"},
   { nodeName: "list_graphs"}
 ];
 
 export const categories: string[] = ['File', 'Class', 'Function'];
+
+export const graphs: { graphName: string; }[] = [
+  { graphName: "GraphRAG-SDK" },
+  { graphName: "click" },
+];
