@@ -23,9 +23,9 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      const graphData = await codeGraph.getGraphNodes();
+  
+      const targetNode = findNodeByName(graphData, node.nodeName);
       expect(targetNode).toBeDefined();
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnViewNode();
@@ -38,9 +38,8 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const node1 = findNodeByName(convertCoordinates, node.nodeName);
+      const graphData = await codeGraph.getGraphNodes();
+      const node1 = findNodeByName(graphData, node.nodeName);
       await codeGraph.nodeClick(node1.screenX, node1.screenY);
       await codeGraph.clickOnViewNode();
       await codeGraph.clickOnNodeDetailsCloseBtn();
@@ -53,9 +52,8 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const node1 = findNodeByName(convertCoordinates, node.nodeName);
+      const graphData = await codeGraph.getGraphNodes();
+      const node1 = findNodeByName(graphData, node.nodeName);
       await codeGraph.nodeClick(node1.screenX, node1.screenY);
       expect(await codeGraph.getNodeDetailsHeader()).toContain(
         node.nodeName.toUpperCase()
@@ -67,9 +65,8 @@ test.describe("Node details panel tests", () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await browser.setPageToFullScreen();
     await codeGraph.selectGraph(FLASK_GRAPH);
-    const graphData = await codeGraph.getGraphDetails();
-    const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-    const nodeData = findFirstNodeWithSrc(convertCoordinates);
+    const graphData = await codeGraph.getGraphNodes();
+    const nodeData = findFirstNodeWithSrc(graphData);
     await codeGraph.nodeClick(nodeData.screenX, nodeData.screenY);
     await codeGraph.clickOnViewNode();
     const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();
@@ -84,9 +81,8 @@ test.describe("Node details panel tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const node1 = findNodeByName(convertCoordinates, node.nodeName);
+      const graphData = await codeGraph.getGraphNodes();
+      const node1 = findNodeByName(graphData, node.nodeName);
       const api = new ApiCalls();
       const response = await api.getProject(GRAPHRAG_SDK);
       const data: any = response.result.entities.nodes;

@@ -468,7 +468,8 @@ export default class CodeGraph extends BasePage {
         await button.click();
     }
 
-    async nodeClick(x: number, y: number): Promise<void> {  
+    async nodeClick(x: number, y: number): Promise<void> {
+        await this.waitForCanvasAnimationToEnd();
         for (let attempt = 1; attempt <= 3; attempt++) {
             await this.canvasElement.hover({ position: { x, y } });
             await this.page.waitForTimeout(500);
@@ -578,8 +579,8 @@ export default class CodeGraph extends BasePage {
 
     async getGraphDetails(): Promise<any> {
         await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await this.page.waitForFunction(() => window.graph && window.graph.elements.nodes.length > 0);
-        await this.page.waitForTimeout(2000); //canvas animation
+        await this.page.waitForTimeout(3000);
+        await this.page.waitForFunction(() => !!window.graph);
     
         const graphData = await this.page.evaluate(() => {
             return window.graph;
@@ -587,48 +588,41 @@ export default class CodeGraph extends BasePage {
         
         return graphData;
     }
-
-    async transformNodeCoordinates(graphData: any): Promise<any[]> {
-        let maxRetries = 3;
-        let transform = null;
-        let canvasRect = null;
-        await this.page.waitForFunction(() => window.graph && window.graph.elements?.nodes?.length > 0);
     
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+
+    async getGraphNodes(): Promise<any[]> {
+        await this.page.waitForTimeout(3000);
+    
+        const graphData = await this.page.evaluate(() => {
+            return (window as any).graph;
+        });
+    
+        let transformData: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
             await this.page.waitForTimeout(1000);
     
-            const result = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
+            transformData = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
                 const rect = canvas.getBoundingClientRect();
                 const ctx = canvas.getContext('2d');
                 return {
-                    canvasLeft: rect.left,
-                    canvasTop: rect.top,
-                    canvasWidth: rect.width,
-                    canvasHeight: rect.height,
+                    left: rect.left,
+                    top: rect.top,
                     transform: ctx?.getTransform() || null,
                 };
             });
     
-            if (!result.transform) {
-                console.warn(`Attempt ${attempt}: Transform not available yet, retrying...`);
-                continue;
-            }
-    
-            transform = result.transform;
-            canvasRect = result;
-            break;
+            if (transformData.transform) break;
+            console.warn(`Attempt ${attempt + 1}: Transform data not available, retrying...`);
         }
     
-        if (!transform) throw new Error("Canvas transform data not available after multiple attempts!");
-
-        return graphData.elements.nodes.map((node: any) => {
-            const adjustedX = node.x * transform.a + transform.e;
-            const adjustedY = node.y * transform.d + transform.f;
-            const screenX = canvasRect!.canvasLeft + adjustedX - 35;
-            const screenY = canvasRect!.canvasTop + adjustedY - 190;
+        if (!transformData?.transform) throw new Error("Canvas transform data not available!");
     
-            return { ...node, screenX, screenY };
-        });
+        const { a, e, d, f } = transformData.transform;
+        return graphData.elements.nodes.map((node: any) => ({
+            ...node,
+            screenX: transformData.left + node.x * a + e - 35,
+            screenY: transformData.top + node.y * d + f - 190,
+        }));
     }
     
    

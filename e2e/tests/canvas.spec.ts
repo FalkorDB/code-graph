@@ -58,9 +58,8 @@ test.describe("Canvas tests", () => {
     test(`Validate node hide functionality via element menu in canvas for ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const initialGraph = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
-      const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      const initialGraph = await codeGraph.getGraphNodes();
+      const targetNode = findNodeByName(initialGraph, node.nodeName);
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnRemoveNodeViaElementMenu();
       const updatedGraph = await codeGraph.getGraphDetails();
@@ -73,9 +72,8 @@ test.describe("Canvas tests", () => {
     test(`Validate unhide node functionality after hiding a node in canvas for ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const initialGraph = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
-      const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      const initialGraph = await codeGraph.getGraphNodes();
+      const targetNode = findNodeByName(initialGraph, node.nodeName);
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnRemoveNodeViaElementMenu();
       await codeGraph.clickOnUnhideNodesBtn();
@@ -134,12 +132,11 @@ test.describe("Canvas tests", () => {
     test(`Validate canvas node dragging for node: ${index}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const initialGraph = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(initialGraph);
-      await codeGraph.changeNodePosition(convertCoordinates[nodeIndex].screenX, convertCoordinates[nodeIndex].screenY);
+      const initialGraph = await codeGraph.getGraphNodes();
+      await codeGraph.changeNodePosition(initialGraph[nodeIndex].screenX, initialGraph[nodeIndex].screenY);
       const updateGraph = await codeGraph.getGraphDetails();
-      expect(updateGraph.elements.nodes[nodeIndex].x).not.toBe(initialGraph.elements.nodes[nodeIndex].x);
-      expect(updateGraph.elements.nodes[nodeIndex].y).not.toBe(initialGraph.elements.nodes[nodeIndex].y);
+      expect(updateGraph.elements.nodes[nodeIndex].x).not.toBe(initialGraph[nodeIndex].x);
+      expect(updateGraph.elements.nodes[nodeIndex].y).not.toBe(initialGraph[nodeIndex].y);
     });
   }
 
