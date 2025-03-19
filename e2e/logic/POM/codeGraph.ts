@@ -579,7 +579,7 @@ export default class CodeGraph extends BasePage {
 
     async getGraphDetails(): Promise<any> {
         await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await this.page.waitForTimeout(3000);
+        await this.waitForCanvasAnimationToEnd();
         await this.page.waitForFunction(() => !!window.graph);
     
         const graphData = await this.page.evaluate(() => {
@@ -591,7 +591,7 @@ export default class CodeGraph extends BasePage {
     
 
     async getGraphNodes(): Promise<any[]> {
-        await this.page.waitForTimeout(3000);
+        await this.waitForCanvasAnimationToEnd();
     
         const graphData = await this.page.evaluate(() => {
             return (window as any).graph;
