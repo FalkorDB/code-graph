@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const AUTH_HEADERS: HeadersInit = import.meta.env.VITE_SECRET_TOKEN
@@ -17,58 +18,84 @@ interface Props {
 export default function Combobox({ options, setOptions, selectedValue, onSelectedValue }: Props) {
 
     const [open, setOpen] = useState(false)
-    const [lastOpened, setLastOpened] = useState<number>();
+    const [lastFetch, setLastFetch] = useState<number>();
+    const [isFetchingOptions, setIsFetchingOptions] = useState(false)
 
     const fetchOptions = async () => {
-        const result = await fetch(`/api/list_repos`, {
-            method: 'GET',
-            headers: {
-                ...AUTH_HEADERS,
-            },
-        })
+        setIsFetchingOptions(true)
 
-        if (!result.ok) {
+        try {
+            const result = await fetch(`/api/list_repos`, {
+                method: 'GET',
+                headers: {
+                    ...AUTH_HEADERS,
+                },
+            })
+
+            if (!result.ok) {
+                toast({
+                    variant: "destructive",
+                    title: "Uh oh! Something went wrong.",
+                    description: await result.text(),
+                })
+                return 
+            }
+
+            const json = await result.json()
+            setOptions(json.repositories)
+        } catch {
             toast({
                 variant: "destructive",
                 title: "Uh oh! Something went wrong.",
-                description: await result.text(),
+                description: "Failed to fetch repositories. Please try again.",
             })
-            return
+        } finally {
+            setIsFetchingOptions(false)
         }
-
-        const json = await result.json()
-        setOptions(json.repositories)
     }
 
     useEffect(() => {
         fetchOptions()
     }, [])
 
+    //fetch options when the combobox is opened
     useEffect(() => {
         if (!open) return
 
         const now = Date.now();
 
-        if (lastOpened && now - lastOpened < 30000) return;
-
-        setLastOpened(now);
-
+        //check if last fetch was less than 30 seconds ago
+        if (lastFetch && now - lastFetch < 30000) return;
+        
+        setLastFetch(now);
+        
         fetchOptions()
     }, [open])
 
     return (
-        <Select open={open} onOpenChange={setOpen} value={selectedValue} onValueChange={onSelectedValue}>
+        <Select open={open} onOpenChange={setOpen} disabled={isFetchingOptions || options.length === 0} value={options.length !== 0 ? selectedValue : undefined} onValueChange={onSelectedValue}>
             <SelectTrigger className="z-10 md:z-0 rounded-md border border-border focus:ring-1 focus:ring-primary">
                 <SelectValue placeholder="Select a repo" />
             </SelectTrigger>
             <SelectContent>
                 {
-                    options.length !== 0 &&
-                    options.map((option) => (
-                        <SelectItem key={option} value={option}>
-                            {option}
+                    isFetchingOptions ?
+                        <SelectItem value="Fetching options...">
+                            <div className="flex flex-row items-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <p>Fetching options...</p>
+                            </div>
                         </SelectItem>
-                    ))
+                        : options.length !== 0 ?
+                            options.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                    {option}
+                                </SelectItem>
+                            ))
+                            :
+                            <SelectItem value="No options found">
+                                <p>No options found</p>
+                            </SelectItem>
                 }
             </SelectContent>
         </Select>
