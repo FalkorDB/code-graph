@@ -26,7 +26,7 @@
     "d3": "^7.9.0",
     "embla-carousel-react": "^8.5.2",
     "html2canvas": "^1.4.1",
-    "lucide-react": "^0.475.0",
+    "lucide-react": "^0.484.0",
     "next": "^15.1.7",
     "playwright": "^1.49.1",
     "react": "^18.3.1",
