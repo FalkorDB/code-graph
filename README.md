@@ -1,6 +1,6 @@
 # CodeGraph - Knowledge Graph Visualization Tool
 
-###Visualize your repository with our graph for code analysis
+### Visualize your repository with our graph for code analysis
 
 [![Try Free](https://img.shields.io/badge/Try%20Free-FalkorDB%20Cloud-FF8101?labelColor=FDE900&link=https://app.falkordb.cloud)](https://app.falkordb.cloud)
 [![Dockerhub](https://img.shields.io/docker/pulls/falkordb/falkordb?label=Docker)](https://hub.docker.com/r/falkordb/falkordb/)
