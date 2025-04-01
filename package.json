@@ -19,7 +19,7 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@types/react-gtm-module": "^2.0.4",
-    "autoprefixer": "^10.4.20",
+    "autoprefixer": "^10.4.21",
     "canvas2svg": "^1.0.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
