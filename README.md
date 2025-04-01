@@ -10,11 +10,7 @@
 
 ![Alt Text](https://res.cloudinary.com/dhd0k02an/image/upload/v1739719361/FalkorDB_-_Github_-_readme_jr6scy.gif)
 
-
-
 **👉🏻[Live Demo](https://code-graph.falkordb.com/)**
-
-
 
 ## Running Locally  
 
