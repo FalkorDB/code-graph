@@ -1,25 +1,24 @@
-import { Dispatch, RefObject, SetStateAction, useContext, useEffect, useRef, useState } from "react";
-import { GraphData, Link, Node } from "./model";
-import { GraphContext } from "./provider";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
 import { Download, GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { Path, PathNode } from '../page';
+import { Path } from "@/lib/utils";
 import Input from './Input';
 // import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
 import dynamic from 'next/dynamic';
 import { Position } from "./graphView";
 import { prepareArg } from '../utils';
-import { NodeObject, ForceGraphMethods } from "react-force-graph-2d";
-import { handleZoomToFit } from "@/lib/utils";
+import { GraphRef } from "@/lib/utils";
 
 const GraphView = dynamic(() => import('./graphView'));
 
 interface Props {
+    graph: Graph,
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
     onFetchGraph: (graphName: string) => Promise<void>,
@@ -28,15 +27,25 @@ interface Props {
     setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
-    chartRef: React.MutableRefObject<ForceGraphMethods<Node, Link>>
+    chartRef: GraphRef
     selectedValue: string
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
     isPathResponse: boolean | undefined
     setIsPathResponse: Dispatch<SetStateAction<boolean | undefined>>
+    handleSearchSubmit: (node: any) => void
+    searchNode: any
+    setSearchNode: Dispatch<SetStateAction<any>>
+    cooldownTicks: number | undefined
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
+    onCategoryClick: (name: string, show: boolean) => void
+    handleDownloadImage: () => void
+    zoomedNodes: Node[]
+    setZoomedNodes: Dispatch<SetStateAction<Node[]>>
 }
 
 export function CodeGraph({
+    graph,
     data,
     setData,
     onFetchGraph,
@@ -50,26 +59,29 @@ export function CodeGraph({
     setSelectedPathId,
     isPathResponse,
     setIsPathResponse,
-    selectedPathId
+    selectedPathId,
+    handleSearchSubmit,
+    searchNode,
+    setSearchNode,
+    cooldownTicks,
+    setCooldownTicks,
+    onCategoryClick,
+    handleDownloadImage,
+    zoomedNodes,
+    setZoomedNodes
 }: Props) {
-
-    let graph = useContext(GraphContext)
 
     const [url, setURL] = useState("");
     const [selectedObj, setSelectedObj] = useState<Node | Link>();
     const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
     const [position, setPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
-    const [searchNode, setSearchNode] = useState<PathNode>({});
     const [commits, setCommits] = useState<any[]>([]);
     const [nodesCount, setNodesCount] = useState<number>(0);
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
-    const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
-    const [cooldownTime, setCooldownTime] = useState<number>(0)
     const containerRef = useRef<HTMLDivElement>(null);
-    const [zoomedNodes, setZoomedNodes] = useState<Node[]>([]);
 
     useEffect(() => {
         setData({ ...graph.Elements })
@@ -84,7 +96,7 @@ export function CodeGraph({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Delete') {
                 if (selectedObj && selectedObjects.length === 0) return
-                handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined));
+                handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined), "nodes");
             }
         };
 
@@ -155,19 +167,6 @@ export function CodeGraph({
         onFetchGraph(value)
     }
 
-    function onCategoryClick(name: string, show: boolean) {
-        graph.Categories.find(c => c.name === name)!.show = show
-
-        graph.Elements.nodes.forEach(node => {
-            if (!(node.category === name)) return
-            node.visible = show
-        })
-
-        graph.visibleLinks(show)
-
-        setData({ ...graph.Elements })
-    }
-
     const deleteNeighbors = (nodes: Node[]) => {
 
         if (nodes.length === 0) return;
@@ -224,73 +223,24 @@ export function CodeGraph({
         setData({ ...graph.Elements })
     }
 
-    const handleSearchSubmit = (node: any) => {
-        const chart = chartRef.current
-
-        if (chart) {
-
-            let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
-
-            if (!chartNode?.visible) {
-                if (!chartNode) {
-                    chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
-                } else {
-                    chartNode.visible = true
-                    setCooldownTicks(undefined)
-                    setCooldownTime(1000)
-                }
-                graph.visibleLinks(true, [chartNode!.id])
-                setData({ ...graph.Elements })
-                setZoomedNodes([node])
-                return
-            }
-
-            handleZoomToFit(chartRef, 4, (n: NodeObject<Node>) => n.id === node.id)
-            setSearchNode(chartNode)
-        }
-    }
-
-    const handleRemove = (ids: number[]) => {
-        graph.Elements.nodes.forEach(node => {
-            if (!ids.includes(node.id)) return
-            node.visible = false
+    const handleRemove = (ids: number[], type: "nodes" | "links") => {
+        graph.Elements[type].forEach(element => {
+            if (!ids.includes(element.id)) return
+            element.visible = false
         })
 
         graph.visibleLinks(false, ids)
 
+        setSelectedObj(undefined)
+        setSelectedObjects([])
+
         setData({ ...graph.Elements })
     }
 
-    const handleDownloadImage = async () => {
-        try {
-            const canvas = document.querySelector('.force-graph-container canvas') as HTMLCanvasElement;
-            if (!canvas) {
-                toast({
-                    title: "Error",
-                    description: "Canvas not found",
-                    variant: "destructive",
-                });
-                return;
-            }
-
-            const dataURL = canvas.toDataURL('image/webp');
-            const link = document.createElement('a');
-            link.href = dataURL;
-            link.download = `${graphName}.webp`;
-            link.click();
-        } catch (error) {
-            console.error('Error downloading graph image:', error);
-            toast({
-                title: "Error",
-                description: "Failed to download image. Please try again.",
-                variant: "destructive",
-            });
-        }
-    };
-
     return (
-        <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
-            <header className="flex flex-col gap-4">
+        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 pt-0 md:p-8 md:bg-gray-100">
+            <header className="flex flex-col gap-4 relative">
+                <div className="absolute md:hidden inset-x-0 top-8 h-[50%] bg-gray-100 -mx-8 -mt-8 px-8 border-b border-gray-400" />
                 <Combobox
                     options={options}
                     setOptions={setOptions}
@@ -302,9 +252,9 @@ export function CodeGraph({
                 <main ref={containerRef} className="bg-white h-1 grow">
                     {
                         graph.Id ?
-                            <div className="h-full relative border">
-                                <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
-                                    <div className='flex gap-4'>
+                            <div className="h-full relative border flex flex-col md:block">
+                                <div className="flex w-full absolute top-0 left-0 justify-between p-4 z-10 pointer-events-none">
+                                    <div className='hidden md:flex gap-4'>
                                         <Input
                                             graph={graph}
                                             onValueChange={(node) => setSearchNode(node)}
@@ -334,15 +284,14 @@ export function CodeGraph({
                                             </button>
                                         }
                                         {
-                                            (graph.Elements.nodes.some(e => !e.visible)) &&
+                                            (graph.getElements().some(e => !e.visible)) &&
                                             <button
                                                 className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
                                                 onClick={() => {
                                                     graph.Categories.forEach(c => c.show = true)
-                                                    graph.Elements.nodes.forEach((element) => {
+                                                    graph.getElements().forEach((element) => {
                                                         element.visible = true
                                                     })
-                                                    graph.visibleLinks(true)
 
                                                     setData({ ...graph.Elements })
                                                 }}
@@ -351,44 +300,6 @@ export function CodeGraph({
                                                 <p>Unhide Nodes</p>
                                             </button>
                                         }
-                                    </div>
-                                </div>
-                                <div data-name="canvas-info-panel" className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
-                                    <div data-name="metrics-panel" className="flex gap-4 text-gray-500">
-                                        <p>{nodesCount} Nodes</p>
-                                        <p>{edgesCount} Edges</p>
-                                    </div>
-                                    <div className='flex gap-4'>
-                                        {
-                                            commitIndex !== commits.length &&
-                                            <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
-                                                <div className='flex gap-2 items-center'>
-                                                    <Checkbox
-                                                        className='h-5 w-5 bg-gray-500 data-[state true]'
-                                                    />
-                                                    <p className='text-bold'>Display Changes</p>
-                                                </div>
-                                                <div className='flex gap-2 items-center'>
-                                                    <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full' />
-                                                    <p className='text-pink-500'>Were added</p>
-                                                </div>
-                                                <div className='flex gap-2 items-center'>
-                                                    <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full' />
-                                                    <p className='text-blue-500'>Were edited</p>
-                                                </div>
-                                            </div>
-                                        }
-                                        <Toolbar
-                                            className="pointer-events-auto"
-                                            chartRef={chartRef}
-                                        />
-                                        <button
-                                            className="pointer-events-auto bg-white p-2 rounded-md"
-                                            title='downloadImage'
-                                            onClick={handleDownloadImage}
-                                        >
-                                            <Download />
-                                        </button>
                                     </div>
                                 </div>
                                 <ElementMenu
@@ -414,7 +325,6 @@ export function CodeGraph({
                                     setSelectedObj={setSelectedObj}
                                     setSelectedObjects={setSelectedObjects}
                                     setPosition={setPosition}
-                                    onFetchNode={onFetchNode}
                                     handleExpand={handleExpand}
                                     isShowPath={isShowPath}
                                     setPath={setPath}
@@ -423,15 +333,46 @@ export function CodeGraph({
                                     setSelectedPathId={setSelectedPathId}
                                     cooldownTicks={cooldownTicks}
                                     setCooldownTicks={setCooldownTicks}
-                                    cooldownTime={cooldownTime}
-                                    setCooldownTime={setCooldownTime}
                                     setZoomedNodes={setZoomedNodes}
                                     zoomedNodes={zoomedNodes}
                                 />
+                                <div data-name="canvas-info-panel" className="w-full md:absolute md:bottom-0 md:left-0 md:flex md:justify-between md:items-center md:p-4 z-10 pointer-events-none">
+                                    <div data-name="metrics-panel" className="flex gap-4 justify-center bg-gray-100 md:bg-transparent md:text-gray-500 p-2 md:p-0">
+                                        <p>{nodesCount} Nodes</p>
+                                        <p className="md:hidden">|</p>
+                                        <p>{edgesCount} Edges</p>
+                                    </div>
+                                    <div className='hidden md:flex gap-4'>
+                                        {
+                                            commitIndex !== commits.length &&
+                                            <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
+                                                <div className='flex gap-2 items-center'>
+                                                    <Checkbox
+                                                        className='h-5 w-5 bg-gray-500 data-[state true]'
+                                                    />
+                                                    <p className='text-bold'>Display Changes</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-pink-500 bg-opacity-50 border-[3px] border-pink-500 rounded-full' />
+                                                    <p className='text-pink-500'>Were added</p>
+                                                </div>
+                                                <div className='flex gap-2 items-center'>
+                                                    <div className='h-4 w-4 bg-blue-500 bg-opacity-50 border-[3px] border-blue-500 rounded-full' />
+                                                    <p className='text-blue-500'>Were edited</p>
+                                                </div>
+                                            </div>
+                                        }
+                                        <Toolbar
+                                            className="gap-4"
+                                            chartRef={chartRef}
+                                            handleDownloadImage={handleDownloadImage}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                             : <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                                <GitFork size={100} color="gray" />
-                                <h1 className="text-4xl">Select a repo to show its graph here</h1>
+                                <GitFork className="md:w-24 md:h-24 w-16 h-16" color="gray" />
+                                <h1 className="md:text-4xl text-2xl text-center">Select a repo to show its graph here</h1>
                             </div>
                     }
                 </main>

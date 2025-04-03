@@ -4,14 +4,14 @@ import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react"
 import { Link, Node } from "./model";
 import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
-import { Path } from "../page";
+import { Path } from "@/lib/utils";
 import { Position } from "./graphView";
 
 interface Props {
     obj: Node | Link | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
-    handleRemove: (nodes: number[]) => void;
+    handleRemove: (ids: number[], type: "nodes" | "links") => void;
     position: Position | undefined;
     url: string;
     handleExpand: (nodes: Node[], expand: boolean) => void;
@@ -42,8 +42,8 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                 }}
                 className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
                 style={{
-                    left: Math.max(-34, Math.min(position.x - 33 - containerWidth / 2, (parentRef?.current?.clientWidth || 0) + 32 - containerWidth)),
-                    top: Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - 9),
+                    left: Math.max(8, Math.min(position.x - containerWidth / 2, (parentRef?.current?.clientWidth || 0) - containerWidth - 8)),
+                    top: Math.max(8, Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - containerWidth - 8)),
                 }}
                 id="elementMenu"
             >
@@ -63,7 +63,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove(objects.map(o => o.id))}
+                                onClick={() => handleRemove(objects.map(o => o.id), "nodes")}
                             >
                                 <EyeOff color="white" />
                             </button>
@@ -87,7 +87,25 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                     <button
                                         className="p-2"
                                         title="Copy src to clipboard"
-                                        onClick={() => navigator.clipboard.writeText(obj.src || "")}
+                                        onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(obj.src || "");
+                                            } catch (err) {
+                                                // Fallback for older browsers
+                                                const textArea = document.createElement('textarea');
+                                                textArea.value = obj.src || "";
+                                                textArea.style.position = 'fixed';
+                                                textArea.style.left = '-999999px';
+                                                document.body.appendChild(textArea);
+                                                textArea.select();
+                                                try {
+                                                    document.execCommand('copy');
+                                                } catch (e) {
+                                                    console.error('Failed to copy text: ', e);
+                                                }
+                                                document.body.removeChild(textArea);
+                                            }
+                                        }}
                                     >
                                         <Copy color="white" />
                                     </button>
@@ -96,7 +114,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove([obj.id])}
+                                onClick={() => handleRemove([obj.id], "category" in obj ? "nodes" : "links")}
                             >
                                 <EyeOff color="white" />
                             </button>

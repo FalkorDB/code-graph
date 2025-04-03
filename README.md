@@ -1,87 +1,113 @@
+# CodeGraph - Knowledge Graph Visualization Tool
+
+### Visualize your repository with our graph for code analysis
+
 [![Try Free](https://img.shields.io/badge/Try%20Free-FalkorDB%20Cloud-FF8101?labelColor=FDE900&link=https://app.falkordb.cloud)](https://app.falkordb.cloud)
 [![Dockerhub](https://img.shields.io/docker/pulls/falkordb/falkordb?label=Docker)](https://hub.docker.com/r/falkordb/falkordb/)
 [![Discord](https://img.shields.io/discord/1146782921294884966?style=flat-square)](https://discord.com/invite/6M4QwDXn2w)
 [![Workflow](https://github.com/FalkorDB/code-graph/actions/workflows/nextjs.yml/badge.svg?branch=main)](https://github.com/FalkorDB/code-graph/actions/workflows/nextjs.yml)
+-
 
-![image](https://github.com/FalkorDB/code-graph/assets/753206/60f535ed-cf29-44b2-9005-721f11614803)
+![Alt Text](https://res.cloudinary.com/dhd0k02an/image/upload/v1739719361/FalkorDB_-_Github_-_readme_jr6scy.gif)
 
-## Getting Started
-[Live Demo](https://code-graph.falkordb.com/)
+**👉🏻[Live Demo](https://code-graph.falkordb.com/)**
 
-## Run locally
-This project is composed of three pieces:
+## Running Locally  
 
-1. FalkorDB Graph DB - this is where your graphs are stored and queried
-2. Code-Graph-Backend - backend logic
-3. Code-Graph-Frontend - website
+This project consists of three core components:  
 
-You'll need to start all three components:
+1. **FalkorDB Graph DB** – Stores and queries your graphs.  
+2. **Code-Graph-Backend** – Handles backend logic.  
+3. **Code-Graph-Frontend** – Provides the web interface.  
 
-### Run FalkorDB 
+To set up the project, you’ll need to start all three components.  
+
+### 1. Start FalkorDB  
+
+Run the following command to start FalkorDB using Docker:  
 
 ```bash
 docker run -p 6379:6379 -it --rm falkordb/falkordb
 ```
 
-### Run Code-Graph-Backend
+### 2. Start the Backend  
 
-#### Clone the Backend
+#### Clone the Backend Repository  
 
 ```bash
 git clone https://github.com/FalkorDB/code-graph-backend.git
+cd code-graph-backend
 ```
 
-#### Setup environment variables
+#### Set Up Environment Variables  
 
-`SECRET_TOKEN` - user defined token used to authorize the request
+Define the required environment variables:  
 
 ```bash
 export FALKORDB_HOST=localhost FALKORDB_PORT=6379 \
-    OPENAI_API_KEY=<YOUR OPENAI_API_KEY> SECRET_TOKEN=<YOUR_SECRECT_TOKEN> \
+    OPENAI_API_KEY=<YOUR_OPENAI_API_KEY> SECRET_TOKEN=<YOUR_SECRET_TOKEN> \
     FLASK_RUN_HOST=0.0.0.0 FLASK_RUN_PORT=5000
 ```
 
-#### Install dependencies & run
+`SECRET_TOKEN` is a user-defined token used for request authorization.  
+
+#### Install Dependencies & Start the Backend  
 
 ```bash
-cd code-graph-backend
-
 pip install --no-cache-dir -r requirements.txt
-
 flask --app api/index.py run --debug > flask.log 2>&1 &
-
 ```
 
-### Run Code-Graph-Frontend
+### 3. Start the Frontend  
 
-#### Clone the Frontend
+#### Clone the Frontend Repository  
 
 ```bash
 git clone https://github.com/FalkorDB/code-graph.git
+cd code-graph
 ```
 
-#### Setup environment variables
+#### Set Up Environment Variables  
 
 ```bash
 export BACKEND_URL=http://${FLASK_RUN_HOST}:${FLASK_RUN_PORT} \
-    SECRET_TOKEN=<YOUR_SECRECT_TOKEN> OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
+    SECRET_TOKEN=<YOUR_SECRET_TOKEN> OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
 ```
 
-#### Install dependencies & run
+#### Install Dependencies & Start the Frontend  
 
 ```bash
-cd code-graph
 npm install
 npm run dev
 ```
 
-### Process a local repository
+### 4. Process a Local Repository  
+
+Use the following `curl` command to analyze a local repository:  
+
 ```bash
-curl -X POST http://127.0.0.1:5000/analyze_folder -H "Content-Type: application/json" -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git","./deps", "./bin", "./build"]}' -H "Authorization: <YOUR_SECRECT_TOKEN>"
+curl -X POST http://127.0.0.1:5000/analyze_folder \
+    -H "Content-Type: application/json" \
+    -H "Authorization: <YOUR_SECRET_TOKEN>" \
+    -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"]}'
 ```
 
-Note: At the moment code-graph can analyze both the C & Python source files.
-Support for additional languages e.g. JavaScript, Go, Java is planned to be added
-in the future.
+**Note:** Currently, Code-Graph supports analyzing C and Python source files.  
+Support for additional languages (e.g., JavaScript, Go, Java) is planned.  
 
-Browse to [http://localhost:3000](http://localhost:3000)
+### 5. Access the Web Interface  
+
+Once everything is running, open your browser and go to:  
+
+[http://localhost:3000](http://localhost:3000)  
+
+## Community
+
+Have questions or feedback? Reach out via:
+
+* [GitHub Issues](https://github.com/FalkorDB/GraphRAG-SDK/issues)
+* Join our [Discord](https://discord.com/invite/6M4QwDXn2w)
+
+⭐️ If you find this repository helpful, please consider giving it a star!
+
+Knowledge Graph, Code Analysis, Code Visualization, Dead Code Analysis, Graph Database

@@ -1,8 +1,8 @@
+import { Link, Node } from "@/app/components/model"
 import { type ClassValue, clsx } from "clsx"
+import { MutableRefObject } from "react"
 import { twMerge } from "tailwind-merge"
 import { ForceGraphMethods, NodeObject } from "react-force-graph-2d"
-import { Link, Node } from "@/app/components/model"
-import { MutableRefObject } from "react"
 
 export type PathData = {
   nodes: any[]
@@ -67,6 +67,7 @@ export function handleZoomToFit(chartRef: GraphRef, paddingMultiplier = 1, filte
 
     // Calculate padding as 10% of the smallest canvas dimension
     const minDimension = Math.min(container.clientWidth, container.clientHeight);
+
     const padding = minDimension * 0.1 * paddingMultiplier;
 
     chart.zoomToFit(1000, padding, filter);

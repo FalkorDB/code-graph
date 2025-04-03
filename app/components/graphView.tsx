@@ -1,8 +1,11 @@
-import ForceGraph2D, { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
+'use client'
+
+import ForceGraph2D, { NodeObject } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react';
-import { Path } from '../page';
-import { handleZoomToFit } from '@/lib/utils';
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
+import { Path } from '@/lib/utils';
+import { Fullscreen } from 'lucide-react';
+import { GraphRef, handleZoomToFit } from '@/lib/utils';
 
 export interface Position {
     x: number,
@@ -13,13 +16,12 @@ interface Props {
     data: GraphData
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
-    chartRef: React.MutableRefObject<ForceGraphMethods<Node, Link>>
+    chartRef: GraphRef
     selectedObj: Node | Link | undefined
     setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
-    onFetchNode: (nodeIds: number[]) => Promise<GraphData>
     handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
@@ -28,8 +30,6 @@ interface Props {
     setSelectedPathId: (selectedPathId: number) => void
     cooldownTicks: number | undefined
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
-    cooldownTime: number | undefined
-    setCooldownTime: Dispatch<SetStateAction<number>>
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
     zoomedNodes: Node[]
 }
@@ -40,7 +40,6 @@ const PADDING = 2;
 
 export default function GraphView({
     data,
-    setData,
     graph,
     chartRef,
     selectedObj,
@@ -48,7 +47,6 @@ export default function GraphView({
     selectedObjects,
     setSelectedObjects,
     setPosition,
-    onFetchNode,
     handleExpand,
     isShowPath,
     setPath,
@@ -56,9 +54,7 @@ export default function GraphView({
     selectedPathId,
     setSelectedPathId,
     cooldownTicks,
-    cooldownTime,
     setCooldownTicks,
-    setCooldownTime,
     zoomedNodes,
     setZoomedNodes
 }: Props) {
@@ -67,6 +63,21 @@ export default function GraphView({
     const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
     const [parentWidth, setParentWidth] = useState(0)
     const [parentHeight, setParentHeight] = useState(0)
+    const [screenSize, setScreenSize] = useState<number>(0)
+
+    useEffect(() => {
+        const handleResize = () => {
+            setScreenSize(window.innerWidth)
+        }
+
+        handleResize()
+
+        window.addEventListener('resize', handleResize)
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+        }
+    }, [])
 
     useEffect(() => {
         const handleResize = () => {
@@ -90,7 +101,6 @@ export default function GraphView({
     }, [parentRef])
 
     useEffect(() => {
-        setCooldownTime(2000)
         setCooldownTicks(undefined)
     }, [graph.Id, graph.getElements().length])
 
@@ -100,19 +110,19 @@ export default function GraphView({
         setSelectedObjects([])
     }
 
-    const handleRightClick = (node: Node | Link, evt: MouseEvent) => {
-        if (evt.ctrlKey && "category" in node) {
-            if (selectedObjects.some(obj => obj.id === node.id)) {
-                setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
+    const handleRightClick = (element: Node | Link, evt: MouseEvent) => {
+        if (evt.ctrlKey && "category" in element) {
+            if (selectedObjects.some(obj => obj.id === element.id)) {
+                setSelectedObjects(selectedObjects.filter(obj => obj.id !== element.id))
                 return
             } else {
-                setSelectedObjects([...selectedObjects, node as Node])
+                setSelectedObjects([...selectedObjects, element as Node])
             }
         } else {
             setSelectedObjects([])
         }
 
-        setSelectedObj(node)
+        setSelectedObj(element)
         setPosition({ x: evt.clientX, y: evt.clientY })
     }
 
@@ -165,7 +175,12 @@ export default function GraphView({
     };    
 
     return (
-        <div ref={parentRef} className="relative w-fill h-full">
+        <div ref={parentRef} className="relative w-full md:h-full h-1 grow">
+            <div className="md:hidden absolute bottom-4 right-4 z-10">
+                <button className='control-button' onClick={() => handleZoomToFit(chartRef)}>
+                    <Fullscreen />
+                </button>
+            </div>
             <ForceGraph2D
                 ref={chartRef}
                 height={parentHeight}
@@ -325,24 +340,24 @@ export default function GraphView({
 
                     ctx.restore(); // reset rotation
                 }}
-                onNodeClick={handleNodeClick}
-                onNodeDragEnd={(n, translate) => setPosition(prev => {
-                    return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
-                })}
+                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? handleNodeClick : handleRightClick}
                 onNodeRightClick={handleRightClick}
+                onNodeDragEnd={(n, translate) => setPosition(prev => {
+                    return prev && { x: prev.x + translate.x * (chartRef.current?.zoom() ?? 1), y: prev.y + translate.y * (chartRef.current?.zoom() ?? 1) }
+                })}
+                onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isPathResponse ? handleLinkClick : handleRightClick}
                 onLinkRightClick={handleRightClick}
-                onLinkClick={handleLinkClick}
                 onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}
                 onEngineStop={() => {
                     setCooldownTicks(0)
-                    setCooldownTime(0)
+                    debugger
                     handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: NodeObject<Node>) => zoomedNodes.some(node => node.id === n.id))
                     setZoomedNodes([])
                 }}
                 cooldownTicks={cooldownTicks}
-                cooldownTime={cooldownTime}
+                cooldownTime={6000}
             />
         </div>
     )

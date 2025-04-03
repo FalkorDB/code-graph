@@ -1,7 +1,7 @@
 import { toast } from "@/components/ui/use-toast"
 import { getCategoryColorName, getCategoryColorValue, Graph } from "./model"
 import { useEffect, useRef, useState } from "react"
-import { PathNode } from "../page"
+import { PathNode } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import { prepareArg } from "../utils"
 
@@ -131,7 +131,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
 
     return (
         <div
-            className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            className={cn("w-full md:w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
             data-name='search-bar'
         >
             <input
@@ -142,6 +142,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                 }}
                 onKeyDown={handleKeyDown}
                 className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
+                placeholder="Search for nodes in the graph"
                 value={node?.name || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
@@ -166,7 +167,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                 open &&
                 <div
                     ref={containerRef}
-                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md md:max-h-[50dvh] h-[25dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
                     data-name='search-bar-list'
                     style={{
                         top: inputHeight + 16
