@@ -2,19 +2,58 @@ import { Locator } from "@playwright/test";
 
 export const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
-export const waitToBeEnabled = async (locator: Locator, timeout: number = 5000): Promise<boolean> => {
-    const startTime = Date.now();
+export const waitToBeEnabled = async (locator: Locator, timeout: number = 5000): Promise<void> => {
+    const elementHandle = await locator.elementHandle();
+    if (!elementHandle) throw new Error("Element not found");
 
-    while (Date.now() - startTime < timeout) {
-        if (await locator.isEnabled()) {
-            return true;
+    await locator.page().waitForFunction(
+        (el) => el && !(el as HTMLElement).hasAttribute("disabled"),
+        elementHandle,
+        { timeout }
+    );
+};
+
+export const waitForStableText = async (locator: Locator, timeout: number = 5000): Promise<string> => {
+    const elementHandle = await locator.elementHandle();
+    if (!elementHandle) throw new Error("Element not found");
+
+    let previousText = "";
+    let stableText = "";
+    const pollingInterval = 300;
+    const maxChecks = timeout / pollingInterval;
+
+    for (let i = 0; i < maxChecks; i++) {
+        stableText = await locator.textContent() ?? "";
+        if (stableText === previousText && stableText.trim().length > 0) {
+            return stableText;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        previousText = stableText;
+        await locator.page().waitForTimeout(pollingInterval);
     }
 
+    return stableText;
+};
+
+export const waitForElementToBeVisible = async (locator: Locator, time = 500, retry = 10): Promise<boolean> => {
+    for (let i = 0; i < retry; i++) {
+        try {
+            if (await locator.isVisible()) {
+                return true;
+            }
+        } catch (error) {
+            console.error(`Error checking element visibility: ${error}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, time)); // Delay
+    }
     return false;
 };
 
+
 export function findNodeByName(nodes: { name: string }[], nodeName: string): any {
     return nodes.find((node) => node.name === nodeName);
-  }
+}
+
+export function findFirstNodeWithSrc(nodes: { src?: string }[]): any {
+    return nodes.find((node) => node.src !== undefined);
+}
+
