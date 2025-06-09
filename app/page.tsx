@@ -82,6 +82,7 @@ export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
   const [zoomedNodes, setZoomedNodes] = useState<Node[]>([])
+  const [isFetchingGraph, setIsFetchingGraph] = useState(false)
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -142,27 +143,31 @@ export default function Home() {
   async function onFetchGraph(graphName: string) {
 
     setGraph(Graph.empty())
-
-    const result = await fetch(`/api/repo/${prepareArg(graphName)}`, {
-      method: 'GET'
-    })
-
-    if (!result.ok) {
-      toast({
-        variant: "destructive",
-        title: "Uh oh! Something went wrong.",
-        description: await result.text(),
+    setIsFetchingGraph(true)
+    try {
+      const result = await fetch(`/api/repo/${prepareArg(graphName)}`, {
+        method: 'GET'
       })
-      return
-    }
 
-    const json = await result.json()
-    const g = Graph.create(json.result.entities, graphName)
-    setGraph(g)
-    setIsPathResponse(false)
-    chatPanel.current?.expand()
-    // @ts-ignore
-    window.graph = g
+      if (!result.ok) {
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Something went wrong.",
+          description: await result.text(),
+        })
+        return
+      }
+
+      const json = await result.json()
+      const g = Graph.create(json.result.entities, graphName)
+      setGraph(g)
+      setIsPathResponse(false)
+      chatPanel.current?.expand()
+      // @ts-ignore
+      window.graph = g
+    } finally {
+      setIsFetchingGraph(false)
+    }
   }
 
   // Send the user query to the server to expand a node
@@ -394,6 +399,7 @@ export default function Home() {
               options={options}
               setOptions={setOptions}
               onFetchGraph={onFetchGraph}
+              isFetchingGraph={isFetchingGraph}
               onFetchNode={onFetchNode}
               setPath={setPath}
               isShowPath={!!path}
@@ -512,6 +518,7 @@ export default function Home() {
             options={options}
             setOptions={setOptions}
             onFetchGraph={onFetchGraph}
+            isFetchingGraph={isFetchingGraph}
             onFetchNode={onFetchNode}
             setPath={setPath}
             isShowPath={!!path}

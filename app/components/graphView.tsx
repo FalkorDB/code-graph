@@ -352,7 +352,6 @@ export default function GraphView({
                 onZoom={() => unsetSelectedObjects()}
                 onEngineStop={() => {
                     setCooldownTicks(0)
-                    debugger
                     handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: NodeObject<Node>) => zoomedNodes.some(node => node.id === n.id))
                     setZoomedNodes([])
                 }}
