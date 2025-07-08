@@ -57,22 +57,21 @@ test.describe("Node details panel tests", () => {
     })
   })
   
-  nodes.slice(0,2).forEach((node) => {
-    test(`Validate copy functionality for node inside node details panel and verify with api for ${node.nodeName}`, async () => {
-      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await browser.setPageToFullScreen();
-      await codeGraph.selectGraph(FLASK_GRAPH);
-      const graphData = await codeGraph.getGraphNodes();
-      const targetNode = findFirstNodeWithSrc(graphData);
-      await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
-      await codeGraph.clickOnViewNode();
-      const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();      
-      const api = new ApiCalls();
-      const response = await api.getProject(FLASK_GRAPH);
-      const foundNode = response.result.entities.nodes.find((nod) => nod.properties?.name === targetNode.name);
-      expect(foundNode?.properties.src).toBe(result);
-    });
-  })
+
+  test(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(FLASK_GRAPH);
+    const graphData = await codeGraph.getGraphNodes();
+    const targetNode = findFirstNodeWithSrc(graphData);
+    await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
+    await codeGraph.clickOnViewNode();
+    const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();      
+    const api = new ApiCalls();
+    const response = await api.getProject(FLASK_GRAPH);
+    const foundNode = response.result.entities.nodes.find((nod) => nod.properties?.name === targetNode.name);
+    expect(foundNode?.properties.src).toBe(result);
+  });
 
   nodes.slice(0, 2).forEach((node) => {
     test(`Validate view node panel keys via api for ${node.nodeName}`, async () => {
