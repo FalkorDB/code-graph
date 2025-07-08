@@ -8,6 +8,10 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       falkordb:
         image: falkordb/falkordb:latest
@@ -32,10 +36,61 @@ jobs:
       run: |
         npm install
         npm run build
-        NEXTAUTH_SECRET=SECRET npm start & npx playwright test --reporter=dot,list
+        NEXTAUTH_SECRET=SECRET npm start &
+        npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list,json
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
-        name: playwright-report
+        name: playwright-report-shard-${{ matrix.shard }}
         path: playwright-report/
+        retention-days: 30
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: test-results-shard-${{ matrix.shard }}
+        path: test-results/
+        retention-days: 30
+
+  merge-reports:
+    if: ${{ !cancelled() }}
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - name: Install dependencies
+      run: npm ci
+    - name: Download all test results
+      uses: actions/download-artifact@v4
+      with:
+        path: all-test-results
+        pattern: test-results-shard-*
+    - name: Download all reports
+      uses: actions/download-artifact@v4
+      with:
+        path: all-reports
+        pattern: playwright-report-shard-*
+    - name: Merge test results
+      run: |
+        # Create combined results directory
+        mkdir -p combined-results
+        
+        # Merge JSON results
+        npx playwright merge-reports --reporter=html,json all-reports/playwright-report-shard-*/
+        
+        # Move merged report to combined directory
+        mv playwright-report combined-results/
+        
+        # Create a summary of all test results
+        echo "## Test Results Summary" > combined-results/summary.md
+        echo "Total shards: 2" >> combined-results/summary.md
+        echo "Workers per shard: 2" >> combined-results/summary.md
+        echo "Generated on: $(date)" >> combined-results/summary.md
+    - name: Upload combined report
+      uses: actions/upload-artifact@v4
+      with:
+        name: combined-playwright-report
+        path: combined-results/
         retention-days: 30
