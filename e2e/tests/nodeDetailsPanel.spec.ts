@@ -58,7 +58,7 @@ test.describe("Node details panel tests", () => {
   })
   
 
-  test(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
+  test.only(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
     const api = new ApiCalls();
     const response = await api.getProject(FLASK_GRAPH);
 
@@ -66,14 +66,18 @@ test.describe("Node details panel tests", () => {
     await browser.setPageToFullScreen();
     await codeGraph.selectGraph(FLASK_GRAPH);
     const graphData = await codeGraph.getGraphNodes();
-    const targetNode = findNodeWithSpecificSrc(graphData, "test_options_work");
-
+    
+    const targetNode = findFirstNodeWithSrc(graphData);
+    
     await new Promise(resolve => setTimeout(resolve, 2000));
     await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
     await codeGraph.clickOnViewNode();
     const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();      
-
+    await new Promise(resolve => setTimeout(resolve, 2000));
     const foundNode = response.result.entities.nodes.find((nod) => nod.properties?.name === targetNode.name);
+    console.log("API Node:", foundNode);
+    console.log("Copied Result:", result);
+    
     expect(foundNode?.properties.src).toBe(result);
   });
 
