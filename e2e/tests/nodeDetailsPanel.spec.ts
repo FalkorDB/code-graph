@@ -58,7 +58,7 @@ test.describe("Node details panel tests", () => {
   })
   
 
-  test.only(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
+  test(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
     const api = new ApiCalls();
     const response = await api.getProject(FLASK_GRAPH);
 
