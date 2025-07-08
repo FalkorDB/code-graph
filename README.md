@@ -80,8 +80,8 @@ npm run dev
 curl -X POST http://127.0.0.1:5000/analyze_folder -H "Content-Type: application/json" -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git","./deps", "./bin", "./build"]}' -H "Authorization: <YOUR_SECRECT_TOKEN>"
 ```
 
-Note: At the moment code-graph can analyze both the C & Python source files.
-Support for additional languages e.g. JavaScript, Go, Java is planned to be added
+Note: At the moment code-graph can analyze both the Java & Python source files.
+Support for additional languages e.g. C, JavaScript, Go is planned to be added
 in the future.
 
 Browse to [http://localhost:3000](http://localhost:3000)
