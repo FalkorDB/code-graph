@@ -2,10 +2,10 @@ import { test, expect } from "@playwright/test";
 import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
-import { FLASK_GRAPH, GRAPHRAG_SDK,  } from "../config/constants";
+import { FLASK_GRAPH, GRAPHRAG_SDK } from "../config/constants";
+import { findNodeByName, findFirstNodeWithSrc, findNodeWithSpecificSrc } from "../logic/utils";
 import { nodes } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
-import { findFirstNodeWithSrc, findNodeByName } from "../logic/utils";
 
 test.describe("Node details panel tests", () => {
   let browser: BrowserWrapper;
@@ -58,17 +58,21 @@ test.describe("Node details panel tests", () => {
   })
   
 
-  test(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
+  test.only(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
+    const api = new ApiCalls();
+    const response = await api.getProject(FLASK_GRAPH);
+
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await browser.setPageToFullScreen();
     await codeGraph.selectGraph(FLASK_GRAPH);
     const graphData = await codeGraph.getGraphNodes();
-    const targetNode = findFirstNodeWithSrc(graphData);
+    const targetNode = findNodeWithSpecificSrc(graphData, "test_options_work");
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
     await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
     await codeGraph.clickOnViewNode();
     const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();      
-    const api = new ApiCalls();
-    const response = await api.getProject(FLASK_GRAPH);
+
     const foundNode = response.result.entities.nodes.find((nod) => nod.properties?.name === targetNode.name);
     expect(foundNode?.properties.src).toBe(result);
   });
