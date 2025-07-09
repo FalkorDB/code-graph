@@ -41,6 +41,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                     setContainerWidth(ref.clientWidth)
                 }}
                 className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
+                id="elementMenu"
                 style={{
                     left: Math.max(-34, Math.min(position.x - 33 - containerWidth / 2, (parentRef?.current?.clientWidth || 0) + 32 - containerWidth)),
                     top: Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - 9),

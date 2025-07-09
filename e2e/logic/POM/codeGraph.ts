@@ -120,6 +120,10 @@ export default class CodeGraph extends BasePage {
         return this.page.locator("//main[@data-name='main-chat']/*[last()-2]//img[@alt='Waiting for response']")
     }
 
+    private get waitingForResponseImage(): Locator {
+        return this.page.locator("//img[@alt='Waiting for response']")
+    }
+
     private get selectInputForShowPath(): (inputNum: string) => Locator {
         return (inputNum: string) => this.page.locator(`(//main[@data-name='main-chat']//input)[${inputNum}]`);
     }
@@ -188,6 +192,10 @@ export default class CodeGraph extends BasePage {
 
     private get nodeDetailsPanel(): Locator {
         return this.page.locator("//div[@data-name='node-details-panel']");
+    }
+
+    private get elementMenu(): Locator {
+        return this.page.locator("//div[@id='elementMenu']");
     }
     
     private get nodedetailsPanelHeader(): Locator {
@@ -277,7 +285,12 @@ export default class CodeGraph extends BasePage {
     }
 
     async getTextInLastChatElement(): Promise<string>{
-        await delay(2500);
+        // Wait for loading indicator to disappear
+        await this.waitingForResponseImage.waitFor({ state: 'hidden', timeout: 15000 });
+        
+        // Short delay to ensure text is fully rendered
+        await delay(1000);
+        
         return (await this.lastElementInChat.textContent())!;
     }
 
@@ -416,8 +429,18 @@ export default class CodeGraph extends BasePage {
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
-        await this.canvasElement.hover({ position: { x, y } });
-        await this.canvasElement.click({ position: { x, y } });
+        await this.waitForCanvasAnimationToEnd();
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            await this.canvasElement.hover({ position: { x, y } });
+            await this.page.waitForTimeout(500);
+            await this.canvasElement.click({ position: { x, y }, button: 'left' });
+            if (await this.elementMenu.isVisible()) {
+                return;
+            }
+            await this.page.waitForTimeout(1000);
+        }
+    
+        throw new Error(`Failed to click, elementMenu not visible after multiple attempts.`);
     }
     
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
@@ -493,42 +516,39 @@ export default class CodeGraph extends BasePage {
         return Promise.all(elements.map(element => element.innerHTML()));
     }
 
-    async getGraphDetails(): Promise<any> {
-        await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await delay(2000)
-        await this.page.waitForFunction(() => !!window.graph);
+    async getGraphNodes(): Promise<any[]> {
+        await this.waitForCanvasAnimationToEnd();
     
         const graphData = await this.page.evaluate(() => {
-            return window.graph;
-        });
-        
-        return graphData;
-    }
-
-    async transformNodeCoordinates(graphData: any): Promise<any[]> {
-        const { canvasLeft, canvasTop, canvasWidth, canvasHeight, transform } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
-            const rect = canvas.getBoundingClientRect();
-            const ctx = canvas.getContext('2d');
-            const transform = ctx?.getTransform()!; 
-            return {
-                canvasLeft: rect.left,
-                canvasTop: rect.top,
-                canvasWidth: rect.width,
-                canvasHeight: rect.height,
-                transform,
-            };
-        });
-
-        const screenCoordinates = graphData.elements.nodes.map((node: any) => {
-            const adjustedX = node.x * transform.a + transform.e; 
-            const adjustedY = node.y * transform.d + transform.f;
-            const screenX = canvasLeft + adjustedX - 35;
-            const screenY = canvasTop + adjustedY - 190;
-    
-            return {...node, screenX, screenY,};
+            return (window as any).graph;
         });
     
-        return screenCoordinates;
+        let transformData: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            await this.page.waitForTimeout(1000);
+    
+            transformData = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
+                const rect = canvas.getBoundingClientRect();
+                const ctx = canvas.getContext('2d');
+                return {
+                    left: rect.left,
+                    top: rect.top,
+                    transform: ctx?.getTransform() || null,
+                };
+            });
+    
+            if (transformData.transform) break;
+            console.warn(`Attempt ${attempt + 1}: Transform data not available, retrying...`);
+        }
+    
+        if (!transformData?.transform) throw new Error("Canvas transform data not available!");
+    
+        const { a, e, d, f } = transformData.transform;
+        return graphData.elements.nodes.map((node: any) => ({
+            ...node,
+            screenX: transformData.left + node.x * a + e - 35,
+            screenY: transformData.top + node.y * d + f - 190,
+        }));
     }
    
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
@@ -541,6 +561,65 @@ export default class CodeGraph extends BasePage {
             };
         });
         return { scaleX, scaleY };
+    }
+
+    async getGraphDetails(): Promise<any> {
+        await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
+        await this.waitForCanvasAnimationToEnd();
+        await this.page.waitForFunction(() => !!window.graph);
+    
+        const graphData = await this.page.evaluate(() => {
+            return window.graph;
+        });
+        
+        return graphData;
+    }
+
+    async waitForCanvasAnimationToEnd(timeout = 15000, checkInterval = 500): Promise<void> {
+        const canvasHandle = await this.canvasElement.elementHandle();
+    
+        if (!canvasHandle) {
+            throw new Error("Canvas element not found!");
+        }
+    
+        await this.page.waitForFunction(
+            async ({ canvas, checkInterval, timeout }) => {
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return false;
+    
+                const width = canvas.width;
+                const height = canvas.height;
+    
+                let previousData = ctx.getImageData(0, 0, width, height).data;
+                const startTime = Date.now();
+    
+                return new Promise<boolean>((resolve) => {
+                    const checkCanvas = () => {
+                        if (Date.now() - startTime > timeout) {
+                            resolve(true);
+                            return;
+                        }
+    
+                        setTimeout(() => {
+                            const currentData = ctx.getImageData(0, 0, width, height).data;
+                            if (JSON.stringify(previousData) === JSON.stringify(currentData)) {
+                                resolve(true);
+                            } else {
+                                previousData = currentData;
+                                checkCanvas();
+                            }
+                        }, checkInterval);
+                    };
+                    checkCanvas();
+                });
+            },
+            { 
+                canvas: await canvasHandle.evaluateHandle((el) => el as HTMLCanvasElement),
+                checkInterval,
+                timeout
+            },
+            { timeout }
+        );
     }
 
 }

@@ -1,7 +1,7 @@
 export const searchData: { searchInput: string; completedSearchInput?: string; }[] = [
     { searchInput: "test"},
     { searchInput: "set"},
-    { searchInput: "low", completedSearchInput: "lower" },
+    { searchInput: "low", completedSearchInput: "lower_items" },
     { searchInput: "as", completedSearchInput:  "ask"},
 ];
 
