@@ -8,6 +8,10 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       falkordb:
         image: falkordb/falkordb:latest
@@ -32,10 +36,17 @@ jobs:
       run: |
         npm install
         npm run build
-        NEXTAUTH_SECRET=SECRET npm start & npx playwright test --reporter=dot,list
+        NEXTAUTH_SECRET=SECRET npm start &
+        npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
-        name: playwright-report
+        name: playwright-report-shard-${{ matrix.shard }}
         path: playwright-report/
+        retention-days: 30
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: test-results-shard-${{ matrix.shard }}
+        path: test-results/
         retention-days: 30

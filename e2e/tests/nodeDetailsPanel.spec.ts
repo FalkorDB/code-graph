@@ -2,10 +2,10 @@ import { test, expect } from "@playwright/test";
 import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
-import { GRAPH_ID, PROJECT_NAME } from "../config/constants";
+import { FLASK_GRAPH, GRAPHRAG_SDK } from "../config/constants";
+import { findNodeByName, findFirstNodeWithSrc, findNodeWithSpecificSrc } from "../logic/utils";
 import { nodes } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
-import { findNodeByName } from "../logic/utils";
 
 test.describe("Node details panel tests", () => {
   let browser: BrowserWrapper;
@@ -21,10 +21,10 @@ test.describe("Node details panel tests", () => {
   nodes.slice(0,2).forEach((node) => {
     test(`Validate node details panel displayed on node click for ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const targetNode = findNodeByName(convertCoordinates, node.nodeName);
+      await browser.setPageToFullScreen();
+      await codeGraph.selectGraph(GRAPHRAG_SDK);
+      const graphData = await codeGraph.getGraphNodes();
+      const targetNode = findNodeByName(graphData, node.nodeName);
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnViewNode();
       expect(await codeGraph.isNodeDetailsPanel()).toBe(true)
@@ -34,11 +34,11 @@ test.describe("Node details panel tests", () => {
   nodes.slice(0,2).forEach((node) => {
     test(`Validate node details panel is not displayed after close interaction for ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const node1 = findNodeByName(convertCoordinates, node.nodeName);
-      await codeGraph.nodeClick(node1.screenX, node1.screenY);
+      await browser.setPageToFullScreen();
+      await codeGraph.selectGraph(GRAPHRAG_SDK);
+      const graphData = await codeGraph.getGraphNodes();
+      const targetNode = findNodeByName(graphData, node.nodeName);
+      await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnViewNode();
       await codeGraph.clickOnNodeDetailsCloseBtn();
       expect(await codeGraph.isNodeDetailsPanel()).toBe(false)
@@ -48,54 +48,62 @@ test.describe("Node details panel tests", () => {
   nodes.forEach((node) => {
     test(`Validate node details panel header displays correct node name: ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const node1 = findNodeByName(convertCoordinates, node.nodeName);
-      await codeGraph.nodeClick(node1.screenX, node1.screenY);
+      await browser.setPageToFullScreen();
+      await codeGraph.selectGraph(GRAPHRAG_SDK);
+      const graphData = await codeGraph.getGraphNodes();
+      const targetNode = findNodeByName(graphData, node.nodeName);
+      await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       expect(await codeGraph.getNodeDetailsHeader()).toContain(node.nodeName.toUpperCase())
     })
   })
   
-  nodes.slice(0,2).forEach((node) => {
-    test(`Validate copy functionality for node inside node details panel and verify with api for ${node.nodeName}`, async () => {
-      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const nodeData = findNodeByName(convertCoordinates, node.nodeName);
-      await codeGraph.nodeClick(nodeData.screenX, nodeData.screenY);
-      await codeGraph.clickOnViewNode();
-      const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();
-      const api = new ApiCalls();
-      const response = await api.getProject(PROJECT_NAME);
-      const foundNode = response.result.entities.nodes.find(nod => nod.properties?.name === node.nodeName);
-      expect(foundNode?.properties.src).toBe(result);
-    });
-  })
 
-  nodes.slice(0,2).forEach((node) => {
+  test(`Validate copy functionality for node inside node details panel and verify with api`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(FLASK_GRAPH);
+    const graphData = await codeGraph.getGraphNodes();
+    const targetNode = graphData.find(node => 
+        node.name === "root" && node.src !== undefined
+    ) || findFirstNodeWithSrc(graphData);
+    
+    
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
+    await codeGraph.clickOnViewNode();
+    const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();      
+    
+    const api = new ApiCalls();
+    const response = await api.getProject(FLASK_GRAPH);
+    const foundNode = response.result.entities.nodes.find((nod) => nod.properties?.name === targetNode.name);
+    
+    expect(foundNode?.properties.src).toBe(result);
+});
+
+  nodes.slice(0, 2).forEach((node) => {
     test(`Validate view node panel keys via api for ${node.nodeName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPH_ID);
-      const graphData = await codeGraph.getGraphDetails();
-      const convertCoordinates = await codeGraph.transformNodeCoordinates(graphData);
-      const node1 = findNodeByName(convertCoordinates, node.nodeName);
+      await browser.setPageToFullScreen();
+      await codeGraph.selectGraph(GRAPHRAG_SDK);
+      const graphData = await codeGraph.getGraphNodes();
+      const node1 = findNodeByName(graphData, node.nodeName);
       const api = new ApiCalls();
-      const response = await api.getProject(PROJECT_NAME);
+      const response = await api.getProject(GRAPHRAG_SDK);
       const data: any = response.result.entities.nodes;
       const findNode = data.find((nod: any) => nod.properties.name === node.nodeName);
-      
       await codeGraph.nodeClick(node1.screenX, node1.screenY);
       let elements = await codeGraph.getNodeDetailsPanelElements();
-      elements.splice(2,1)
-      const apiFields = [...Object.keys(findNode), ...Object.keys(findNode.properties || {})];
-      
+      elements.splice(2, 1);
+      const apiFields = [
+        ...Object.keys(findNode),
+        ...Object.keys(findNode.properties || {}),
+      ];
+
       const isValid = elements.every((field) => {
-          const cleanedField = field.replace(':', '').trim();
-          return apiFields.includes(cleanedField);
+        const cleanedField = field.replace(":", "").trim();
+        return apiFields.includes(cleanedField);
       });
-      expect(isValid).toBe(true)
+      expect(isValid).toBe(true);
     });
-  })
+  });
 });
