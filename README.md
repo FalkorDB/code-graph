@@ -157,4 +157,8 @@ Made with ❤️ by the FalkorDB team
 
 ### Consider ⭐️ to show your support!
 
+Note: At the moment code-graph can analyze both the Java & Python source files.
+Support for additional languages e.g. C, JavaScript, Go is planned to be added
+in the future.
+
 code graph, code visualization, codebase analysis, dependency graph, software architecture, code dependencies, graph database, FalkorDB, code analysis tool, source code visualization, project dependencies, code structure analysis, software development tools, code mapping, dependency tracking, code relationships, software visualization, code exploration, development workflow, code insights, static code analysis, code comprehension, software engineering tools, code quality analysis, project structure visualization
