@@ -180,35 +180,35 @@ export default function Home() {
               <p>Github</p>
             </Link>
             <DropdownMenu open={tipOpen} onOpenChange={setTipOpen}>
-              <DropdownMenuTrigger asChild>
-                <button title="Tip" className="flex gap-2.5 items-center p-4">
-                  <BookOpen />
-                  <p>Tip</p>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className='flex-col flex p-4 gap-6 max-w-[30dvw]'>
-                <div className='flex justify-between items-center'>
-                  <DropdownMenuLabel className='font-oswald text-[20px] font-semibold leading-[20px] text-left'>HOW TO USE THE PRODUCT</DropdownMenuLabel>
-                  <button
-                    title='Close'
-                    onClick={() => setTipOpen(false)}
-                  >
-                    <X />
-                  </button>
-                </div>
-                {
-                  TIPS.map((tip, index) => (
-                    <div key={index} className='flex flex-col gap-4 text-[#7D7D7D]'>
-                      <div className='flex gap-3 items-center'>
-                        <h1 className='text-black font-bold'>{tip.title}</h1>
-                        <p className='bg-[#ECECEC] p-1 rounded italic'>{tip.keyboardCommand}</p>
-                      </div>
-                      <p>{tip.description}</p>
-                    </div>
-                  ))
-                }
-              </DropdownMenuContent>
-            </DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <button title="Tip" className="flex gap-2.5 items-center p-4">
+      <BookOpen />
+      <p>Tip</p>
+    </button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent className='flex-col flex p-4 gap-6 max-w-[30dvw]'>
+    <div className='flex justify-between items-center'>
+      <DropdownMenuLabel className='font-oswald text-[20px] font-semibold leading-[20px] text-left'>HOW TO USE THE PRODUCT</DropdownMenuLabel>
+      <button
+        title='Close'
+        onClick={() => setTipOpen(false)}
+      >
+        <X />
+      </button>
+    </div>
+    {
+      TIPS.map((tip, index) => (
+        <div key={index} className='flex flex-col gap-4 text-[#7D7D7D]'>
+          <div className='flex gap-3 items-center'>
+            <h2 className='text-black font-bold'>{tip.title}</h2>
+            <p className='bg-[#ECECEC] p-1 rounded italic'>{tip.keyboardCommand}</p>
+          </div>
+          <p>{tip.description}</p>
+        </div>
+      ))
+    }
+  </DropdownMenuContent>
+</DropdownMenu>
             {/* <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
                 <button
