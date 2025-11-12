@@ -66,7 +66,6 @@ export default function Home() {
   const [tipOpen, setTipOpen] = useState(false)
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
-  const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const desktopChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
   const mobileChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -82,6 +81,7 @@ export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
   const [zoomedNodes, setZoomedNodes] = useState<Node[]>([])
+  const [progress, setProgress] = useState<{ progress: number, message: string } | undefined>()
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -100,7 +100,6 @@ export default function Home() {
   async function onCreateRepo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
-    setIsSubmit(true)
 
     if (!createURL) {
       toast({
@@ -111,32 +110,53 @@ export default function Home() {
       return
     }
 
-    const result = await fetch(`/api/repo/?url=${prepareArg(createURL)}`, {
-      method: 'POST',
-    })
+    try {
+      setProgress({ progress: 0, message: "" })
 
-    if (!result.ok) {
-      toast({
-        variant: "destructive",
-        title: "Uh oh! Something went wrong.",
-        description: await result.text(),
+      const result = await fetch(`/api/repo/?url=${prepareArg(createURL)}`, {
+        method: 'POST',
       })
-      setIsSubmit(false)
-      return
+
+      if (!result.ok) {
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Something went wrong.",
+          description: await result.text(),
+        })
+        return
+      }
+
+      const { id } = await result.json()
+
+      const interval = setInterval(async () => {
+        const res = await fetch(`/api/repo/progress?id=${id}`, {
+          method: 'GET',
+        })
+
+        const json: { progress: number, message: string } = await res.json()
+
+        if (json.progress === -1) {
+          clearInterval(interval)
+          return
+        }
+
+        setProgress(json)
+      }, 1000)
+
+      const graphName = createURL.split('/').pop()!
+
+      setOptions(prev => [...prev, graphName])
+      setSelectedValue(graphName)
+      setCreateURL("")
+      setCreateOpen(false)
+
+      toast({
+        title: "Success",
+        description: `Project ${graphName} created successfully`,
+      })
+    } finally {
+      setProgress(undefined)
     }
-
-    const graphName = createURL.split('/').pop()!
-
-    setOptions(prev => [...prev, graphName])
-    setSelectedValue(graphName)
-    setCreateURL("")
-    setCreateOpen(false)
-    setIsSubmit(false)
-
-    toast({
-      title: "Success",
-      description: `Project ${graphName} created successfully`,
-    })
   }
 
   async function onFetchGraph(graphName: string) {
@@ -346,17 +366,17 @@ export default function Home() {
                   </DialogTrigger>
                   <DialogContent className='sm:max-w-[500px]'>
                     <DialogHeader>
-                      <DialogTitle>{!isSubmit ? "CREATE A NEW PROJECT" : "THANK YOU FOR A NEW REQUEST"}</DialogTitle>
+                      <DialogTitle>{!progress ? "CREATE A NEW PROJECT" : "THANK YOU FOR A NEW REQUEST"}</DialogTitle>
                     </DialogHeader>
                     <DialogDescription className='text-black'>
                       {
-                        !isSubmit
+                        !progress
                           ? "Please provide the URL of the project to connect and start querying data"
                           : "Processing your graph, this could take a while. We appreciate your patience"
                       }
                     </DialogDescription>
                     {
-                      !isSubmit ?
+                      !progress ?
                         <form onSubmit={onCreateRepo} className='flex flex-col gap-4'>
                           <input
                             className='border p-3 rounded-lg'
@@ -375,7 +395,10 @@ export default function Home() {
                             </button>
                           </div>
                         </form>
-                        : <Progress value={0} />
+                        : <div className='flex flex-col justify-center items-center gap-4'>
+                          <p>{progress?.message}</p>
+                          <Progress value={progress?.progress} />
+                        </div>
                     }
                   </DialogContent>
                 </Dialog>

@@ -54,7 +54,9 @@ export async function POST(request: NextRequest) {
 			throw new Error(await result.text());
 		}
 
-		return NextResponse.json({ message: "success" }, { status: 200 });
+		const { id } = await result.json();
+
+		return NextResponse.json({ id }, { status: 200 });
 	} catch (err) {
 		console.error(err)
 		return NextResponse.json((err as Error).message, { status: 400 });
