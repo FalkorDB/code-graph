@@ -413,10 +413,12 @@ export default class CodeGraph extends BasePage {
 
     async clickZoomIn(): Promise<void> {
         await this.zoomInBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickZoomOut(): Promise<void> {
         await this.zoomOutBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickCenter(): Promise<void> {
@@ -429,6 +431,8 @@ export default class CodeGraph extends BasePage {
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
+        console.log(`Clicking on node at coordinates (${x}, ${y})`);
+        
         await this.waitForCanvasAnimationToEnd();
         for (let attempt = 1; attempt <= 3; attempt++) {
             await this.canvasElement.hover({ position: { x, y } });
@@ -552,6 +556,7 @@ export default class CodeGraph extends BasePage {
     }
    
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
+        await this.waitForCanvasAnimationToEnd();
         const { scaleX, scaleY } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
             const ctx = canvas.getContext('2d');
             const transform = ctx?.getTransform();

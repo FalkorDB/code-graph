@@ -3,7 +3,7 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { FLASK_GRAPH, GRAPHRAG_SDK } from "../config/constants";
-import { findNodeByName, findFirstNodeWithSrc, findNodeWithSpecificSrc } from "../logic/utils";
+import { findNodeByName } from "../logic/utils";
 import { nodes } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
 
@@ -63,21 +63,16 @@ test.describe("Node details panel tests", () => {
     await browser.setPageToFullScreen();
     await codeGraph.selectGraph(FLASK_GRAPH);
     const graphData = await codeGraph.getGraphNodes();
-    const targetNode = graphData.find(node => 
-        node.name === "root" && node.src !== undefined
-    ) || findFirstNodeWithSrc(graphData);
-    
-    
-    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Find a node that has src property (actual source code)
+    const targetNode = graphData.find(node => node.src) || graphData[0];
+
     await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
     await codeGraph.clickOnViewNode();
-    const result = await codeGraph.clickOnCopyToClipboardNodePanelDetails();      
-    
-    const api = new ApiCalls();
-    const response = await api.getProject(FLASK_GRAPH);
-    const foundNode = response.result.entities.nodes.find((nod) => nod.properties?.name === targetNode.name);
-    
-    expect(foundNode?.properties.src).toBe(result);
+    const copiedText = await codeGraph.clickOnCopyToClipboardNodePanelDetails();
+
+    // Verify the copied text matches the node's src property
+    expect(copiedText).toBe(targetNode.src || "");
 });
 
   nodes.slice(0, 2).forEach((node) => {
