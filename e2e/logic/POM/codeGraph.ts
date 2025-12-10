@@ -430,9 +430,7 @@ export default class CodeGraph extends BasePage {
         await this.elementMenuButton("Remove").click();
     }
 
-    async nodeClick(x: number, y: number): Promise<void> {
-        console.log(`Clicking on node at coordinates (${x}, ${y})`);
-        
+    async nodeClick(x: number, y: number): Promise<void> {        
         await this.waitForCanvasAnimationToEnd();
         for (let attempt = 1; attempt <= 3; attempt++) {
             await this.canvasElement.hover({ position: { x, y } });
