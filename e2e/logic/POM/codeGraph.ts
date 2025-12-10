@@ -413,15 +413,17 @@ export default class CodeGraph extends BasePage {
 
     async clickZoomIn(): Promise<void> {
         await this.zoomInBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickZoomOut(): Promise<void> {
         await this.zoomOutBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickCenter(): Promise<void> {
         await this.centerBtn.click();
-        await delay(2000); //animation delay
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
@@ -434,12 +436,14 @@ export default class CodeGraph extends BasePage {
             await this.canvasElement.hover({ position: { x, y } });
             await this.page.waitForTimeout(500);
             await this.canvasElement.click({ position: { x, y }, button: 'left' });
-            if (await this.elementMenu.isVisible()) {
+            try {
+                await this.elementMenu.waitFor({ state: 'visible', timeout: 1500 });
                 return;
+            } catch {
+                // retry next iteration
             }
-            await this.page.waitForTimeout(1000);
         }
-    
+
         throw new Error(`Failed to click, elementMenu not visible after multiple attempts.`);
     }
     
@@ -552,6 +556,7 @@ export default class CodeGraph extends BasePage {
     }
    
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
+        await this.waitForCanvasAnimationToEnd();
         const { scaleX, scaleY } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
             const ctx = canvas.getContext('2d');
             const transform = ctx?.getTransform();
