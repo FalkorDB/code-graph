@@ -3,8 +3,8 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPHRAG_SDK } from "../config/constants";
-import { delay, findFirstNodeWithSrc, findNodeByName } from "../logic/utils";
 import { nodes, searchData, specialCharacters } from "../config/testData";
+import { delay } from "../logic/utils";
 import { ApiCalls } from "../logic/api/apiCalls";
 
 test.describe("search bar tests", () => {

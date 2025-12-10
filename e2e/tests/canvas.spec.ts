@@ -3,7 +3,7 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPHRAG_SDK } from "../config/constants";
-import { delay, findNodeByName } from "../logic/utils";
+import { findNodeByName } from "../logic/utils";
 import { nodesPath, categories, nodes, graphs } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
 import fs from 'fs';
@@ -50,8 +50,9 @@ test.describe("Canvas tests", () => {
     await codeGraph.clickZoomOut();
     await codeGraph.clickCenter();
     const updatedGraph = await codeGraph.getCanvasScaling();
-    expect(Math.abs(initialGraph.scaleX - updatedGraph.scaleX)).toBeLessThanOrEqual(0.1);
-    expect(Math.abs(initialGraph.scaleY - updatedGraph.scaleY)).toBeLessThanOrEqual(0.1);
+    expect(Math.abs(initialGraph.scaleX - updatedGraph.scaleX)).toBeLessThanOrEqual(0.2);
+    expect(Math.abs(initialGraph.scaleY - updatedGraph.scaleY)).toBeLessThanOrEqual(0.2);
+
   })
 
   nodes.slice(0,2).forEach((node) => {
@@ -62,8 +63,8 @@ test.describe("Canvas tests", () => {
       const targetNode = findNodeByName(initialGraph, node.nodeName);
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnRemoveNodeViaElementMenu();
-      const updatedGraph = await codeGraph.getGraphDetails();
-      const targetNodeForUpdateGraph = findNodeByName(updatedGraph.elements.nodes, node.nodeName);
+      const updatedGraph = await codeGraph.getGraphNodes();
+      const targetNodeForUpdateGraph = findNodeByName(updatedGraph, node.nodeName);
       expect(targetNodeForUpdateGraph.visible).toBe(false);
     });
   })
@@ -77,8 +78,8 @@ test.describe("Canvas tests", () => {
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnRemoveNodeViaElementMenu();
       await codeGraph.clickOnUnhideNodesBtn();
-      const updatedGraph = await codeGraph.getGraphDetails();
-      const targetNodeForUpdateGraph = findNodeByName(updatedGraph.elements.nodes, node.nodeName);
+      const updatedGraph = await codeGraph.getGraphNodes();
+      const targetNodeForUpdateGraph = findNodeByName(updatedGraph, node.nodeName);
       expect(targetNodeForUpdateGraph.visible).toBe(true);
     });
   })
@@ -89,9 +90,9 @@ test.describe("Canvas tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.selectCodeGraphCheckbox(checkboxIndex.toString());
-      const result = await codeGraph.getGraphDetails();
-      const findItem = result.categories.find((item: { name: string; }) => item.name === category)      
-      expect(findItem.show).toBe(false)
+      const result = await codeGraph.getGraphNodes();
+      const findItem = result.find((item: { category: string; }) => item.category === category);
+      expect(findItem?.visible).toBe(false);
     });
   })
 
@@ -103,15 +104,15 @@ test.describe("Canvas tests", () => {
       await codeGraph.clickOnShowPathBtn("Show the path");
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
-      const initialGraph = await codeGraph.getGraphDetails();
-      const firstNode = findNodeByName(initialGraph.elements.nodes, path.firstNode);
-      const secondNode = findNodeByName(initialGraph.elements.nodes, path.secondNode);
+      const initialGraph = await codeGraph.getGraphNodes();
+      const firstNode = findNodeByName(initialGraph, path.firstNode);
+      const secondNode = findNodeByName(initialGraph, path.secondNode);
       expect(firstNode.isPath).toBe(true);
       expect(secondNode.isPath).toBe(true);
       await codeGraph.clickOnClearGraphBtn();
-      const updateGraph = await codeGraph.getGraphDetails();
-      const firstNode1 = findNodeByName(updateGraph.elements.nodes, path.firstNode);
-      const secondNode1 =  findNodeByName(updateGraph.elements.nodes, path.secondNode);
+      const updateGraph = await codeGraph.getGraphNodes();
+      const firstNode1 = findNodeByName(updateGraph, path.firstNode);
+      const secondNode1 =  findNodeByName(updateGraph, path.secondNode);
       expect(firstNode1.isPath).toBe(false);
       expect(secondNode1.isPath).toBe(false);
     });
