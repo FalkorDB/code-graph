@@ -423,25 +423,27 @@ export default class CodeGraph extends BasePage {
 
     async clickCenter(): Promise<void> {
         await this.centerBtn.click();
-        await delay(2000); //animation delay
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
         await this.elementMenuButton("Remove").click();
     }
 
-    async nodeClick(x: number, y: number): Promise<void> {        
+    async nodeClick(x: number, y: number): Promise<void> {
         await this.waitForCanvasAnimationToEnd();
         for (let attempt = 1; attempt <= 3; attempt++) {
             await this.canvasElement.hover({ position: { x, y } });
             await this.page.waitForTimeout(500);
             await this.canvasElement.click({ position: { x, y }, button: 'left' });
-            if (await this.elementMenu.isVisible()) {
+            try {
+                await this.elementMenu.waitFor({ state: 'visible', timeout: 1500 });
                 return;
+            } catch {
+                // retry next iteration
             }
-            await this.page.waitForTimeout(1000);
         }
-    
+
         throw new Error(`Failed to click, elementMenu not visible after multiple attempts.`);
     }
     
