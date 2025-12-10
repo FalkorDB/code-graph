@@ -3,7 +3,7 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import urls from "../config/urls.json";
 import { ApiCalls } from "../logic/api/apiCalls";
 import CodeGraph from "../logic/POM/codeGraph";
-import { CHAT_OPTTIONS_COUNT, GRAPHRAG_SDK, Node_Question, } from "../config/constants";
+import { CHAT_OPTTIONS_COUNT, GRAPHRAG_SDK, Node_Question } from "../config/constants";
 import { delay } from "../logic/utils";
 import { nodesPath } from "../config/testData";
 
@@ -132,4 +132,33 @@ test.describe("Chat tests", () => {
       expect(result).toBeDefined();
     });
   }
+
+  test(`Validate consistent UI responses for repeated questions in chat`, async () => {
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPHRAG_SDK);
+    const responses: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      await chat.sendMessage(Node_Question);
+      const result = await chat.getTextInLastChatElement();
+      const number = result.match(/\d+/g)?.[0]!;
+      responses.push(number);
+      await delay(3000); //delay before asking next question
+    }
+    const identicalResponses = responses.every((value) => value === responses[0]);
+    expect(identicalResponses).toBe(true);
+  });
+
+  test(`Validate UI response matches API response for a given question in chat`, async () => {
+    const api = new ApiCalls();
+    const apiResponse = await api.askQuestion(GRAPHRAG_SDK, Node_Question);
+
+    const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await chat.selectGraph(GRAPHRAG_SDK);
+  
+    await chat.sendMessage(Node_Question);
+    const uiResponse = await chat.getTextInLastChatElement();
+    const number = uiResponse.match(/\d+/g)?.[0]!;
+    
+    expect(number).toEqual(apiResponse.result.response.match(/\d+/g)?.[0]);
+  });
 });

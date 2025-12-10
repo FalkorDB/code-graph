@@ -136,6 +136,10 @@ export default class CodeGraph extends BasePage {
         return this.scopedLocator("//main[@data-name='main-chat']/*[last()-2]//img[@alt='Waiting for response']")
     }
 
+    private get waitingForResponseImage(): Locator {
+        return this.page.locator("//img[@alt='Waiting for response']")
+    }
+
     private get selectInputForShowPath(): (inputNum: string) => Locator {
         return (inputNum: string) => this.scopedLocator(`(//main[@data-name='main-chat']//input)[${inputNum}]`);
     }
@@ -211,7 +215,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get elementMenu(): Locator {
-        return this.scopedLocator("//div[@id='elementMenu']");
+        return this.page.locator("//div[@id='elementMenu']");
     }
     
     private get nodedetailsPanelHeader(): Locator {
@@ -450,15 +454,17 @@ export default class CodeGraph extends BasePage {
 
     async clickZoomIn(): Promise<void> {
         await this.zoomInBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickZoomOut(): Promise<void> {
         await this.zoomOutBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickCenter(): Promise<void> {
         await this.centerBtn.click();
-        await this.page.waitForTimeout(2000); //animation delay
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
@@ -577,19 +583,6 @@ export default class CodeGraph extends BasePage {
         return Promise.all(elements.map(element => element.innerHTML()));
     }
 
-    async getGraphDetails(): Promise<any> {
-        await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await this.waitForCanvasAnimationToEnd();
-        await this.page.waitForFunction(() => !!window.graph);
-    
-        const graphData = await this.page.evaluate(() => {
-            return window.graph;
-        });
-        
-        return graphData;
-    }
-    
-
     async getGraphNodes(): Promise<any[]> {
         await this.waitForCanvasAnimationToEnd();
     
@@ -627,6 +620,7 @@ export default class CodeGraph extends BasePage {
     
    
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
+        await this.waitForCanvasAnimationToEnd();
         const { scaleX, scaleY } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
             const ctx = canvas.getContext('2d');
             const transform = ctx?.getTransform();
@@ -667,6 +661,18 @@ export default class CodeGraph extends BasePage {
     async isNodeToolTipVisible(node: string): Promise<boolean> {
         await this.page.waitForTimeout(500);
         return await this.nodeToolTip(node).isVisible();
+    }
+    
+    async getGraphDetails(): Promise<any> {
+        await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
+        await this.waitForCanvasAnimationToEnd();
+        await this.page.waitForFunction(() => !!window.graph);
+    
+        const graphData = await this.page.evaluate(() => {
+            return window.graph;
+        });
+        
+        return graphData;
     }
 
     async waitForCanvasAnimationToEnd(timeout = 15000, checkInterval = 500): Promise<void> {
