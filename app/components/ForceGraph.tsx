@@ -8,7 +8,7 @@ import { GraphData, Link, Node } from "./model"
 interface Props {
     data: GraphData
     canvasRef: GraphRef
-    onNodeClick?: (node: Node) => void
+    onNodeClick?: (node: Node, event: MouseEvent) => void
     onNodeRightClick?: (node: Node, event: MouseEvent) => void
     onLinkClick?: (link: Link, event: MouseEvent) => void
     onLinkRightClick?: (link: Link, event: MouseEvent) => void
@@ -113,7 +113,7 @@ export default function ForceGraph({
     const handleNodeClick = useCallback((node: any, event: MouseEvent) => {
         if (onNodeClick) {
             const originalNode = data.nodes.find(n => n.id === node.id)
-            if (originalNode) onNodeClick(originalNode)
+            if (originalNode) onNodeClick(originalNode, event)
         }
     }, [onNodeClick, data.nodes])
 
@@ -144,15 +144,16 @@ export default function ForceGraph({
     // Update event handlers
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
+        
         canvasRef.current.setConfig({
             onNodeClick: handleNodeClick,
             onNodeRightClick: handleNodeRightClick,
             onLinkClick: handleLinkClick,
             onLinkRightClick: handleLinkRightClick,
             onBackgroundClick,
-            onBackgroundRightClick,
+            // onBackgroundRightClick,
             onEngineStop,
-            onZoom
+            // onZoom
         })
     }, [
         handleNodeClick, 

@@ -19,8 +19,8 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } 
 import Input from './components/Input';
 import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
-import { cn, GraphRef, handleZoomToFit, Message, Path, PathData, PathNode } from '@/lib/utils';
-import { GraphContext } from './components/provider';
+import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
+import { GraphNode } from '@falkordb/canvas';
 
 type Tip = {
   title: string
@@ -66,8 +66,8 @@ export default function Home() {
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
-  const desktopChartRef = useRef<GraphRef["current"]>()
-  const mobileChartRef = useRef<GraphRef["current"]>()
+  const desktopChartRef = useRef<GraphRef["current"]>(null)
+  const mobileChartRef = useRef<GraphRef["current"]>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [searchNode, setSearchNode] = useState<PathNode>({});
@@ -189,10 +189,10 @@ export default function Home() {
     return graph.extend(json.result.neighbors, true)
   }
 
-  const handleSearchSubmit = (node: any, chartRef: GraphRef) => {
-    const chart = chartRef.current
+  const handleSearchSubmit = (node: any, canvasRef: GraphRef) => {
+    const canvas = canvasRef.current
 
-    if (chart) {
+    if (canvas) {
       let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
 
       if (!chartNode?.visible) {
@@ -210,7 +210,7 @@ export default function Home() {
       }
 
       setTimeout(() => {
-        handleZoomToFit(chartRef, 4, (n: GraphNode) => n.id === chartNode!.id)
+        canvas.zoomToFit(4, (n: GraphNode) => n.id === chartNode!.id)
       }, 0)
       setSearchNode(chartNode)
       setOptionsOpen(false)
@@ -389,7 +389,7 @@ export default function Home() {
               graph={graph}
               data={data}
               setData={setData}
-              chartRef={desktopChartRef}
+              canvasRef={desktopChartRef}
               options={options}
               setOptions={setOptions}
               onFetchGraph={onFetchGraph}
@@ -428,7 +428,7 @@ export default function Home() {
               setQuery={setQuery}
               selectedPath={selectedPath}
               setSelectedPath={setSelectedPath}
-              chartRef={desktopChartRef}
+              canvasRef={desktopChartRef}
               setPath={setPath}
               path={path}
               repo={graph.Id}
@@ -507,7 +507,7 @@ export default function Home() {
             graph={graph}
             data={data}
             setData={setData}
-            chartRef={mobileChartRef}
+            canvasRef={mobileChartRef}
             options={options}
             setOptions={setOptions}
             onFetchGraph={onFetchGraph}
@@ -549,7 +549,7 @@ export default function Home() {
                     setQuery={setQuery}
                     selectedPath={selectedPath}
                     setSelectedPath={setSelectedPath}
-                    chartRef={mobileChartRef}
+                    canvasRef={mobileChartRef}
                     setPath={setPath}
                     path={path}
                     repo={graph.Id}
@@ -577,7 +577,7 @@ export default function Home() {
                   </VisuallyHidden>
                   <Toolbar
                     className='bg-transparent absolute -top-14 left-0 w-full justify-between px-6'
-                    chartRef={mobileChartRef}
+                    canvasRef={mobileChartRef}
                   />
                   <Input
                     className='border-2 border-gray-500'

@@ -4,8 +4,9 @@ import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '@/lib/utils';
 import { Fullscreen } from 'lucide-react';
-import { GraphRef, handleZoomToFit } from '@/lib/utils';
+import { GraphRef } from '@/lib/utils';
 import ForceGraph from './ForceGraph';
+import { GraphNode } from '@falkordb/canvas';
 
 export interface Position {
     x: number,
@@ -29,7 +30,6 @@ interface Props {
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
     cooldownTicks: number | undefined
-    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
     zoomedNodes: Node[]
 }
@@ -37,7 +37,7 @@ interface Props {
 export default function GraphView({
     data,
     graph,
-    chartRef,
+    chartRef: canvasRef,
     selectedObj,
     setSelectedObj,
     selectedObjects,
@@ -50,7 +50,6 @@ export default function GraphView({
     selectedPathId,
     setSelectedPathId,
     cooldownTicks,
-    setCooldownTicks,
     zoomedNodes,
     setZoomedNodes
 }: Props) {
@@ -122,20 +121,20 @@ export default function GraphView({
     }
 
     const handleEngineStop = () => {
-        handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: any) => zoomedNodes.some(node => node.id === n.id))
+        canvasRef.current?.zoomToFit(zoomedNodes.length === 1 ? 4 : 1, (n: GraphNode) => zoomedNodes.some(node => node.id === n.id))
         setZoomedNodes([])
     }
 
     return (
         <div className="relative w-full md:h-full h-1 grow">
             <div className="md:hidden absolute bottom-4 right-4 z-10">
-                <button className='control-button' onClick={() => handleZoomToFit(chartRef)}>
+                <button className='control-button' onClick={() => canvasRef.current?.zoomToFit()}>
                     <Fullscreen />
                 </button>
             </div>
             <ForceGraph
                 data={data}
-                canvasRef={chartRef}
+                canvasRef={canvasRef}
                 onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}
                 onNodeRightClick={handleRightClick}
                 onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isPathResponse ? handleLinkClick : handleRightClick}

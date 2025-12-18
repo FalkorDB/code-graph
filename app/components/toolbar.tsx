@@ -3,24 +3,26 @@ import { cn } from "@/lib/utils"
 import { GraphRef } from "@/lib/utils";
 
 interface Props {
-    chartRef: GraphRef
+    canvasRef: GraphRef
     className?: string
     handleDownloadImage?: () => void
 }
 
-export function Toolbar({ chartRef, className, handleDownloadImage }: Props) {
+export function Toolbar({ canvasRef, className, handleDownloadImage }: Props) {
 
     const handleZoomClick = (changefactor: number) => {
-        const chart = chartRef.current
-        if (chart) {
-            chart.zoom(chart.zoom() * changefactor)
+        const canvas = canvasRef.current
+        
+        if (canvas) {
+            canvas.zoom(canvas.getZoom() * changefactor)
         }
     }
 
     const handleCenterClick = () => {
-        const chart = chartRef.current
-        if (chart) {
-            chart.zoomToFit(1000, 40)
+        const canvas = canvasRef.current
+        
+        if (canvas) {
+            canvas.zoomToFit()
         }
     }
 
