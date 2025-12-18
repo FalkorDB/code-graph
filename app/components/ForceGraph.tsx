@@ -151,9 +151,9 @@ export default function ForceGraph({
             onLinkClick: handleLinkClick,
             onLinkRightClick: handleLinkRightClick,
             onBackgroundClick,
-            // onBackgroundRightClick,
+            onBackgroundRightClick,
             onEngineStop,
-            // onZoom
+            onZoom
         })
     }, [
         handleNodeClick, 
