@@ -2,7 +2,6 @@ import { Link, Node } from "@/app/components/model"
 import { type ClassValue, clsx } from "clsx"
 import { MutableRefObject } from "react"
 import { twMerge } from "tailwind-merge"
-import { ForceGraphMethods, NodeObject } from "react-force-graph-2d"
 
 export type PathData = {
   nodes: any[]
@@ -35,13 +34,13 @@ export interface Message {
   graphName?: string;
 }
 
-export type GraphRef = MutableRefObject<ForceGraphMethods<Node, Link> | undefined>
+export type GraphRef = MutableRefObject<FalkorDBCanvas | undefined>
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function handleZoomToFit(chartRef: GraphRef, paddingMultiplier = 1, filter?: (node: NodeObject<Node>) => boolean) {
+export function handleZoomToFit(chartRef: GraphRef, paddingMultiplier = 1, filter?: (node: NodeGraph) => boolean) {
   const chart = chartRef.current
   if (chart) {
     // Find the currently visible canvas by checking display property

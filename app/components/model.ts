@@ -1,4 +1,3 @@
-import { LinkObject, NodeObject } from 'react-force-graph-2d'
 import { Path } from '@/lib/utils'
 
 export interface GraphData {
@@ -13,34 +12,37 @@ export interface Category {
 
 export interface Label {
   name: string,
-  textWidth: number,
-  textHeight: number,
 }
 
-export type Node = NodeObject<{
+export interface Node {
   id: number,
   name: string,
   category: string,
   color: string,
+  visible: boolean,
   collapsed: boolean,
   expand: boolean,
-  visible: boolean,
   isPathSelected: boolean,
   isPath: boolean,
+  x?: number,
+  y?: number,
+  vx?: number,
+  vy?: number,
   [key: string]: any,
-}>
+}
 
-export type Link = LinkObject<Node, {
+export interface Link {
   id: number,
-  source: Node,
-  target: Node,
+  source: number,
+  target: number,
   label: string,
   visible: boolean,
   isPathSelected: boolean,
   isPath: boolean,
   curve: number,
+  color: string,
   [key: string]: any,
-}>
+}
 
 const COLORS_ORDER_NAME = [
   "blue",
@@ -226,18 +228,19 @@ export class Graph {
 
       let label = this.labelsMap.get(edgeData.relation)
       if (!label) {
-        label = { name: edgeData.relation, textWidth: 0, textHeight: 0 }
+        label = { name: edgeData.relation }
         this.labelsMap.set(edgeData.relation, label)
         this.labels.push(label)
       }
 
       link = {
         id: edgeData.id,
-        source,
-        target,
+        source: edgeData.src_node,
+        target: edgeData.dest_node,
         label: edgeData.relation,
         visible: true,
         expand: false,
+        color: "#999999",
         collapsed,
         isPathSelected: false,
         isPath: !!path,
@@ -251,12 +254,12 @@ export class Graph {
     newElements.links.forEach(link => {
       const start = link.source
       const end = link.target
-      const sameNodesLinks = this.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
+      const sameNodesLinks = this.elements.links.filter(l => (l.source === start && l.target === end) || (l.target === start && l.source === end))
       const index = sameNodesLinks.findIndex(l => l.id === link.id) ?? 0
       const even = index % 2 === 0
       let curve
 
-      if (start.id === end.id) {
+      if (start === end) {
         if (even) {
           curve = Math.floor(-(index / 2)) - 3
         } else {
@@ -282,7 +285,7 @@ export class Graph {
     this.elements = {
       nodes: this.elements.nodes,
       links: this.elements.links.map(link => {
-        if (this.elements.nodes.map(n => n.id).includes(link.source.id) && this.elements.nodes.map(n => n.id).includes(link.target.id)) {
+        if (this.elements.nodes.map(n => n.id).includes(link.source) && this.elements.nodes.map(n => n.id).includes(link.target)) {
           return link
         }
         this.linksMap.delete(link.id)
@@ -291,15 +294,15 @@ export class Graph {
   }
 
   public visibleLinks(visible: boolean, ids?: number[]) {
-    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source.id) || ids.includes(link.target.id)) : this.elements.links
+    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source) || ids.includes(link.target)) : this.elements.links
 
     elements.forEach(link => {
-      if (visible && this.elements.nodes.map(n => n.id).includes(link.source.id) && link.source.visible && this.elements.nodes.map(n => n.id).includes(link.target.id) && link.target.visible) {
+      if (visible && this.elements.nodes.find(n => n.id === link.source)?.visible && this.elements.nodes.find(n => n.id === link.target)?.visible) {
         // eslint-disable-next-line no-param-reassign
         link.visible = true
       }
 
-      if (!visible && ((this.elements.nodes.map(n => n.id).includes(link.source.id) && !link.source.visible) || (this.elements.nodes.map(n => n.id).includes(link.target.id) && !link.target.visible))) {
+      if (!visible && (this.elements.nodes.find(n => n.id === link.source)?.visible === false || this.elements.nodes.find(n => n.id === link.target)?.visible === false)) {
         // eslint-disable-next-line no-param-reassign
         link.visible = false
       }

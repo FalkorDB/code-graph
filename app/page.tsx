@@ -1,8 +1,8 @@
 'use client'
 
-import { MutableRefObject, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Chat } from './components/chat';
-import { Graph, GraphData, Link as LinkType, Node } from './components/model';
+import { Graph, GraphData, Node } from './components/model';
 import { AlignRight, BookOpen, BoomBox, Download, Github, HomeIcon, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -17,10 +17,9 @@ import { Progress } from '@/components/ui/progress';
 import { Carousel, CarouselApi, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import Input from './components/Input';
-import { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
 import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
-import { cn, handleZoomToFit, Message, Path, PathData, PathNode } from '@/lib/utils';
+import { cn, GraphRef, handleZoomToFit, Message, Path, PathData, PathNode } from '@/lib/utils';
 import { GraphContext } from './components/provider';
 
 type Tip = {
@@ -67,8 +66,8 @@ export default function Home() {
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
-  const desktopChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
-  const mobileChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
+  const desktopChartRef = useRef<GraphRef["current"]>()
+  const mobileChartRef = useRef<GraphRef["current"]>()
   const [menuOpen, setMenuOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [searchNode, setSearchNode] = useState<PathNode>({});
@@ -190,7 +189,7 @@ export default function Home() {
     return graph.extend(json.result.neighbors, true)
   }
 
-  const handleSearchSubmit = (node: any, chartRef: MutableRefObject<ForceGraphMethods<Node, LinkType> | undefined>) => {
+  const handleSearchSubmit = (node: any, chartRef: GraphRef) => {
     const chart = chartRef.current
 
     if (chart) {
@@ -211,7 +210,7 @@ export default function Home() {
       }
 
       setTimeout(() => {
-        handleZoomToFit(chartRef, 4, (n: NodeObject<Node>) => n.id === chartNode!.id)
+        handleZoomToFit(chartRef, 4, (n: GraphNode) => n.id === chartNode!.id)
       }, 0)
       setSearchNode(chartNode)
       setOptionsOpen(false)
