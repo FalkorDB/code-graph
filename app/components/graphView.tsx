@@ -1,11 +1,12 @@
 'use client'
 
-import ForceGraph2D, { NodeObject } from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 import { Path } from '@/lib/utils';
 import { Fullscreen } from 'lucide-react';
-import { GraphRef, handleZoomToFit } from '@/lib/utils';
+import { GraphRef } from '@/lib/utils';
+import ForceGraph from './ForceGraph';
+import { GraphNode } from '@falkordb/canvas';
 
 export interface Position {
     x: number,
@@ -34,14 +35,9 @@ interface Props {
     zoomedNodes: Node[]
 }
 
-const PATH_COLOR = "#ffde21"
-const NODE_SIZE = 6;
-const PADDING = 2;
-
 export default function GraphView({
     data,
-    graph,
-    chartRef,
+    chartRef: canvasRef,
     selectedObj,
     setSelectedObj,
     selectedObjects,
@@ -59,10 +55,7 @@ export default function GraphView({
     setZoomedNodes
 }: Props) {
 
-    const parentRef = useRef<HTMLDivElement>(null)
     const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
-    const [parentWidth, setParentWidth] = useState(0)
-    const [parentHeight, setParentHeight] = useState(0)
     const [screenSize, setScreenSize] = useState<number>(0)
 
     useEffect(() => {
@@ -78,31 +71,6 @@ export default function GraphView({
             window.removeEventListener('resize', handleResize)
         }
     }, [])
-
-    useEffect(() => {
-        const handleResize = () => {
-            if (!parentRef.current) return
-            setParentWidth(parentRef.current.clientWidth)
-            setParentHeight(parentRef.current.clientHeight)
-        }
-
-        window.addEventListener('resize', handleResize)
-
-        const observer = new ResizeObserver(handleResize)
-
-        if (parentRef.current) {
-            observer.observe(parentRef.current)
-        }
-
-        return () => {
-            window.removeEventListener('resize', handleResize)
-            observer.disconnect()
-        }
-    }, [parentRef])
-
-    useEffect(() => {
-        setCooldownTicks(undefined)
-    }, [graph.Id, graph.getElements().length])
 
     const unsetSelectedObjects = (evt?: MouseEvent) => {
         if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
@@ -153,211 +121,33 @@ export default function GraphView({
         }
     }
 
-    const avoidOverlap = (nodes: Position[]) => {
-        const spacing = NODE_SIZE * 2.5;
-        nodes.forEach((nodeA, i) => {
-            nodes.forEach((nodeB, j) => {
-                if (i !== j) {
-                    const dx = nodeA.x - nodeB.x;
-                    const dy = nodeA.y - nodeB.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-    
-                    if (distance < spacing) {
-                        const pushStrength = (spacing - distance) / distance * 0.5;
-                        nodeA.x += dx * pushStrength;
-                        nodeA.y += dy * pushStrength;
-                        nodeB.x -= dx * pushStrength;
-                        nodeB.y -= dy * pushStrength;
-                    }
-                }
-            });
-        });
-    };    
+    const handleEngineStop = () => {
+        if (cooldownTicks === 0) return
+
+        canvasRef.current?.zoomToFit(zoomedNodes.length === 1 ? 4 : 1, (n: GraphNode) => zoomedNodes.some(node => node.id === n.id))
+        setZoomedNodes([])
+        setCooldownTicks(0)
+    }
 
     return (
-        <div ref={parentRef} className="relative w-full md:h-full h-1 grow">
+        <div className="relative w-full md:h-full h-1 grow">
             <div className="md:hidden absolute bottom-4 right-4 z-10">
-                <button className='control-button' onClick={() => handleZoomToFit(chartRef)}>
+                <button className='control-button' onClick={() => canvasRef.current?.zoomToFit()}>
                     <Fullscreen />
                 </button>
             </div>
-            <ForceGraph2D
-                ref={chartRef}
-                height={parentHeight}
-                width={parentWidth}
-                graphData={data}
-                onEngineTick={() => avoidOverlap(data.nodes as Position[])}
-                nodeVisibility="visible"
-                linkVisibility="visible"
-                linkCurvature="curve"
-                linkDirectionalArrowRelPos={1}
-                linkDirectionalArrowColor={(link) => (link.isPath || link.isPathSelected) ? PATH_COLOR : link.color}
-                linkDirectionalArrowLength={(link) => link.source.id === link.target.id ? 0 : (link.id === selectedObj?.id || link.isPathSelected) ? 3 : 2}
-                nodeRelSize={NODE_SIZE}
-                linkLineDash={(link) => (link.isPath && !link.isPathSelected) ? [5, 5] : []}
-                linkColor={(link) => (link.isPath || link.isPathSelected) ? PATH_COLOR : link.color}
-                linkWidth={(link) => (link.id === selectedObj?.id || link.isPathSelected) ? 2 : 1}
-                nodeCanvasObjectMode={() => 'after'}
-                linkCanvasObjectMode={() => 'after'}
-                nodeCanvasObject={(node, ctx) => {
-                    if (!node.x || !node.y) return
-
-                    if (isPathResponse) {
-                        if (node.isPathSelected) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 1
-                        } else if (node.isPath) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 0.5
-                        } else {
-                            ctx.fillStyle = '#E5E5E5';
-                            ctx.strokeStyle = 'gray';
-                            ctx.lineWidth = 0.5
-                        }
-                    } else if (isPathResponse === undefined) {
-                        if (node.isPathSelected) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 1
-                        } else if (node.isPath) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 0.5
-                        } else {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = 'black';
-                            ctx.lineWidth = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id ? 1 : 0.5
-                        }
-                    } else {
-                        ctx.fillStyle = node.color;
-                        ctx.strokeStyle = 'black';
-                        ctx.lineWidth = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id ? 1 : 0.5
-                    }
-
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
-                    ctx.stroke();
-                    ctx.fill();
-
-                    ctx.fillStyle = 'black';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.font = '2px Arial';
-                    const textWidth = ctx.measureText(node.name).width;
-                    const ellipsis = '...';
-                    const ellipsisWidth = ctx.measureText(ellipsis).width;
-                    const nodeSize = NODE_SIZE * 2 - PADDING;
-                    let { name } = { ...node }
-
-                    // truncate text if it's too long
-                    if (textWidth > nodeSize) {
-                        while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
-                            name = name.slice(0, -1);
-                        }
-                        name += ellipsis;
-                    }
-
-                    // add label
-                    ctx.fillText(name, node.x, node.y);
-                }}
-                linkCanvasObject={(link, ctx) => {
-                    const start = link.source;
-                    const end = link.target;
-
-                    if (!start.x || !start.y || !end.x || !end.y) return
-
-                    let textX, textY, angle;
-
-                    if (start.id === end.id) {
-                        const radius = NODE_SIZE * link.curve * 6.2;
-                        const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
-                        textX = start.x + radius * Math.cos(angleOffset);
-                        textY = start.y + radius * Math.sin(angleOffset);
-                        angle = -angleOffset;
-                    } else {
-                        const midX = (start.x + end.x) / 2;
-                        const midY = (start.y + end.y) / 2;
-                        const offset = link.curve / 2;
-
-                        angle = Math.atan2(end.y - start.y, end.x - start.x);
-
-                        // maintain label vertical orientation for legibility
-                        if (angle > Math.PI / 2) angle = -(Math.PI - angle);
-                        if (angle < -Math.PI / 2) angle = -(-Math.PI - angle);
-
-                        // Calculate perpendicular offset
-                        const perpX = -Math.sin(angle) * offset;
-                        const perpY = Math.cos(angle) * offset;
-
-                        // Adjust position to compensate for rotation around origin
-                        const cos = Math.cos(angle);
-                        const sin = Math.sin(angle);
-                        textX = midX + perpX;
-                        textY = midY + perpY;
-                        const rotatedX = textX * cos + textY * sin;
-                        const rotatedY = -textX * sin + textY * cos;
-                        textX = rotatedX;
-                        textY = rotatedY;
-                    }
-
-                    // Setup text properties to measure background size
-                    ctx.font = '2px Arial';
-                    const padding = 0.5;
-                    // Get text width and height
-                    const label = graph.LabelsMap.get(link.label)!
-                    let { textWidth, textHeight } = label
-
-                    if (!textWidth || !textHeight) {
-                        const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(link.label)
-                        textWidth = width
-                        textHeight = actualBoundingBoxAscent + actualBoundingBoxDescent
-                        graph.LabelsMap.set(link.label, { ...label, textWidth, textHeight })
-                    }
-
-                    // Save the current context state
-                    ctx.save();
-
-                    // add label with background and rotation
-                    ctx.rotate(angle);
-
-                    // Draw background
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(
-                        textX - textWidth / 2 - padding,
-                        textY - textHeight / 2 - padding,
-                        textWidth + padding * 2,
-                        textHeight + padding * 2
-                    );
-
-                    // Draw text
-                    ctx.globalAlpha = 1;
-                    ctx.fillStyle = 'black';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(link.label, textX, textY);
-
-                    ctx.restore(); // reset rotation
-                }}
-                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? handleNodeClick : handleRightClick}
+            <ForceGraph
+                data={data}
+                canvasRef={canvasRef}
+                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}
                 onNodeRightClick={handleRightClick}
-                onNodeDragEnd={(n, translate) => setPosition(prev => {
-                    return prev && { x: prev.x + translate.x * (chartRef.current?.zoom() ?? 1), y: prev.y + translate.y * (chartRef.current?.zoom() ?? 1) }
-                })}
                 onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isPathResponse ? handleLinkClick : handleRightClick}
                 onLinkRightClick={handleRightClick}
-                onBackgroundRightClick={unsetSelectedObjects}
                 onBackgroundClick={unsetSelectedObjects}
+                onBackgroundRightClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}
-                onEngineStop={() => {
-                    setCooldownTicks(0)
-                    debugger
-                    handleZoomToFit(chartRef, zoomedNodes.length === 1 ? 4 : 1, (n: NodeObject<Node>) => zoomedNodes.some(node => node.id === n.id))
-                    setZoomedNodes([])
-                }}
+                onEngineStop={handleEngineStop}
                 cooldownTicks={cooldownTicks}
-                cooldownTime={6000}
             />
         </div>
     )
