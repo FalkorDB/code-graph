@@ -297,12 +297,12 @@ export class Graph {
     const elements = ids ? this.elements.links.filter(link => ids.includes(link.source) || ids.includes(link.target)) : this.elements.links
 
     elements.forEach(link => {
-      if (visible && this.elements.nodes.find(n => n.id === link.source)?.visible && this.elements.nodes.find(n => n.id === link.target)?.visible) {
+      if (visible && this.nodesMap.get(link.source)?.visible && this.nodesMap.get(link.target)?.visible) {
         // eslint-disable-next-line no-param-reassign
         link.visible = true
       }
 
-      if (!visible && (this.elements.nodes.find(n => n.id === link.source)?.visible === false || this.elements.nodes.find(n => n.id === link.target)?.visible === false)) {
+      if (!visible && (this.nodesMap.get(link.source)?.visible === false || this.nodesMap.get(link.target)?.visible === false)) {
         // eslint-disable-next-line no-param-reassign
         link.visible = false
       }
