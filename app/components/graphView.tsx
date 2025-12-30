@@ -30,13 +30,13 @@ interface Props {
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
     cooldownTicks: number | undefined
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
     zoomedNodes: Node[]
 }
 
 export default function GraphView({
     data,
-    graph,
     chartRef: canvasRef,
     selectedObj,
     setSelectedObj,
@@ -50,6 +50,7 @@ export default function GraphView({
     selectedPathId,
     setSelectedPathId,
     cooldownTicks,
+    setCooldownTicks,
     zoomedNodes,
     setZoomedNodes
 }: Props) {
@@ -121,8 +122,11 @@ export default function GraphView({
     }
 
     const handleEngineStop = () => {
+        if (cooldownTicks === 0) return
+
         canvasRef.current?.zoomToFit(zoomedNodes.length === 1 ? 4 : 1, (n: GraphNode) => zoomedNodes.some(node => node.id === n.id))
         setZoomedNodes([])
+        setCooldownTicks(0)
     }
 
     return (

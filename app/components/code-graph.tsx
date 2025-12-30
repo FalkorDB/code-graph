@@ -332,6 +332,7 @@ export function CodeGraph({
                                     selectedPathId={selectedPathId}
                                     setSelectedPathId={setSelectedPathId}
                                     cooldownTicks={cooldownTicks}
+                                    setCooldownTicks={setCooldownTicks}
                                     setZoomedNodes={setZoomedNodes}
                                     zoomedNodes={zoomedNodes}
                                 />
@@ -365,6 +366,8 @@ export function CodeGraph({
                                             className="gap-4"
                                             canvasRef={chartRef}
                                             handleDownloadImage={handleDownloadImage}
+                                            setCooldownTicks={setCooldownTicks}
+                                            cooldownTicks={cooldownTicks}
                                         />
                                     </div>
                                 </div>

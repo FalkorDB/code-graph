@@ -578,6 +578,8 @@ export default function Home() {
                   <Toolbar
                     className='bg-transparent absolute -top-14 left-0 w-full justify-between px-6'
                     canvasRef={mobileChartRef}
+                    setCooldownTicks={setCooldownTicks}
+                    cooldownTicks={cooldownTicks}
                   />
                   <Input
                     className='border-2 border-gray-500'

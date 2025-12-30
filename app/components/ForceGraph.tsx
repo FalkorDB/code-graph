@@ -52,7 +52,6 @@ export default function ForceGraph({
     onBackgroundRightClick,
     onZoom,
     onEngineStop,
-    onNodeDragEnd,
     cooldownTicks,
     backgroundColor = "#FFFFFF",
     foregroundColor = "#000000"
