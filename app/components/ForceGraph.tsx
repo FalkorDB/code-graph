@@ -57,10 +57,7 @@ export default function ForceGraph({
     backgroundColor = "#FFFFFF",
     foregroundColor = "#000000"
 }: Props) {
-    const parentRef = useRef<HTMLDivElement>(null)
     const [canvasLoaded, setCanvasLoaded] = useState(false)
-    const [parentWidth, setParentWidth] = useState(0)
-    const [parentHeight, setParentHeight] = useState(0)
 
     // Load falkordb-canvas dynamically (client-only)
     useEffect(() => {
@@ -68,33 +65,6 @@ export default function ForceGraph({
             setCanvasLoaded(true)
         })
     }, [])
-
-    // Handle parent resize
-    useEffect(() => {
-        const handleResize = () => {
-            if (!parentRef.current) return
-            setParentWidth(parentRef.current.clientWidth)
-            setParentHeight(parentRef.current.clientHeight)
-        }
-
-        handleResize()
-
-        const observer = new ResizeObserver(handleResize)
-        if (parentRef.current) {
-            observer.observe(parentRef.current)
-        }
-
-        return () => {
-            observer.disconnect()
-        }
-    }, [])
-
-    // Update canvas dimensions
-    useEffect(() => {
-        if (!canvasRef.current || !canvasLoaded) return
-        canvasRef.current.setWidth(parentWidth)
-        canvasRef.current.setHeight(parentHeight)
-    }, [canvasRef, parentWidth, parentHeight, canvasLoaded])
 
     // Update canvas colors
     useEffect(() => {
@@ -144,7 +114,7 @@ export default function ForceGraph({
     // Update event handlers
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
-        
+
         canvasRef.current.setConfig({
             onNodeClick: handleNodeClick,
             onNodeRightClick: handleNodeRightClick,
@@ -156,15 +126,15 @@ export default function ForceGraph({
             onZoom
         })
     }, [
-        handleNodeClick, 
-        handleNodeRightClick, 
-        handleLinkClick, 
-        handleLinkRightClick, 
-        onBackgroundClick, 
-        onBackgroundRightClick, 
+        handleNodeClick,
+        handleNodeRightClick,
+        handleLinkClick,
+        handleLinkRightClick,
+        onBackgroundClick,
+        onBackgroundRightClick,
         onEngineStop,
         onZoom,
-        canvasRef, 
+        canvasRef,
         canvasLoaded
     ])
 
@@ -178,8 +148,6 @@ export default function ForceGraph({
     }, [canvasRef, data, canvasLoaded])
 
     return (
-        <div ref={parentRef} className="w-full h-full relative">
-            <falkordb-canvas ref={canvasRef} />
-        </div>
+        <falkordb-canvas ref={canvasRef} />
     )
 }
