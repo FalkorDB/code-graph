@@ -246,7 +246,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get nodeToolTip(): (node: string) => Locator {
-        return (node: string) => this.page.locator(`//div[contains(@class, 'force-graph-container')]/div[contains(text(), '${node}')]`);
+        return (node: string) => this.page.locator(`.float-tooltip-kap:has-text("${node}")`);
     }
 
     private get downloadImageBtn(): Locator {
@@ -675,50 +675,19 @@ export default class CodeGraph extends BasePage {
         return graphData;
     }
 
-    async waitForCanvasAnimationToEnd(timeout = 15000, checkInterval = 500): Promise<void> {
-        const canvasHandle = await this.canvasElement.elementHandle();
+    async waitForCanvasAnimationToEnd(timeout = 15000): Promise<void> {
+        // Wait for the canvas element to be attached
+        await this.canvasElement.waitFor({ state: "attached", timeout: 10000 });
     
-        if (!canvasHandle) {
-            throw new Error("Canvas element not found!");
+        // Poll the canvas element's data-engine-status attribute
+        const startTime = Date.now();
+        while (Date.now() - startTime < timeout) {
+            const status = await this.canvasElement.getAttribute("data-engine-status");
+            if (status === "stopped") {
+                return;
+            }
+            await this.page.waitForTimeout(500); // Poll every 500ms
         }
-    
-        await this.page.waitForFunction(
-            async ({ canvas, checkInterval, timeout }) => {
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return false;
-    
-                const width = canvas.width;
-                const height = canvas.height;
-    
-                let previousData = ctx.getImageData(0, 0, width, height).data;
-                const startTime = Date.now();
-    
-                return new Promise<boolean>((resolve) => {
-                    const checkCanvas = () => {
-                        if (Date.now() - startTime > timeout) {
-                            resolve(true);
-                            return;
-                        }
-    
-                        setTimeout(() => {
-                            const currentData = ctx.getImageData(0, 0, width, height).data;
-                            if (JSON.stringify(previousData) === JSON.stringify(currentData)) {
-                                resolve(true);
-                            } else {
-                                previousData = currentData;
-                                checkCanvas();
-                            }
-                        }, checkInterval);
-                    };
-                    checkCanvas();
-                });
-            },
-            { 
-                canvas: await canvasHandle.evaluateHandle((el) => el as HTMLCanvasElement),
-                checkInterval,
-                timeout
-            },
-            { timeout }
-        );
+        throw new Error(`Canvas animation did not stop within ${timeout}ms`);
     }
 }
