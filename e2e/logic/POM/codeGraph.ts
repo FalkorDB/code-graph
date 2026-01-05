@@ -179,7 +179,7 @@ export default class CodeGraph extends BasePage {
     /* Canvas Locators*/
 
     private get canvasElement(): Locator {
-        return this.scopedLocator("//canvas");
+        return this.scopedLocator("//falkordb-canvas").locator("canvas").first();
     }
 
     private get zoomInBtn(): Locator {
