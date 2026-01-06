@@ -285,7 +285,7 @@ export class Graph {
     this.elements = {
       nodes: this.elements.nodes,
       links: this.elements.links.map(link => {
-        if (this.elements.nodes.map(n => n.id).includes(link.source) && this.elements.nodes.map(n => n.id).includes(link.target)) {
+        if (this.nodesMap.get(link.source) && this.nodesMap.get(link.target)) {
           return link
         }
         this.linksMap.delete(link.id)

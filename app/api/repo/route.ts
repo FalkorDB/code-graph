@@ -22,7 +22,7 @@ export async function GET() {
 		return NextResponse.json({ result: repositories }, { status: 200 })
 	} catch (err) {
 		console.error(err)
-		return NextResponse.json(err instanceof Error ? err.message : err, { status: 400 })
+		return NextResponse.json(err instanceof Error ? err.message : String(err), { status: 400 })
 	}
 }
 
@@ -57,6 +57,6 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json({ message: "success" }, { status: 200 });
 	} catch (err) {
 		console.error(err)
-		return NextResponse.json(err instanceof Error ? err.message : err, { status: 400 });
+		return NextResponse.json(err instanceof Error ? err.message : String(err), { status: 400 });
 	}
 }

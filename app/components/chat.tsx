@@ -4,7 +4,7 @@ import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Message, MessageTypes, Path, PathData } from "@/lib/utils";
 import Input from "./Input";
-import { Graph, GraphData } from "./model";
+import { Graph, GraphData, Node } from "./model";
 import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -247,7 +247,8 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         setIsPathResponse(true)
         setData({ ...graph.Elements })
         setTimeout(() => {
-            canvas.zoomToFit(2, (n: GraphNode) => formattedPaths.some(p => p.nodes.some(node => node.id === n.id)));
+            const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
+            canvas.zoomToFit(2, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));
         }, 0)
     }
 
