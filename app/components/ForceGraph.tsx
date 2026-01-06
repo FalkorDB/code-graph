@@ -115,10 +115,8 @@ export default function ForceGraph({
         const canvas = canvasRef.current
 
         if (!canvas) return
-
-        const currentData = canvas.getGraphData();
         
-        (window as any).graph = { elements: { nodes: currentData.nodes, links: currentData.links } }
+        (window as any).graph = () => canvas.getGraphData();
 
         if (onEngineStop) onEngineStop()
     }, [canvasRef, onEngineStop])
