@@ -116,9 +116,9 @@ export default function ForceGraph({
 
         if (!canvas) return
 
-        const currentData = canvas.getGraphData()
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(window as any).graph = { elements: { nodes: currentData.nodes, links: currentData.links } }
+        const currentData = canvas.getGraphData();
+        
+        (window as any).graph = { elements: { nodes: currentData.nodes, links: currentData.links } }
 
         if (onEngineStop) onEngineStop()
     }, [canvasRef, onEngineStop])
