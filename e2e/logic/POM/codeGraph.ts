@@ -585,6 +585,7 @@ export default class CodeGraph extends BasePage {
 
     async getGraphNodes(): Promise<any[]> {
         await this.waitForCanvasAnimationToEnd();
+        await this.page.waitForFunction(() => !!(window as any).graph);
     
         const graphData = await this.page.evaluate(() => {
             return (window as any).graph;

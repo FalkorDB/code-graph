@@ -110,6 +110,19 @@ export default function ForceGraph({
         }
     }, [onLinkRightClick, data.links])
 
+    // Handle engine stop and set window.graph
+    const handleEngineStop = useCallback(() => {
+        const canvas = canvasRef.current
+
+        if (!canvas) return
+
+        const currentData = canvas.getGraphData()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(window as any).graph = { elements: { nodes: currentData.nodes, links: currentData.links } }
+
+        if (onEngineStop) onEngineStop()
+    }, [canvasRef, onEngineStop])
+
     // Update event handlers
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
@@ -121,7 +134,7 @@ export default function ForceGraph({
             onLinkRightClick: handleLinkRightClick,
             onBackgroundClick,
             onBackgroundRightClick,
-            onEngineStop,
+            onEngineStop: handleEngineStop,
             onZoom
         })
     }, [
@@ -131,7 +144,7 @@ export default function ForceGraph({
         handleLinkRightClick,
         onBackgroundClick,
         onBackgroundRightClick,
-        onEngineStop,
+        handleEngineStop,
         onZoom,
         canvasRef,
         canvasLoaded
