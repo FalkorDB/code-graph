@@ -57,3 +57,6 @@ export function findFirstNodeWithSrc(nodes: { src?: string }[]): any {
     return nodes.find((node) => node.src !== undefined);
 }
 
+export function findNodeWithSpecificSrc(nodes: { src?: string }[], srcContent: string): any {
+    return nodes.find((node) => node.src && node.src.includes(srcContent));
+}

@@ -8,6 +8,10 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       falkordb:
         image: falkordb/falkordb:latest
@@ -17,7 +21,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: lts/*
+        node-version: 24
     - name: Install dependencies
       run: npm ci
     - name: Install Playwright Browsers
@@ -40,7 +44,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: playwright-report
+        name: playwright-report-shard-${{ matrix.shard }}
         path: playwright-report/
         retention-days: 30
     - name: Upload failed test screenshots

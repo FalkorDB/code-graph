@@ -27,7 +27,7 @@ interface Props {
     setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
-    chartRef: GraphRef
+    canvasRef: GraphRef
     selectedValue: string
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
@@ -54,7 +54,7 @@ export function CodeGraph({
     setOptions,
     isShowPath,
     setPath,
-    chartRef,
+    canvasRef: chartRef,
     selectedValue,
     setSelectedPathId,
     isPathResponse,
@@ -177,7 +177,7 @@ export function CodeGraph({
             nodes: graph.Elements.nodes.filter(node => {
                 if (!node.collapsed) return true
 
-                const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
+                const isTarget = graph.Elements.links.some(link => link.target === node.id && nodes.some(n => n.id === link.source));
 
                 if (!isTarget) return true
 
@@ -364,8 +364,10 @@ export function CodeGraph({
                                         }
                                         <Toolbar
                                             className="gap-4"
-                                            chartRef={chartRef}
+                                            canvasRef={chartRef}
                                             handleDownloadImage={handleDownloadImage}
+                                            setCooldownTicks={setCooldownTicks}
+                                            cooldownTicks={cooldownTicks}
                                         />
                                     </div>
                                 </div>
