@@ -23,7 +23,7 @@ export default class CodeGraph extends BasePage {
     private get scopedLocator(): (selector: string) => Locator {
         return (selector: string) => this.container.locator(selector);
     }
-    
+
     /* NavBar Locators*/
     private get falkorDBLogo(): Locator {
         return this.scopedLocator("//*[img[@alt='FalkorDB']]")
@@ -136,6 +136,10 @@ export default class CodeGraph extends BasePage {
         return this.scopedLocator("//main[@data-name='main-chat']/*[last()-2]//img[@alt='Waiting for response']")
     }
 
+    private get waitingForResponseImage(): Locator {
+        return this.page.locator("//img[@alt='Waiting for response']")
+    }
+
     private get selectInputForShowPath(): (inputNum: string) => Locator {
         return (inputNum: string) => this.scopedLocator(`(//main[@data-name='main-chat']//input)[${inputNum}]`);
     }
@@ -175,7 +179,7 @@ export default class CodeGraph extends BasePage {
     /* Canvas Locators*/
 
     private get canvasElement(): Locator {
-        return this.scopedLocator("//canvas");
+        return this.scopedLocator("//falkordb-canvas").locator("canvas").first();
     }
 
     private get zoomInBtn(): Locator {
@@ -211,13 +215,13 @@ export default class CodeGraph extends BasePage {
     }
 
     private get elementMenu(): Locator {
-        return this.scopedLocator("//div[@id='elementMenu']");
+        return this.page.locator("//div[@id='elementMenu']");
     }
-    
+
     private get nodedetailsPanelHeader(): Locator {
         return this.scopedLocator("//div[@data-name='node-details-panel']/header/p");
     }
-    
+
     private get nodedetailsPanelcloseBtn(): Locator {
         return this.scopedLocator("//div[@data-name='node-details-panel']/header/button");
     }
@@ -242,7 +246,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get nodeToolTip(): (node: string) => Locator {
-        return (node: string) => this.page.locator(`//div[contains(@class, 'force-graph-container')]/div[contains(text(), '${node}')]`);
+        return (node: string) => this.page.locator(`.float-tooltip-kap:has-text("${node}")`);
     }
 
     private get downloadImageBtn(): Locator {
@@ -259,8 +263,8 @@ export default class CodeGraph extends BasePage {
         return newPage
     }
 
-    async getNavBarItem(navItem : string): Promise<Page> {
-        await this.page.waitForLoadState('networkidle'); 
+    async getNavBarItem(navItem: string): Promise<Page> {
+        await this.page.waitForLoadState('networkidle');
         const [newPage] = await Promise.all([
             this.page.waitForEvent('popup'),
             this.navBaritem(navItem).click(),
@@ -273,11 +277,11 @@ export default class CodeGraph extends BasePage {
         if (!isVisible) throw new Error("'Create New Project' button is not visible!");
         await this.createNewProjectBtn.click();
     }
-    
+
     async isCreateNewProjectDialog(): Promise<boolean> {
         return await waitForElementToBeVisible(this.createNewProjectDialog);
     }
-    
+
     async clickOnTipBtn(): Promise<void> {
         await this.tipBtn.click();
     }
@@ -286,36 +290,36 @@ export default class CodeGraph extends BasePage {
         await this.page.waitForTimeout(500);
         return await this.genericMenu.isVisible();
     }
-    
+
     async clickOnTipMenuCloseBtn(): Promise<void> {
         const isVisible = await waitForElementToBeVisible(this.tipMenuCloseBtn);
         if (!isVisible) throw new Error("'Tip Menu Close' button is not visible!");
         await this.tipMenuCloseBtn.click();
     }
-    
+
 
     /* Chat functionality */
     async clickOnShowPathBtn(selection: string): Promise<void> {
         await this.showPathBtn(selection).click();
     }
-    
+
     async clickAskQuestionBtn(): Promise<void> {
         const isVisible = await waitForElementToBeVisible(this.askquestionBtn);
         if (!isVisible) throw new Error("'Ask Question' button is not visible!");
         await this.askquestionBtn.click();
     }
-    
+
     async sendMessage(message: string) {
         await waitToBeEnabled(this.askquestionBtn);
         await this.askquestionInput.fill(message);
         await this.askquestionBtn.click();
     }
-    
+
     async clickOnLightBulbBtn(): Promise<void> {
         await this.lightbulbBtn.click();
     }
 
-    async getTextInLastChatElement(): Promise<string>{
+    async getTextInLastChatElement(): Promise<string> {
         await this.waitingForResponseIndicator.waitFor({ state: 'hidden' });
         return await waitForStableText(this.lastElementInChat);
     }
@@ -327,16 +331,16 @@ export default class CodeGraph extends BasePage {
     async scrollToTop(): Promise<void> {
         const isVisible = await waitForElementToBeVisible(this.chatContainer);
         if (!isVisible) throw new Error("Chat container is not visible!");
-    
+
         await this.chatContainer.evaluate((chat) => {
             chat.scrollTop = 0;
         });
     }
-    
+
     async getScrollMetrics() {
         const isVisible = await waitForElementToBeVisible(this.chatContainer);
         if (!isVisible) throw new Error("Chat container is not visible!");
-    
+
         return await this.chatContainer.evaluate((el) => ({
             scrollTop: el.scrollTop,
             scrollHeight: el.scrollHeight,
@@ -357,7 +361,7 @@ export default class CodeGraph extends BasePage {
         await this.selectInputForShowPath(inputNum).fill(node);
         await this.selectFirstPathOption(inputNum).click();
     }
-    
+
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
         await this.page.mouse.click(10, 10);
         const nodeLocator = this.locateNodeInLastChatPath(node);
@@ -374,37 +378,37 @@ export default class CodeGraph extends BasePage {
         if (!isVisible) throw new Error("Notification error close button is not visible!");
         await this.notificationErrorCloseBtn.click();
     }
-    
+
     async selectAndGetQuestionInOptionsMenu(questionNumber: string): Promise<string> {
         const question = this.selectQuestionInMenu(questionNumber);
         await question.click();
         return await question.innerText();
     }
-    
+
     async getLastQuestionInChat(): Promise<string> {
         const isVisible = await waitForElementToBeVisible(this.lastQuestionInChat);
         if (!isVisible) throw new Error("Last question in chat is not visible!");
         return (await this.lastQuestionInChat.innerText()) ?? "";
-    }    
+    }
 
     /* CodeGraph functionality */
     async selectGraph(graph: string | number): Promise<void> {
         await this.comboBoxbtn.click();
-        if(typeof graph === 'number'){
-            await this.selectGraphInComboBoxById(graph.toString()).waitFor({ state : 'visible'})
+        if (typeof graph === 'number') {
+            await this.selectGraphInComboBoxById(graph.toString()).waitFor({ state: 'visible' })
             await this.selectGraphInComboBoxById(graph.toString()).click();
         } else {
-            await this.selectGraphInComboBoxByName(graph).waitFor({ state : 'visible'})
+            await this.selectGraphInComboBoxByName(graph).waitFor({ state: 'visible' })
             await this.selectGraphInComboBoxByName(graph).click();
         }
         await this.page.waitForTimeout(2000); // graph animation delay
     }
 
-    async createProject(url : string): Promise<void> {
+    async createProject(url: string): Promise<void> {
         await this.clickCreateNewProjectBtn();
         await this.typeUrlInput.fill(url);
         await this.createBtnInCreateProjectDialog.click();
-        await this.createProjectWaitDialog.waitFor({ state : 'hidden'});
+        await this.createProjectWaitDialog.waitFor({ state: 'hidden' });
     }
 
     async isGraphCreated(graph: string): Promise<boolean> {
@@ -427,22 +431,23 @@ export default class CodeGraph extends BasePage {
 
     async selectSearchBarOptionBtn(buttonNum: string): Promise<void> {
         const button = this.searchBarOptionBtn(buttonNum);
-        await button.waitFor({ state : "visible"})
+        await button.waitFor({ state: "visible" })
         await button.click();
     }
 
     async getSearchBarInputValue(): Promise<string> {
         return await this.searchBarInput.inputValue();
     }
-    
+
     async scrollToBottomInSearchBarList(): Promise<void> {
         await this.searchBarList.evaluate((element) => {
-          element.scrollTop = element.scrollHeight;
-    })};
+            element.scrollTop = element.scrollHeight;
+        })
+    };
 
     async isScrolledToBottomInSearchBarList(): Promise<boolean> {
         return await this.searchBarList.evaluate((element) => {
-          return element.scrollTop + element.clientHeight >= element.scrollHeight;
+            return element.scrollTop + element.clientHeight >= element.scrollHeight;
         });
     }
 
@@ -450,19 +455,21 @@ export default class CodeGraph extends BasePage {
 
     async clickZoomIn(): Promise<void> {
         await this.zoomInBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickZoomOut(): Promise<void> {
         await this.zoomOutBtn.click();
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickCenter(): Promise<void> {
         await this.centerBtn.click();
-        await this.page.waitForTimeout(2000); //animation delay
+        await this.waitForCanvasAnimationToEnd();
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
-        const button = this.elementMenuButton("Remove"); 
+        const button = this.elementMenuButton("Remove");
         const isVisible = await waitForElementToBeVisible(button);
         if (!isVisible) throw new Error("'Remove' button is not visible!");
         await button.click();
@@ -479,11 +486,11 @@ export default class CodeGraph extends BasePage {
             }
             await this.page.waitForTimeout(1000);
         }
-    
+
         throw new Error(`Failed to click, elementMenu not visible after multiple attempts.`);
     }
-    
-    
+
+
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await this.codeGraphCheckbox(checkbox).click();
     }
@@ -535,11 +542,11 @@ export default class CodeGraph extends BasePage {
         return this.nodedetailsPanelHeader.innerHTML();
     }
 
-    async clickOnNodeDetailsCloseBtn(): Promise<void>{
+    async clickOnNodeDetailsCloseBtn(): Promise<void> {
         await this.nodedetailsPanelcloseBtn.click();
     }
 
-    async getMetricsPanelInfo(): Promise<{nodes: string, edges: string}> {
+    async getMetricsPanelInfo(): Promise<{ nodes: string, edges: string }> {
         const nodes = await this.canvasMetricsPanel("1").innerHTML();
         const edges = await this.canvasMetricsPanel("3").innerHTML();
         return { nodes, edges }
@@ -553,10 +560,10 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnCopyToClipboard(): Promise<string> {
-        const button = this.elementMenuButton("Copy src to clipboard"); 
+        const button = this.elementMenuButton("Copy src to clipboard");
         const isVisible = await waitForElementToBeVisible(button);
         if (!isVisible) throw new Error("View Node button is not visible!");
-        await button.click(); 
+        await button.click();
         return await this.page.evaluate(() => navigator.clipboard.readText());
     }
 
@@ -577,30 +584,23 @@ export default class CodeGraph extends BasePage {
         return Promise.all(elements.map(element => element.innerHTML()));
     }
 
-    async getGraphDetails(): Promise<any> {
-        await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await this.waitForCanvasAnimationToEnd();
-        await this.page.waitForFunction(() => !!window.graph);
-    
-        const graphData = await this.page.evaluate(() => {
-            return window.graph;
-        });
-        
-        return graphData;
-    }
-    
-
     async getGraphNodes(): Promise<any[]> {
         await this.waitForCanvasAnimationToEnd();
-    
+        await this.page.waitForFunction(() => {
+            const data = (window as any).graph?.();
+
+            return data && Array.isArray(data.elements?.nodes) && data.elements.nodes.length > 0;
+        },
+            { timeout: 5000 });
+
         const graphData = await this.page.evaluate(() => {
-            return (window as any).graph;
+            return (window as any).graph?.();
         });
-    
+
         let transformData: any = null;
         for (let attempt = 0; attempt < 3; attempt++) {
             await this.page.waitForTimeout(1000);
-    
+
             transformData = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
                 const rect = canvas.getBoundingClientRect();
                 const ctx = canvas.getContext('2d');
@@ -610,13 +610,13 @@ export default class CodeGraph extends BasePage {
                     transform: ctx?.getTransform() || null,
                 };
             });
-    
+
             if (transformData.transform) break;
             console.warn(`Attempt ${attempt + 1}: Transform data not available, retrying...`);
         }
-    
+
         if (!transformData?.transform) throw new Error("Canvas transform data not available!");
-    
+
         const { a, e, d, f } = transformData.transform;
         return graphData.elements.nodes.map((node: any) => ({
             ...node,
@@ -624,9 +624,10 @@ export default class CodeGraph extends BasePage {
             screenY: transformData.top + node.y * d + f - 190,
         }));
     }
-    
-   
+
+
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
+        await this.waitForCanvasAnimationToEnd();
         const { scaleX, scaleY } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
             const ctx = canvas.getContext('2d');
             const transform = ctx?.getTransform();
@@ -669,50 +670,31 @@ export default class CodeGraph extends BasePage {
         return await this.nodeToolTip(node).isVisible();
     }
 
-    async waitForCanvasAnimationToEnd(timeout = 15000, checkInterval = 500): Promise<void> {
-        const canvasHandle = await this.canvasElement.elementHandle();
-    
-        if (!canvasHandle) {
-            throw new Error("Canvas element not found!");
+    async getGraphDetails(): Promise<any> {
+        await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
+        await this.waitForCanvasAnimationToEnd();
+        await this.page.waitForFunction(() => !!window.graph);
+
+        const graphData = await this.page.evaluate(() => {
+            return window.graph;
+        });
+
+        return graphData;
+    }
+
+    async waitForCanvasAnimationToEnd(timeout = 15000): Promise<void> {
+        // Wait for the canvas element to be attached
+        await this.canvasElement.waitFor({ state: "attached", timeout: 10000 });
+
+        // Poll the canvas element's data-engine-status attribute
+        const startTime = Date.now();
+        while (Date.now() - startTime < timeout) {
+            const status = await this.canvasElement.getAttribute("data-engine-status");
+            if (status === "stopped") {
+                return;
+            }
+            await this.page.waitForTimeout(500); // Poll every 500ms
         }
-    
-        await this.page.waitForFunction(
-            async ({ canvas, checkInterval, timeout }) => {
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return false;
-    
-                const width = canvas.width;
-                const height = canvas.height;
-    
-                let previousData = ctx.getImageData(0, 0, width, height).data;
-                const startTime = Date.now();
-    
-                return new Promise<boolean>((resolve) => {
-                    const checkCanvas = () => {
-                        if (Date.now() - startTime > timeout) {
-                            resolve(true);
-                            return;
-                        }
-    
-                        setTimeout(() => {
-                            const currentData = ctx.getImageData(0, 0, width, height).data;
-                            if (JSON.stringify(previousData) === JSON.stringify(currentData)) {
-                                resolve(true);
-                            } else {
-                                previousData = currentData;
-                                checkCanvas();
-                            }
-                        }, checkInterval);
-                    };
-                    checkCanvas();
-                });
-            },
-            { 
-                canvas: await canvasHandle.evaluateHandle((el) => el as HTMLCanvasElement),
-                checkInterval,
-                timeout
-            },
-            { timeout }
-        );
+        throw new Error(`Canvas animation did not stop within ${timeout}ms`);
     }
 }

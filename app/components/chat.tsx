@@ -4,12 +4,12 @@ import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Message, MessageTypes, Path, PathData } from "@/lib/utils";
 import Input from "./Input";
-import { Graph, GraphData, Link, Node } from "./model";
+import { Graph, GraphData, Node } from "./model";
 import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
-import { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
+import { GraphNode } from "@falkordb/canvas";
 
 interface Props {
     repo: string
@@ -20,7 +20,7 @@ interface Props {
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
     setData: Dispatch<SetStateAction<GraphData>>
-    chartRef: GraphRef
+    canvasRef: GraphRef
     messages: Message[]
     setMessages: Dispatch<SetStateAction<Message[]>>
     query: string
@@ -51,7 +51,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, chartRef, paths, setPaths }: Props) {
+export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, canvasRef, paths, setPaths }: Props) {
 
     const [sugOpen, setSugOpen] = useState(false);
 
@@ -91,9 +91,9 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
     }, [isPathResponse])
 
     const handleSetSelectedPath = (p: PathData) => {
-        const chart = chartRef.current
+        const canvas = canvasRef.current
 
-        if (!chart) return
+        if (!canvas) return
         setSelectedPath(prev => {
             if (prev) {
                 if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
@@ -147,7 +147,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         }
         setData({ ...graph.Elements })
         setTimeout(() => {
-            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => p.nodes.some(node => node.id === n.id));
+            canvas.zoomToFit(2, (n: GraphNode) => p.nodes.some(node => node.id === n.id));
         }, 0)
         setChatOpen && setChatOpen(false)
     }
@@ -206,9 +206,9 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
     }
 
     const handleSubmit = async () => {
-        const chart = chartRef.current
+        const canvas = canvasRef.current
 
-        if (!chart) return
+        if (!canvas) return
 
         setSelectedPath(undefined)
 
@@ -247,7 +247,8 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         setIsPathResponse(true)
         setData({ ...graph.Elements })
         setTimeout(() => {
-            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => formattedPaths.some(p => p.nodes.some(node => node.id === n.id)));
+            const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
+            canvas.zoomToFit(2, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));
         }, 0)
     }
 

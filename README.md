@@ -92,8 +92,9 @@ curl -X POST http://127.0.0.1:5000/analyze_folder \
     -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"]}'
 ```
 
-**Note:** Currently, Code-Graph supports analyzing C and Python source files.  
-Support for additional languages (e.g., JavaScript, Go, Java) is planned.  
+Note: At the moment code-graph can analyze both the Java & Python source files.
+Support for additional languages e.g. C, JavaScript, Go is planned to be added
+in the future.
 
 ### 5. Access the Web Interface  
 
