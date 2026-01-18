@@ -586,10 +586,12 @@ export default class CodeGraph extends BasePage {
 
     async getGraphNodes(): Promise<any[]> {
         await this.waitForCanvasAnimationToEnd();
+        // Wait for the graph data to be available on window object (set by handleEngineStop)
         await this.page.waitForFunction(() => {
             const data = (window as any).graph?.();
-
-            return data && Array.isArray(data.elements?.nodes) && data.elements.nodes.length > 0;
+            // Check both possible structures: { nodes } or { elements: { nodes } }
+            return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
+                           (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
         },
             { timeout: 5000 });
 
@@ -617,8 +619,12 @@ export default class CodeGraph extends BasePage {
 
         if (!transformData?.transform) throw new Error("Canvas transform data not available!");
 
+        // Support both data structures: { nodes } or { elements: { nodes } }
+        const nodes = graphData.elements?.nodes || graphData.nodes;
+        if (!nodes) throw new Error("No nodes found in graph data!");
+
         const { a, e, d, f } = transformData.transform;
-        return graphData.elements.nodes.map((node: any) => ({
+        return nodes.map((node: any) => ({
             ...node,
             screenX: transformData.left + node.x * a + e - 35,
             screenY: transformData.top + node.y * d + f - 190,
