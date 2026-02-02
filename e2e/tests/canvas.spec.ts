@@ -65,7 +65,7 @@ test.describe("Canvas tests", () => {
       await codeGraph.clickOnRemoveNodeViaElementMenu();
       const updatedGraph = await codeGraph.getGraphNodes();
       const targetNodeForUpdateGraph = findNodeByName(updatedGraph, node.nodeName);
-      expect(targetNodeForUpdateGraph.visible).toBe(false);
+      expect(targetNodeForUpdateGraph).toBeUndefined();
     });
   })
 
@@ -91,8 +91,9 @@ test.describe("Canvas tests", () => {
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.selectCodeGraphCheckbox(checkboxIndex.toString());
       const result = await codeGraph.getGraphNodes();
+      // Canvas filters out hidden nodes, so they should not be found
       const findItem = result.find((item: { category: string; }) => item.category === category);
-      expect(findItem?.visible).toBe(false);
+      expect(findItem).toBeUndefined();
     });
   })
 
@@ -123,8 +124,11 @@ test.describe("Canvas tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(graphName);
       const result = await codeGraph.getGraphDetails();
-      expect(result.elements.nodes.length).toBeGreaterThan(1);
-      expect(result.elements.links.length).toBeGreaterThan(1);
+      // Support both data structures: { nodes, links } or { elements: { nodes, links } }
+      const nodes = result.elements?.nodes || result.nodes;
+      const links = result.elements?.links || result.links;
+      expect(nodes.length).toBeGreaterThan(1);
+      expect(links.length).toBeGreaterThan(1);
     });
   })
 
@@ -136,8 +140,10 @@ test.describe("Canvas tests", () => {
       const initialGraph = await codeGraph.getGraphNodes();
       await codeGraph.changeNodePosition(initialGraph[nodeIndex].screenX, initialGraph[nodeIndex].screenY);
       const updateGraph = await codeGraph.getGraphDetails();
-      expect(updateGraph.elements.nodes[nodeIndex].x).not.toBe(initialGraph[nodeIndex].x);
-      expect(updateGraph.elements.nodes[nodeIndex].y).not.toBe(initialGraph[nodeIndex].y);
+      // Support both data structures: { nodes } or { elements: { nodes } }
+      const nodes = updateGraph.elements?.nodes || updateGraph.nodes;
+      expect(nodes[nodeIndex].x).not.toBe(initialGraph[nodeIndex].x);
+      expect(nodes[nodeIndex].y).not.toBe(initialGraph[nodeIndex].y);
     });
   }
 
@@ -158,8 +164,14 @@ test.describe("Canvas tests", () => {
     const graphData = await codeGraph.getGraphDetails();
     const api = new ApiCalls();
     const response = await api.getProject(GRAPHRAG_SDK);
-    const isMatching = graphData.elements.nodes.slice(0, 2).every(
-      (node: any, index: number) => node.name === response.result.entities.nodes[index].properties.name
+
+    // Support both data structures: { nodes } or { elements: { nodes } }
+    const nodes = graphData.elements?.nodes || graphData.nodes;
+    const isMatching = nodes.slice(0, 2).every(
+      (node: any, index: number) => {
+        const nodeName = node.name || node.data?.name;
+        return nodeName === response.result.entities.nodes[index].properties.name;
+      }
     );
     expect(isMatching).toBe(true)
   });
@@ -172,10 +184,14 @@ test.describe("Canvas tests", () => {
       await codeGraph.insertInputForShowPath("1", firstNode);
       await codeGraph.insertInputForShowPath("2", secondNode);
       const result = await codeGraph.getGraphDetails();
-      const firstNodeRes = findNodeByName(result.elements.nodes, firstNode);
-      const secondnodeRes = findNodeByName(result.elements.nodes, secondNode);
-      expect(firstNodeRes.isPath).toBe(true)
-      expect(secondnodeRes.isPath).toBe(true)
+      // Support both data structures: { nodes } or { elements: { nodes } }
+      const nodes = result.elements?.nodes || result.nodes;
+      const firstNodeRes = findNodeByName(nodes, firstNode);
+      const secondnodeRes = findNodeByName(nodes, secondNode);
+      expect(firstNodeRes).toBeDefined();
+      expect(secondnodeRes).toBeDefined();
+      expect(firstNodeRes?.isPath).toBe(true)
+      expect(secondnodeRes?.isPath).toBe(true)
     })
   })
 
@@ -187,14 +203,19 @@ test.describe("Canvas tests", () => {
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const result = await codeGraph.getGraphDetails();
-      const firstNodeRes = findNodeByName(result.elements.nodes, path.firstNode);
-      const secondNodeRes = findNodeByName(result.elements.nodes, path.secondNode);
-      
+      // Support both data structures: { nodes } or { elements: { nodes } }
+      const nodes = result.elements?.nodes || result.nodes;
+      const firstNodeRes = findNodeByName(nodes, path.firstNode);
+      const secondNodeRes = findNodeByName(nodes, path.secondNode);
+
+      expect(firstNodeRes).toBeDefined();
+      expect(secondNodeRes).toBeDefined();
+
       const api = new ApiCalls();
-      const response = await api.showPath(GRAPHRAG_SDK ,firstNodeRes.id, secondNodeRes.id);
+      const response = await api.showPath(GRAPHRAG_SDK ,firstNodeRes!.id, secondNodeRes!.id);
       const callsRelationObject = response.result.paths[0].find(item => item.relation === "CALLS")
-      expect(callsRelationObject?.src_node).toBe(firstNodeRes.id);
-      expect(callsRelationObject?.dest_node).toBe(secondNodeRes.id);    
+      expect(callsRelationObject?.src_node).toBe(firstNodeRes!.id);
+      expect(callsRelationObject?.dest_node).toBe(secondNodeRes!.id);
     });
   })
 

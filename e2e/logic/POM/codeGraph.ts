@@ -624,11 +624,18 @@ export default class CodeGraph extends BasePage {
         if (!nodes) throw new Error("No nodes found in graph data!");
 
         const { a, e, d, f } = transformData.transform;
-        return nodes.map((node: any) => ({
-            ...node,
-            screenX: transformData.left + node.x * a + e - 35,
-            screenY: transformData.top + node.y * d + f - 190,
-        }));
+        return nodes.map((node: any) => {
+            // Canvas format has properties nested in 'data' object and 'labels' instead of 'category'
+            // Flatten the structure for backward compatibility
+            const flatNode = {
+                ...node,
+                ...(node.data || {}), // Spread data properties to top level
+                category: node.labels?.[0] || node.category, // Use labels[0] or fallback to category
+                screenX: transformData.left + node.x * a + e - 35,
+                screenY: transformData.top + node.y * d + f - 190,
+            };
+            return flatNode;
+        });
     }
 
 
@@ -679,10 +686,17 @@ export default class CodeGraph extends BasePage {
     async getGraphDetails(): Promise<any> {
         await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
         await this.waitForCanvasAnimationToEnd();
-        await this.page.waitForFunction(() => !!window.graph);
+
+        // Wait for the graph function to be available and return data
+        await this.page.waitForFunction(() => {
+            const data = (window as any).graph?.();
+            // Check both possible structures: { nodes } or { elements: { nodes } }
+            return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
+                           (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
+        }, { timeout: 5000 });
 
         const graphData = await this.page.evaluate(() => {
-            return window.graph;
+            return (window as any).graph?.();
         });
 
         return graphData;
