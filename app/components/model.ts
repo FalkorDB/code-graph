@@ -24,10 +24,6 @@ export interface Node {
   expand: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-  x?: number,
-  y?: number,
-  vx?: number,
-  vy?: number,
   [key: string]: any,
 }
 

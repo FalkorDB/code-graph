@@ -8,16 +8,16 @@ import { GraphData, Link, Node } from "./model"
 interface Props {
     data: GraphData
     canvasRef: GraphRef
-    onNodeClick?: (node: Node, event: MouseEvent) => void
-    onNodeRightClick?: (node: Node, event: MouseEvent) => void
-    onLinkClick?: (link: Link, event: MouseEvent) => void
-    onLinkRightClick?: (link: Link, event: MouseEvent) => void
-    onBackgroundClick?: (event: MouseEvent) => void
-    onBackgroundRightClick?: (event: MouseEvent) => void
-    onZoom?: () => void
-    onEngineStop?: () => void
+    onNodeClick: (node: Node, event: MouseEvent) => void
+    onNodeRightClick: (node: Node, event: MouseEvent) => void
+    onLinkClick: (link: Link, event: MouseEvent) => void
+    onLinkRightClick: (link: Link, event: MouseEvent) => void
+    onBackgroundClick: (event: MouseEvent) => void
+    onBackgroundRightClick: (event: MouseEvent) => void
+    onZoom: () => void
+    onEngineStop: () => void
+    cooldownTicks: number | undefined
     onNodeDragEnd?: (node: Node, translate: { x: number; y: number }) => void
-    cooldownTicks?: number | undefined
     backgroundColor?: string
     foregroundColor?: string
 }
@@ -65,6 +65,14 @@ export default function ForceGraph({
         })
     }, [])
 
+    useEffect(() => {
+        const canvas = canvasRef.current
+
+        if (!canvas) return
+
+        (window as any).graph = () => canvas.getGraphData();
+    }, [canvasRef])
+
     // Update canvas colors
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
@@ -80,45 +88,31 @@ export default function ForceGraph({
 
     // Map node click handler
     const handleNodeClick = useCallback((node: any, event: MouseEvent) => {
-        if (onNodeClick) {
             const originalNode = data.nodes.find(n => n.id === node.id)
             if (originalNode) onNodeClick(originalNode, event)
-        }
     }, [onNodeClick, data.nodes])
 
     // Map node right click handler
     const handleNodeRightClick = useCallback((node: any, event: MouseEvent) => {
-        if (onNodeRightClick) {
-            const originalNode = data.nodes.find(n => n.id === node.id)
-            if (originalNode) onNodeRightClick(originalNode, event)
-        }
+        const originalNode = data.nodes.find(n => n.id === node.id)
+        if (originalNode) onNodeRightClick(originalNode, event)
     }, [onNodeRightClick, data.nodes])
 
     // Map link click handler
     const handleLinkClick = useCallback((link: any, event: MouseEvent) => {
-        if (onLinkClick) {
-            const originalLink = data.links.find(l => l.id === link.id)
-            if (originalLink) onLinkClick(originalLink, event)
-        }
+        const originalLink = data.links.find(l => l.id === link.id)
+        if (originalLink) onLinkClick(originalLink, event)
     }, [onLinkClick, data.links])
 
     // Map link right click handler
     const handleLinkRightClick = useCallback((link: any, event: MouseEvent) => {
-        if (onLinkRightClick) {
-            const originalLink = data.links.find(l => l.id === link.id)
-            if (originalLink) onLinkRightClick(originalLink, event)
-        }
+        const originalLink = data.links.find(l => l.id === link.id)
+        if (originalLink) onLinkRightClick(originalLink, event)
     }, [onLinkRightClick, data.links])
 
     // Handle engine stop and set window.graph
     const handleEngineStop = useCallback(() => {
-        const canvas = canvasRef.current
-
-        if (!canvas) return
-        
-        (window as any).graph = () => canvas.getGraphData();
-
-        if (onEngineStop) onEngineStop()
+        onEngineStop()
     }, [canvasRef, onEngineStop])
 
     // Update event handlers
