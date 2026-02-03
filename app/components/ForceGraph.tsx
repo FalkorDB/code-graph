@@ -28,6 +28,7 @@ const convertToCanvasData = (graphData: GraphData): Data => ({
         labels: [category],
         color,
         visible,
+        caption: "name",
         data: { name, ...data }
     })),
     links: graphData.links.filter(l => l.visible).map(({ id, label, color, visible, source, target, ...data }) => ({
