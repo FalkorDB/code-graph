@@ -6,7 +6,6 @@ import { Graph, GraphData, Node } from './components/model';
 import { AlignRight, BookOpen, BoomBox, Download, Github, HomeIcon, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { CodeGraph } from './components/code-graph';
 import { toast } from '@/components/ui/use-toast';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import Image from 'next/image';
@@ -20,7 +19,10 @@ import Input from './components/Input';
 import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
 import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
-import { GraphNode } from '@falkordb/canvas';
+import type { GraphNode } from '@falkordb/canvas';
+import dynamic from 'next/dynamic';
+
+const CodeGraph = dynamic(() => import('./components/code-graph').then(mod => mod.CodeGraph), { ssr: false });
 
 type Tip = {
   title: string
@@ -158,6 +160,9 @@ export default function Home() {
     const json = await result.json()
     const g = Graph.create(json.result.entities, graphName)
     setGraph(g)
+
+    if (cooldownTicks === 0) setCooldownTicks(-1)
+
     setIsPathResponse(false)
     chatPanel.current?.expand()
     // @ts-ignore
@@ -198,11 +203,12 @@ export default function Home() {
       if (!chartNode?.visible) {
         if (!chartNode) {
           chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
-          setCooldownTicks(undefined)
+
+          if (cooldownTicks === 0) setCooldownTicks(-1)
+
           setZoomedNodes([chartNode])
           graph.visibleLinks(true, [chartNode!.id])
           setData({ ...graph.Elements })
-          return
         }
         chartNode.visible = true
         graph.visibleLinks(true, [chartNode!.id])

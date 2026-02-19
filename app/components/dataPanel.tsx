@@ -37,7 +37,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
     if (!obj) return null;
 
     const type = "category" in obj
-    const label = type ? `${obj.category}: ${obj.name}` : obj.label
+    const label = type ? `${obj.category}: ${obj.data.name}` : obj.label
     const object = Object.entries(obj).filter(([k]) => !excludedProperties.includes(k))
 
     return (
@@ -125,7 +125,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                             <button
                                 className="flex items-center gap-2 p-2"
                                 title="Copy src to clipboard"
-                                onClick={() => navigator.clipboard.writeText(obj.src || "")}
+                                onClick={() => navigator.clipboard.writeText(obj.data.src || "")}
                             >
                                 <Copy color="white" />
                                 Copy
@@ -138,10 +138,10 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                 onClick={() => {
                                     const newTab = window.open(url, '_blank');
 
-                                    if (!obj.src_start || !obj.src_end || !newTab) return
+                                    if (!obj.data.src_start || !obj.data.src_end || !newTab) return
 
                                     newTab.scroll({
-                                        top: obj.src_start,
+                                        top: obj.data.src_start,
                                         behavior: 'smooth'
                                     })
                                 }}

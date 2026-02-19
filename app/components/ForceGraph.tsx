@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import type { Data } from "@falkordb/canvas"
-import { GraphRef } from "@/lib/utils"
+import { useCallback, useEffect, useState } from "react"
+import type { Data, GraphNode } from "@falkordb/canvas"
+import { GraphRef, PATH_COLOR } from "@/lib/utils"
 import { GraphData, Link, Node } from "./model"
 
 interface Props {
@@ -14,31 +14,34 @@ interface Props {
     onLinkRightClick: (link: Link, event: MouseEvent) => void
     onBackgroundClick: (event: MouseEvent) => void
     onBackgroundRightClick: (event: MouseEvent) => void
+    nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void
+    nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void
+    linkCanvasObject: (link: any, ctx: CanvasRenderingContext2D) => void
+    linkPointerAreaPaint: (link: any, color: string, ctx: CanvasRenderingContext2D) => void
     onZoom: () => void
     onEngineStop: () => void
     cooldownTicks: number | undefined
-    onNodeDragEnd?: (node: Node, translate: { x: number; y: number }) => void
     backgroundColor?: string
     foregroundColor?: string
 }
 
 const convertToCanvasData = (graphData: GraphData): Data => ({
-    nodes: graphData.nodes.filter(n => n.visible).map(({ id, category, color, visible, name, ...data }) => ({
+    nodes: graphData.nodes.filter(n => n.visible).map(({ id, category, color, visible, isPath, isPathSelected, data }) => ({
         id,
         labels: [category],
         color,
         visible,
         caption: "name",
-        data: { name, ...data }
+        data: { ...data, isPath, isPathSelected }
     })),
-    links: graphData.links.filter(l => l.visible).map(({ id, label, color, visible, source, target, ...data }) => ({
+    links: graphData.links.filter(l => l.visible).map(({ id, label, color, visible, source, target, isPath, isPathSelected, data }) => ({
         id,
         relationship: label,
-        color,
+        color: isPath ? PATH_COLOR : color,
         visible,
         source,
         target,
-        data
+        data: { ...data, isPath, isPathSelected }
     }))
 });
 
@@ -53,6 +56,10 @@ export default function ForceGraph({
     onBackgroundRightClick,
     onZoom,
     onEngineStop,
+    nodeCanvasObject,
+    nodePointerAreaPaint,
+    linkCanvasObject,
+    linkPointerAreaPaint,
     cooldownTicks,
     backgroundColor = "#FFFFFF",
     foregroundColor = "#000000"
@@ -84,13 +91,14 @@ export default function ForceGraph({
     // Update cooldown ticks
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
-        canvasRef.current.setCooldownTicks(cooldownTicks)
+
+        canvasRef.current.setCooldownTicks(cooldownTicks === -1 ? undefined : cooldownTicks)
     }, [canvasRef, cooldownTicks, canvasLoaded])
 
     // Map node click handler
     const handleNodeClick = useCallback((node: any, event: MouseEvent) => {
-            const originalNode = data.nodes.find(n => n.id === node.id)
-            if (originalNode) onNodeClick(originalNode, event)
+        const originalNode = data.nodes.find(n => n.id === node.id)
+        if (originalNode) onNodeClick(originalNode, event)
     }, [onNodeClick, data.nodes])
 
     // Map node right click handler
@@ -119,8 +127,10 @@ export default function ForceGraph({
     // Update event handlers
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
+        canvasRef.current.setDebug(true);
 
         canvasRef.current.setConfig({
+            autoStopOnSettle: false,
             onNodeClick: handleNodeClick,
             onNodeRightClick: handleNodeRightClick,
             onLinkClick: handleLinkClick,
@@ -128,6 +138,8 @@ export default function ForceGraph({
             onBackgroundClick,
             onBackgroundRightClick,
             onEngineStop: handleEngineStop,
+            node: { nodeCanvasObject, nodePointerAreaPaint },
+            link: { linkCanvasObject, linkPointerAreaPaint },
             onZoom
         })
     }, [

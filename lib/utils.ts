@@ -40,3 +40,5 @@ export type GraphRef = MutableRefObject<FalkorDBCanvas | null>
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+export const PATH_COLOR = "#ffde21"

@@ -32,6 +32,7 @@ interface Props {
     setPaths: Dispatch<SetStateAction<PathData[]>>
 }
 
+const PATH_COLOR = "#ffde21";
 const SUGGESTIONS = [
     "List a few recursive functions",
     "What is the name of the most used method?",
@@ -138,14 +139,35 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             })
             graph.extend(elements, true, { start: p.nodes[0], end: p.nodes[p.nodes.length - 1] })
             graph.getElements().filter(e => "source" in e ? p.links.some(l => l.id === e.id) : p.nodes.some(n => n.id === e.id)).forEach(e => {
-                if ((e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id) || "source" in e) {
+                if (e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id || "source" in e) {
                     e.isPathSelected = true
                 } else {
                     e.isPath = true
                 }
             });
         }
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData();
+
+        const nodesSet = new Set<number>(p.nodes.map((n: Node) => n.id));
+        const linksSet = new Set<number>(p.links.map((l: any) => l.id));
+
+        currentData.nodes.forEach(n => {
+            if (nodesSet.has(n.id)) {
+                if (n.id === p.nodes[0].id || n.id === p.nodes[p.nodes.length - 1].id) {
+                    n.data.isPathSelected = true;
+                } else {
+                    n.data.isPath = true;
+                }
+            }
+        });
+        currentData.links.forEach(l => {
+            if (linksSet.has(l.id)) {
+                l.data.isPathSelected = true;
+                l.color = PATH_COLOR;
+            }
+        });
+
         setTimeout(() => {
             canvas.zoomToFit(2, (n: GraphNode) => p.nodes.some(node => node.id === n.id));
         }, 0)
@@ -245,7 +267,20 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         setPaths(formattedPaths)
         setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
         setIsPathResponse(true)
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData();
+
+        const nodesSet = new Set<number>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => n.id)));
+        const linksSet = new Set<number>(formattedPaths.flatMap(p => p.links.map((l: any) => l.id)));
+
+        currentData.nodes.forEach(n => {
+            n.data.isPath = nodesSet.has(n.id);
+        });
+        currentData.links.forEach(l => {
+            l.data.isPath = linksSet.has(l.id);
+            l.color = linksSet.has(l.id) ? PATH_COLOR : l.color;
+        });
+
         setTimeout(() => {
             const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
             canvas.zoomToFit(2, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));

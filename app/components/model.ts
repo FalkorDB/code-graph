@@ -16,7 +16,6 @@ export interface Label {
 
 export interface Node {
   id: number,
-  name: string,
   category: string,
   color: string,
   visible: boolean,
@@ -24,9 +23,11 @@ export interface Node {
   expand: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-  [key: string]: any,
+  data: {
+    name: string,
+    [key: string]: any,
+  }
 }
-
 export interface Link {
   id: number,
   source: number,
@@ -35,9 +36,10 @@ export interface Link {
   visible: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-  curve: number,
   color: string,
-  [key: string]: any,
+  data: {
+    [key: string]: any,
+  },
 }
 
 const COLORS_ORDER_NAME = [
@@ -161,18 +163,18 @@ export class Graph {
 
       node = {
         id: nodeData.id,
-        name: nodeData.name,
         color: getCategoryColorValue(category.index),
         category: category.name,
         expand: false,
         visible: true,
         collapsed,
         isPath: !!path,
-        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id
+        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id,
+        data: {
+          ...nodeData.properties,
+        }
       }
-      Object.entries(nodeData.properties).forEach(([key, value]) => {
-        node[key] = value
-      })
+
       this.nodesMap.set(nodeData.id, node)
       this.elements.nodes.push(node)
       newElements.nodes.push(node)
@@ -195,14 +197,17 @@ export class Graph {
       if (!source) {
         source = {
           id: edgeData.src_node,
-          name: edgeData.src_node,
           color: getCategoryColorValue(),
           category: "",
           expand: false,
           visible: true,
           collapsed,
           isPath: !!path,
-          isPathSelected: path?.start?.id === edgeData.src_node || path?.end?.id === edgeData.src_node
+          isPathSelected: path?.start?.id === edgeData.src_node || path?.end?.id === edgeData.src_node,
+          data: {
+            name: edgeData.src_node
+          }
+
         }
         this.nodesMap.set(edgeData.src_node, source)
       }
@@ -210,14 +215,16 @@ export class Graph {
       if (!target) {
         target = {
           id: edgeData.dest_node,
-          name: edgeData.dest_node,
           color: getCategoryColorValue(),
           category: "",
           expand: false,
           visible: true,
           collapsed,
           isPath: !!path,
-          isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node
+          isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node,
+          data: {
+            name: edgeData.dest_node
+          }
         }
         this.nodesMap.set(edgeData.dest_node, target)
       }
@@ -235,44 +242,16 @@ export class Graph {
         target: edgeData.dest_node,
         label: edgeData.relation,
         visible: true,
-        expand: false,
         color: "#999999",
-        collapsed,
         isPathSelected: false,
         isPath: !!path,
-        curve: 0
+        data: { ...edgeData.properties }
       }
+
       this.linksMap.set(edgeData.id, link)
       this.elements.links.push(link)
       newElements.links.push(link)
     })
-
-    newElements.links.forEach(link => {
-      const start = link.source
-      const end = link.target
-      const sameNodesLinks = this.elements.links.filter(l => (l.source === start && l.target === end) || (l.target === start && l.source === end))
-      const index = sameNodesLinks.findIndex(l => l.id === link.id) ?? 0
-      const even = index % 2 === 0
-      let curve
-
-      if (start === end) {
-        if (even) {
-          curve = Math.floor(-(index / 2)) - 3
-        } else {
-          curve = Math.floor((index + 1) / 2) + 2
-        }
-      } else {
-        if (even) {
-          curve = Math.floor(-(index / 2))
-        } else {
-          curve = Math.floor((index + 1) / 2)
-        }
-
-      }
-
-      link.curve = curve * 0.1
-    })
-
 
     return newElements
   }

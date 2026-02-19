@@ -33,9 +33,9 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, setCooldown
         <div className={cn("flex flex-row items-center rounded overflow-hidden p-1", className)}>
             <Switch
                 className="ml-4 pointer-events-auto data-[state=unchecked]:bg-border"
-                checked={cooldownTicks === undefined}
+                checked={cooldownTicks !== 0}
                 onCheckedChange={() => {
-                    setCooldownTicks(cooldownTicks === undefined ? 0 : undefined)
+                    setCooldownTicks(cooldownTicks !== 0 ? 0 : undefined)
                 }}
             />
             <button
