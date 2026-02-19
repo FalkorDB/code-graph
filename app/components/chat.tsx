@@ -236,13 +236,21 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         if (!path?.start?.id || !path.end?.id) return
 
+        const pathMessage = [{
+            type: MessageTypes.Response,
+            text: "Please select a starting point and the end point. Select or press relevant item on the graph"
+        }, { type: MessageTypes.Path }]
+
         setPath(undefined)
+        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.Pending }])
 
         const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
         })
 
         if (!result.ok) {
+            setMessages((prev) => [...prev.slice(0, -1), ...pathMessage])
+            setPath({})
             toast({
                 variant: "destructive",
                 title: "Uh oh! Something went wrong.",
@@ -254,6 +262,8 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         const json = await result.json()
 
         if (json.result.paths.length === 0) {
+            setMessages((prev) => [...prev.slice(0, -1), ...pathMessage])
+            setPath({})
             toast({
                 title: `No path found`,
                 description: `no path found between node ${path.start.name} - ${path.end.name}`,
@@ -265,7 +275,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         formattedPaths.forEach((p: any) => graph.extend(p, false, path))
 
         setPaths(formattedPaths)
-        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
+        setMessages((prev) => [...prev.slice(0, -1), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
         setIsPathResponse(true)
 
         const currentData = canvas.getGraphData();
@@ -293,6 +303,10 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 disabled={isSendMessage}
                 className={cn("Tip", className)}
                 onClick={() => {
+                    const canvas = canvasRef.current
+
+                    if (!canvas) return
+
                     setSugOpen(false)
                     setMessages(prev => [
                         ...RemoveLastPath(prev),
@@ -305,16 +319,26 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                             e.isPath = false
                             e.isPathSelected = false
                         })
+
+                        const currentData = canvas.getGraphData();
+
+                        [...currentData.nodes, ...currentData.links].forEach(element => {
+                            element.data.isPath = false
+                            element.data.isPathSelected = false
+
+                            if ("source" in element) {
+                                element.color = "#999999"
+                            }
+                        })
+
+                        canvas.setGraphData(currentData)
                     }
 
-                    setTimeout(() => setMessages(prev => [...prev, {
+                    setMessages(prev => [...prev, {
                         type: MessageTypes.Response,
                         text: "Please select a starting point and the end point. Select or press relevant item on the graph"
-                    }]), 300)
-                    setTimeout(() => {
-                        setMessages(prev => [...prev, { type: MessageTypes.Path }])
-                        setPath({})
-                    }, 4000)
+                    }, { type: MessageTypes.Path }])
+                    setPath({})
                 }}
             >
                 <p className="text-center w-full">Show the path</p>

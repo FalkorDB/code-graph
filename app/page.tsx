@@ -83,6 +83,7 @@ export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
   const [zoomedNodes, setZoomedNodes] = useState<Node[]>([])
+  const [hasHiddenElements, setHasHiddenElements] = useState(false);
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -223,7 +224,12 @@ export default function Home() {
     }
   }
 
-  function onCategoryClick(name: string, show: boolean) {
+  function onCategoryClick(name: string, show: boolean, canvasRef: GraphRef) {
+
+    const canvas = canvasRef.current;
+
+    if (!canvas) return
+
     graph.Categories.find(c => c.name === name)!.show = show
 
     graph.Elements.nodes.forEach(node => {
@@ -233,7 +239,27 @@ export default function Home() {
 
     graph.visibleLinks(show)
 
-    setData({ ...graph.Elements })
+    const currentData = canvas.getGraphData();
+
+    currentData.nodes.forEach(canvasNode => {
+      const appNode = graph.NodesMap.get(canvasNode.id);
+
+      if (appNode) {
+        canvasNode.visible = appNode.visible;
+      }
+    });
+    currentData.links.forEach(canvasLink => {
+      const appLink = graph.LinksMap.get(canvasLink.id);
+
+      if (appLink) {
+        canvasLink.visible = appLink.visible;
+      }
+    });
+
+    canvas.setGraphData({ ...currentData });
+
+    setCooldownTicks(cooldownTicks === undefined ? undefined : -1);
+    setHasHiddenElements(graph.getElements().some(element => !element.visible));
   }
 
   const handleDownloadImage = async () => {
@@ -412,10 +438,12 @@ export default function Home() {
               setSearchNode={setSearchNode}
               cooldownTicks={cooldownTicks}
               setCooldownTicks={setCooldownTicks}
-              onCategoryClick={onCategoryClick}
+              onCategoryClick={(name, show) => onCategoryClick(name, show, desktopChartRef)}
               handleDownloadImage={handleDownloadImage}
               zoomedNodes={zoomedNodes}
               setZoomedNodes={setZoomedNodes}
+              hasHiddenElements={hasHiddenElements}
+              setHasHiddenElements={setHasHiddenElements}
             />
           </Panel>
           <PanelResizeHandle className={cn(!graph.Id && 'hidden')} />
@@ -530,10 +558,12 @@ export default function Home() {
             searchNode={searchNode}
             cooldownTicks={cooldownTicks}
             setCooldownTicks={setCooldownTicks}
-            onCategoryClick={onCategoryClick}
+            onCategoryClick={(name, show) => onCategoryClick(name, show, desktopChartRef)}
             handleDownloadImage={handleDownloadImage}
             zoomedNodes={zoomedNodes}
             setZoomedNodes={setZoomedNodes}
+            hasHiddenElements={hasHiddenElements}
+            setHasHiddenElements={setHasHiddenElements}
           />
           {graph.Id && (
             <div className='flex items-center p-4 gap-4'>
@@ -595,7 +625,7 @@ export default function Home() {
                     handleSubmit={(node) => handleSearchSubmit(node, mobileChartRef)}
                     node={searchNode}
                   />
-                  <Labels categories={graph.Categories} onClick={onCategoryClick} />
+                  <Labels categories={graph.Categories} onClick={(name, show) => onCategoryClick(name, show, mobileChartRef)} />
                   <div className='flex flex-col gap-2 items-center'>
                     <button
                       className='control-button'

@@ -10,12 +10,11 @@ import { Path, PATH_COLOR } from "@/lib/utils";
 import Input from './Input';
 // import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
-import dynamic from 'next/dynamic';
 import type { Position } from "./graphView";
 import { prepareArg } from '../utils';
 import { GraphRef } from "@/lib/utils";
 import { dataToGraphData } from "@falkordb/canvas";
-import type { Node as CanvasNode, Link as CanvasLink, GraphNode } from "@falkordb/canvas";
+import type { Node as CanvasNode, Link as CanvasLink, GraphData as CanvasData } from "@falkordb/canvas";
 import GraphView from "./graphView";
 
 interface Props {
@@ -43,6 +42,8 @@ interface Props {
     handleDownloadImage: () => void
     zoomedNodes: Node[]
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
+    hasHiddenElements: boolean
+    setHasHiddenElements: Dispatch<SetStateAction<boolean>>
 }
 
 export function CodeGraph({
@@ -69,7 +70,9 @@ export function CodeGraph({
     onCategoryClick,
     handleDownloadImage,
     zoomedNodes,
-    setZoomedNodes
+    setZoomedNodes,
+    hasHiddenElements,
+    setHasHiddenElements
 }: Props) {
 
     const [url, setURL] = useState("");
@@ -92,6 +95,10 @@ export function CodeGraph({
         if (!selectedValue) return
         handleSelectedValue(selectedValue)
     }, [selectedValue])
+
+    useEffect(() => {
+        setHasHiddenElements(graph.getElements().some(element => !element.visible))
+    }, [data, graph.Id])
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -290,17 +297,37 @@ export function CodeGraph({
     }
 
     const handleRemove = (ids: number[], type: "nodes" | "links") => {
+        const canvas = canvasRef.current
+
+        if (!canvas) return
+
         graph.Elements[type].forEach(element => {
             if (!ids.includes(element.id)) return
             element.visible = false
         })
 
+        const currentData = canvas.getGraphData()
+
+        currentData[type].forEach(element => {
+            if (!ids.includes(Number(element.id))) return
+            element.visible = false
+        })
+
+        if (type === "nodes") {
+            currentData.links.forEach((link) => {
+                if (ids.includes(link.source.id) || ids.includes(link.target.id)) {
+                    link.visible = false
+                }
+            })
+        }
+
+        canvas.setGraphData(currentData)
         graph.visibleLinks(false, ids)
+        setHasHiddenElements(true)
 
         setSelectedObj(undefined)
         setSelectedObjects([])
-
-        setData({ ...graph.Elements })
+        setCooldownTicks(-1)
     }
 
     return (
@@ -367,16 +394,27 @@ export function CodeGraph({
                                             </button>
                                         }
                                         {
-                                            (graph.getElements().some(e => !e.visible)) &&
+                                            hasHiddenElements &&
                                             <button
                                                 className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
                                                 onClick={() => {
-                                                    graph.Categories.forEach(c => c.show = true)
+                                                    const canvas = canvasRef.current;
+
+                                                    if (!canvas) return;
+
+                                                    graph.Categories.forEach(c => c.show = true);
                                                     graph.getElements().forEach((element) => {
                                                         element.visible = true
-                                                    })
+                                                    });
 
-                                                    setData({ ...graph.Elements })
+                                                    const currentData = canvas.getGraphData();
+
+                                                    [...currentData.nodes, ...currentData.links].forEach(element => {
+                                                        element.visible = true
+                                                    });
+
+                                                    canvas.setGraphData(currentData);
+                                                    setHasHiddenElements(false);
                                                 }}
                                             >
                                                 <X size={15} />

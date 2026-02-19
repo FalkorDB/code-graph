@@ -115,7 +115,7 @@ export class Graph {
     this.elements = elements;
   }
 
-  get EdgesMap(): Map<number, Link> {
+  get LinksMap(): Map<number, Link> {
     return this.linksMap;
   }
 

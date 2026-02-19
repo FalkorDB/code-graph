@@ -127,8 +127,6 @@ export default function ForceGraph({
     // Update event handlers
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
-        canvasRef.current.setDebug(true);
-
         canvasRef.current.setConfig({
             autoStopOnSettle: false,
             onNodeClick: handleNodeClick,
