@@ -168,6 +168,8 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             }
         });
 
+        canvas.setGraphData(currentData)
+
         setTimeout(() => {
             canvas.zoomToFit(2, (n: GraphNode) => p.nodes.some(node => node.id === n.id));
         }, 0)
@@ -290,6 +292,8 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             l.data.isPath = linksSet.has(l.id);
             l.color = linksSet.has(l.id) ? PATH_COLOR : l.color;
         });
+
+        canvas.setGraphData(currentData)
 
         setTimeout(() => {
             const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
