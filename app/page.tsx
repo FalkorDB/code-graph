@@ -256,7 +256,7 @@ export default function Home() {
       }
     });
 
-    canvas.setGraphData({ ...currentData });
+    canvas.setGraphData(currentData);
 
     setCooldownTicks(cooldownTicks === undefined ? undefined : -1);
     setHasHiddenElements(graph.getElements().some(element => !element.visible));

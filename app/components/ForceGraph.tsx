@@ -77,7 +77,7 @@ export default function ForceGraph({
 
         if (!canvas) return
 
-        (window as any).graph = canvas.getGraphData;
+        (window as any).graph = () => canvas.getGraphData();
     }, [canvasRef])
 
     // Update canvas colors
