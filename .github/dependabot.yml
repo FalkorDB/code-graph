@@ -10,4 +10,7 @@ updates:
     schedule:
       interval: "daily"
     target-branch: "staging"
-      
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "patch"      
