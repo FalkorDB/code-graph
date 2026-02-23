@@ -20,7 +20,6 @@ export const nodesPath: { firstNode: string; secondNode: string }[] = [
 ];
 
 export const nodes: { nodeName: string; }[] = [
-  // { nodeName: "ask"},
   { nodeName: "add_edge" },
   { nodeName: "delete"},
   { nodeName: "list_graphs"}
@@ -30,5 +29,5 @@ export const categories: string[] = ['File', 'Class', 'Function'];
 
 export const graphs: { graphName: string; }[] = [
   { graphName: "GraphRAG-SDK" },
-  { graphName: "click" },
+  { graphName: "flask" },
 ];
