@@ -31,7 +31,6 @@ const convertToCanvasData = (graphData: GraphData): Data => ({
         labels: [category],
         color,
         visible,
-        caption: "name",
         data: { ...data, isPath, isPathSelected }
     })),
     links: graphData.links.filter(l => l.visible).map(({ id, label, color, visible, source, target, isPath, isPathSelected, data }) => ({
@@ -78,7 +77,7 @@ export default function ForceGraph({
 
         if (!canvas) return
 
-        (window as any).graph = () => canvas.getGraphData();
+        (window as any).graph = canvas.getGraphData;
     }, [canvasRef])
 
     // Update canvas colors
@@ -129,6 +128,7 @@ export default function ForceGraph({
         if (!canvasRef.current || !canvasLoaded) return
         canvasRef.current.setConfig({
             autoStopOnSettle: false,
+            captionsKeys: ["name", "title"],
             onNodeClick: handleNodeClick,
             onNodeRightClick: handleNodeRightClick,
             onLinkClick: handleLinkClick,
