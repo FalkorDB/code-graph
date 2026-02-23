@@ -18,6 +18,7 @@ import type { Node as CanvasNode, Link as CanvasLink, GraphData as CanvasData } 
 import GraphView from "./graphView";
 
 interface Props {
+    id: "desktop" | "mobile"
     graph: Graph,
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
@@ -47,6 +48,7 @@ interface Props {
 }
 
 export function CodeGraph({
+    id,
     graph,
     data,
     setData,
@@ -387,6 +389,7 @@ export function CodeGraph({
 
                                                     canvas.setGraphData(currentData)
                                                     setIsPathResponse(false)
+                                                    setCooldownTicks(-1)
                                                 }}
                                             >
                                                 <X size={15} />
@@ -415,6 +418,7 @@ export function CodeGraph({
 
                                                     canvas.setGraphData(currentData);
                                                     setHasHiddenElements(false);
+                                                    setCooldownTicks(-1);
                                                 }}
                                             >
                                                 <X size={15} />
@@ -437,6 +441,7 @@ export function CodeGraph({
                                     parentRef={containerRef}
                                 />
                                 <GraphView
+                                    id={id}
                                     data={data}
                                     setData={setData}
                                     graph={graph}

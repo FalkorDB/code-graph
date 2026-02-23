@@ -142,32 +142,37 @@ export default function Home() {
   }
 
   async function onFetchGraph(graphName: string) {
+    try {
+      const result = await fetch(`/api/repo/${prepareArg(graphName)}`, {
+        method: 'GET'
+      })
 
-    setGraph(Graph.empty())
+      if (!result.ok) {
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Something went wrong.",
+          description: await result.text(),
+        })
+        return
+      }
 
-    const result = await fetch(`/api/repo/${prepareArg(graphName)}`, {
-      method: 'GET'
-    })
+      const json = await result.json()
+      const g = Graph.create(json.result.entities, graphName)
+      setGraph(g)
 
-    if (!result.ok) {
+      if (cooldownTicks === 0) setCooldownTicks(-1)
+
+      setIsPathResponse(false)
+      chatPanel.current?.expand()
+      // @ts-ignore
+      window.graph = g
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Uh oh! Something went wrong.",
-        description: await result.text(),
+        description: "Failed to load repository graph. Please try again.",
       })
-      return
     }
-
-    const json = await result.json()
-    const g = Graph.create(json.result.entities, graphName)
-    setGraph(g)
-
-    if (cooldownTicks === 0) setCooldownTicks(-1)
-
-    setIsPathResponse(false)
-    chatPanel.current?.expand()
-    // @ts-ignore
-    window.graph = g
   }
 
   // Send the user query to the server to expand a node
@@ -416,8 +421,9 @@ export default function Home() {
           <div className='h-2.5 bg-gradient-to-r from-[#EC806C] via-[#B66EBD] to-[#7568F2]' />
         </header>
         <PanelGroup direction="horizontal" className="w-full h-full">
-          <Panel defaultSize={70} className="flex flex-col" minSize={50}>
+          <Panel defaultSize={graph.Id ? 70 : 100} className="flex flex-col" minSize={50}>
             <CodeGraph
+              id="desktop"
               graph={graph}
               data={data}
               setData={setData}
@@ -538,6 +544,7 @@ export default function Home() {
         )}
         <div className='flex flex-col grow'>
           <CodeGraph
+            id="mobile"
             graph={graph}
             data={data}
             setData={setData}

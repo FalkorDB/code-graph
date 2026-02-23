@@ -6,6 +6,7 @@ import { GraphRef, PATH_COLOR } from "@/lib/utils"
 import { GraphData, Link, Node } from "./model"
 
 interface Props {
+    id: "desktop" | "mobile"
     data: GraphData
     canvasRef: GraphRef
     onNodeClick: (node: Node, event: MouseEvent) => void
@@ -45,6 +46,7 @@ const convertToCanvasData = (graphData: GraphData): Data => ({
 });
 
 export default function ForceGraph({
+    id,
     data,
     canvasRef,
     onNodeClick,
@@ -77,8 +79,8 @@ export default function ForceGraph({
 
         if (!canvas) return
 
-        (window as any).graph = () => canvas.getGraphData();
-    }, [canvasRef])
+        (window as any)[id === "desktop" ? "graphDesktop" : "graphMobile"] = () => canvas.getGraphData();
+    }, [canvasRef, id])
 
     // Update canvas colors
     useEffect(() => {

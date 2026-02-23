@@ -18,6 +18,7 @@ interface Props {
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
     chartRef: GraphRef
+    id: "desktop" | "mobile"
     selectedObj: Node | Link | undefined
     setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
@@ -42,6 +43,7 @@ export default function GraphView({
     data,
     graph,
     chartRef: canvasRef,
+    id,
     selectedObj,
     setSelectedObj,
     selectedObjects,
@@ -327,6 +329,7 @@ export default function GraphView({
                 </button>
             </div>
             <ForceGraph
+                id={id}
                 data={data}
                 canvasRef={canvasRef}
                 onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}
