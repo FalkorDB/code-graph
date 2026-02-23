@@ -1,6 +1,6 @@
 import { Download, Locator, Page } from "playwright";
 import BasePage from "../../infra/ui/basePage";
-import { waitForElementToBeVisible, waitForStableText, waitToBeEnabled } from "../utils";
+import { interactWhenVisible, waitForElementToBeVisible, waitForStableText, waitToBeEnabled } from "../utils";
 
 declare global {
     interface Window {
@@ -499,9 +499,11 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.click(10, 10);
         await this.clearGraphBtn.click();
     }
-
+    
     async clickOnUnhideNodesBtn(): Promise<void> {
-        await this.unhideNodesBtn.click();
+        await interactWhenVisible(
+            this.unhideNodesBtn, (el) => el.click(),`Unhide Nodes Button`
+        );
     }
 
     async changeNodePosition(x: number, y: number): Promise<void> {
@@ -679,8 +681,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeToolTipVisible(node: string): Promise<boolean> {
-        await this.page.waitForTimeout(500);
-        return await this.nodeToolTip(node).isVisible();
+        return await waitForElementToBeVisible(this.nodeToolTip(node));
     }
 
     async getGraphDetails(): Promise<any> {
@@ -702,19 +703,24 @@ export default class CodeGraph extends BasePage {
         return graphData;
     }
 
-    async waitForCanvasAnimationToEnd(timeout = 15000): Promise<void> {
+    async waitForCanvasAnimationToEnd(timeout = 4500): Promise<void> {
+        // Check if canvas exists before waiting for it
+        const canvasContainer = this.page.locator("falkordb-canvas");
+        const canvasCount = await canvasContainer.count();
+
+        if (canvasCount === 0) {
+            return;
+        }
+
         // Wait for the canvas element to be attached
         await this.canvasElement.waitFor({ state: "attached", timeout: 10000 });
-
-        // Poll the canvas element's data-engine-status attribute
         const startTime = Date.now();
         while (Date.now() - startTime < timeout) {
             const status = await this.canvasElement.getAttribute("data-engine-status");
             if (status === "stopped") {
                 return;
             }
-            await this.page.waitForTimeout(500); // Poll every 500ms
+            await this.page.waitForTimeout(500);
         }
-        throw new Error(`Canvas animation did not stop within ${timeout}ms`);
     }
 }

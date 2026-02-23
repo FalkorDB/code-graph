@@ -49,8 +49,8 @@ export const waitForElementToBeVisible = async (locator: Locator, time = 500, re
 };
 
 
-export function findNodeByName(nodes: { name: string }[], nodeName: string): any {
-    return nodes.find((node) => node.name === nodeName);
+export function findNodeByName(nodes: any[], nodeName: string): any {
+    return nodes.find((node) => node.name === nodeName || node.data?.name === nodeName);
 }
 
 export function findFirstNodeWithSrc(nodes: { src?: string }[]): any {
@@ -59,4 +59,14 @@ export function findFirstNodeWithSrc(nodes: { src?: string }[]): any {
 
 export function findNodeWithSpecificSrc(nodes: { src?: string }[], srcContent: string): any {
     return nodes.find((node) => node.src && node.src.includes(srcContent));
+}
+
+export async function interactWhenVisible<T>(
+  element: Locator,
+  action: (el: Locator) => Promise<T>,
+  name: string
+): Promise<T> {
+  const isVisible = await waitForElementToBeVisible(element);
+  if (!isVisible) throw new Error(`${name} is not visible!`);
+  return action(element);
 }
