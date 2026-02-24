@@ -105,17 +105,13 @@ test.describe("Canvas tests", () => {
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const initialGraph = await codeGraph.getGraphNodes();
       const firstNode = findNodeByName(initialGraph, path.firstNode);
-      console.log("firstNode: ", firstNode);
       const secondNode = findNodeByName(initialGraph, path.secondNode);
-      console.log("secondNode: ", secondNode);
       expect(firstNode.isPath).toBe(true);
       expect(secondNode.isPath).toBe(true);
       await codeGraph.clickOnClearGraphBtn();
       const updateGraph = await codeGraph.getGraphNodes();
       const firstNode1 = findNodeByName(updateGraph, path.firstNode);
       const secondNode1 =  findNodeByName(updateGraph, path.secondNode);
-      console.log("firstNode1: ", firstNode1);
-      console.log("secondNode1: ", secondNode1);
       expect(firstNode1.isPath).toBe(false);
       expect(secondNode1.isPath).toBe(false);
     });
@@ -184,12 +180,8 @@ test.describe("Canvas tests", () => {
       await codeGraph.insertInputForShowPath("2", secondNode);
       const result = await codeGraph.getGraphDetails();
       const firstNodeRes = findNodeByName(result?.nodes, firstNode);
-      console.log("firstNodeRes: ", firstNodeRes);
       
       const secondnodeRes = findNodeByName(result?.nodes, secondNode);
-      console.log("secondNodeRes: ", secondnodeRes);
-      console.log("firstNodeRes: ", firstNodeRes.isPath);
-      console.log("secondnodeRes: ", secondnodeRes.isPath);
       expect(firstNodeRes).toBeDefined();
       expect(secondnodeRes).toBeDefined();
       
