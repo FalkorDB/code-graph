@@ -234,7 +234,7 @@ export default function GraphView({
 
             link.curve = curve * 0.1
 
-            const d = link.curve * 70;
+            const d = link.curve * NODE_SIZE * 11.67;
 
             ctx.beginPath();
             ctx.moveTo(start.x, start.y);
@@ -328,7 +328,7 @@ export default function GraphView({
             }
 
             const curvature = curve * 0.1
-            const d = curvature * 70;
+            const d = curvature * NODE_SIZE * 11.67;
 
             ctx.beginPath();
             ctx.moveTo(start.x, start.y);
