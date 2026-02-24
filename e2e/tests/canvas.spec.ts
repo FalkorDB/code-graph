@@ -55,7 +55,6 @@ test.describe("Canvas tests", () => {
 
   })
 
-  // BUG: canvas.getGraphData() returns stale data - visibility state not syncing after hide
   test(`Validate node hide functionality via element menu in canvas for ${nodes[0].nodeName}`, async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await codeGraph.selectGraph(GRAPHRAG_SDK);
@@ -83,7 +82,6 @@ test.describe("Canvas tests", () => {
 
   categories.forEach((category, index) => {
     const checkboxIndex = index + 1;
-    // BUG: canvas.getGraphData() returns stale data - visibility state not syncing after checkbox uncheck
     test(`Verify that unchecking the ${category} checkbox hides ${category} nodes on the canvas`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
@@ -95,7 +93,6 @@ test.describe("Canvas tests", () => {
   })
 
   nodesPath.forEach((path) => {
-    // BUG: canvas.getGraphData() returns stale data - isPath property not syncing after path selection
     test(`Verify "Clear graph" button resets canvas view for path ${path.firstNode} and ${path.secondNode}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await browser.setPageToFullScreen();
@@ -131,7 +128,6 @@ test.describe("Canvas tests", () => {
 
   for (let index = 0; index < 3; index++) {
     const nodeIndex: number = index + 1;
-    // BUG: canvas.getGraphData() returns stale data - node x/y positions not updating after drag
     test(`Validate canvas node dragging for node: ${index}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
@@ -213,7 +209,6 @@ test.describe("Canvas tests", () => {
     });
   })
 
-  // BUG: download button click does not trigger a file download
   test(`Verify file download is triggered and saved after clicking download`, async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await codeGraph.selectGraph(GRAPHRAG_SDK);
