@@ -1,4 +1,4 @@
-import { Download, Locator, Page } from "playwright";
+import { Download, Locator, Page } from "@playwright/test";
 import BasePage from "../../infra/ui/basePage";
 import { interactWhenVisible, waitForElementToBeVisible, waitForStableText, waitToBeEnabled } from "../utils";
 
@@ -499,10 +499,10 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.click(10, 10);
         await this.clearGraphBtn.click();
     }
-    
+
     async clickOnUnhideNodesBtn(): Promise<void> {
         await interactWhenVisible(
-            this.unhideNodesBtn, (el) => el.click(),`Unhide Nodes Button`
+            this.unhideNodesBtn, (el) => el.click(), `Unhide Nodes Button`
         );
     }
 
@@ -593,7 +593,7 @@ export default class CodeGraph extends BasePage {
             const data = (window as any).graphDesktop();
             // Check both possible structures: { nodes } or { elements: { nodes } }
             return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
-                           (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
+                (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
         },
             { timeout: 5000 });
 
@@ -693,7 +693,7 @@ export default class CodeGraph extends BasePage {
             const data = (window as any).graph?.();
             // Check both possible structures: { nodes } or { elements: { nodes } }
             return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
-                           (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
+                (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
         }, { timeout: 5000 });
 
         const graphData = await this.page.evaluate(() => {
