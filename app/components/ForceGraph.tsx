@@ -19,6 +19,7 @@ interface Props {
     nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void
     linkCanvasObject: (link: any, ctx: CanvasRenderingContext2D) => void
     linkPointerAreaPaint: (link: any, color: string, ctx: CanvasRenderingContext2D) => void
+    linkLineDash: (link: any) => number[] | null
     onZoom: () => void
     onEngineStop: () => void
     cooldownTicks: number | undefined
@@ -61,6 +62,7 @@ export default function ForceGraph({
     nodePointerAreaPaint,
     linkCanvasObject,
     linkPointerAreaPaint,
+    linkLineDash,
     cooldownTicks,
     backgroundColor = "#FFFFFF",
     foregroundColor = "#000000"
@@ -140,6 +142,7 @@ export default function ForceGraph({
             onEngineStop: handleEngineStop,
             node: { nodeCanvasObject, nodePointerAreaPaint },
             link: { linkCanvasObject, linkPointerAreaPaint },
+            linkLineDash,
             onZoom
         })
     }, [

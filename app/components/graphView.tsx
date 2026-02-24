@@ -24,7 +24,7 @@ interface Props {
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
-    handleExpand: (nodes: Node[],  expand: boolean) => void
+    handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     isPathResponse: boolean | undefined
@@ -207,7 +207,7 @@ export default function GraphView({
 
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(node.x, node.y, NODE_SIZE + 4 + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
+        ctx.arc(node.x, node.y, NODE_SIZE + 2 + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
         ctx.fill();
     }, [])
 
@@ -222,6 +222,9 @@ export default function GraphView({
         const even = index % 2 === 0
         let curve
 
+        ctx.strokeStyle = '#999999';
+        ctx.lineWidth = 0.1;
+
         if (start.id === end.id) {
             if (even) {
                 curve = Math.floor(-(index / 2)) - 3
@@ -231,14 +234,25 @@ export default function GraphView({
 
             link.curve = curve * 0.1
 
-            const radius = NODE_SIZE * link.curve * 6.2;
-            const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
-            const textX = start.x + radius * Math.cos(angleOffset);
-            const textY = start.y + radius * Math.sin(angleOffset);
+            const d = link.curve * 70;
+
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+            ctx.stroke();
+
+            // Midpoint of cubic bezier: P0=(sx,sy), P1=(sx,sy-d), P2=(sx+d,sy), P3=(sx,sy)
+            const textX = start.x + 0.375 * d;
+            const textY = start.y - 0.375 * d;
+
+            // Tangent at midpoint is (0.75d, 0.75d), angle always resolves to PI/4
+            let textAngle = Math.atan2(0.75 * d, 0.75 * d);
+            if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
+            if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
 
             ctx.save();
             ctx.translate(textX, textY);
-            ctx.rotate(-angleOffset);
+            ctx.rotate(textAngle);
         } else {
             if (even) {
                 curve = Math.floor(-(index / 2))
@@ -248,8 +262,23 @@ export default function GraphView({
 
             link.curve = curve * 0.1
 
-            const midX = (start.x + end.x) / 2 + (end.y - start.y) * (link.curve / 2);
-            const midY = (start.y + end.y) / 2 + (start.x - end.x) * (link.curve / 2);
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const curvature = link.curve;
+            const cpX = (start.x + end.x) / 2 + (dy / dist) * curvature * dist;
+            const cpY = (start.y + end.y) / 2 + (-dx / dist) * curvature * dist;
+
+            // Draw the quadratic bezier curve
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.quadraticCurveTo(cpX, cpY, end.x, end.y);
+            ctx.stroke();
+
+            // Midpoint of quadratic bezier at t=0.5
+            const t = 0.5;
+            const midX = (1 - t) * (1 - t) * start.x + 2 * (1 - t) * t * cpX + t * t * end.x;
+            const midY = (1 - t) * (1 - t) * start.y + 2 * (1 - t) * t * cpY + t * t * end.y;
 
             let textAngle = Math.atan2(end.y - start.y, end.x - start.x)
 
@@ -272,22 +301,26 @@ export default function GraphView({
         ctx.restore()
     }, [graph.Elements.links])
 
+    const linkLineDash = useCallback((link: GraphLink) => {
+        if (link.data.isPath && !link.data.isPathSelected) return [5, 5]
+        return null
+    }, [])
+
     const linkPointerAreaPaint = useCallback((link: GraphLink, color: string, ctx: CanvasRenderingContext2D) => {
         const start = link.source;
         const end = link.target;
 
         if (!start.x || !start.y || !end.x || !end.y) return
 
-        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
 
-        // Calculate curve the same way as linkCanvasObject
         const sameNodesLinks = graph.Elements.links.filter(l => (l.source === start.id && l.target === end.id) || (l.target === start.id && l.source === end.id))
         const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
         const even = index % 2 === 0
         let curve
 
         if (start.id === end.id) {
-            // Self-loop: draw clickable area at the loop position
             if (even) {
                 curve = Math.floor(-(index / 2)) - 3
             } else {
@@ -295,16 +328,13 @@ export default function GraphView({
             }
 
             const curvature = curve * 0.1
-            const radius = NODE_SIZE * curvature * 6.2;
-            const angleOffset = -Math.PI / 4;
-            const textX = start.x + radius * Math.cos(angleOffset);
-            const textY = start.y + radius * Math.sin(angleOffset);
+            const d = curvature * 70;
 
             ctx.beginPath();
-            ctx.arc(textX, textY, 5, 0, 2 * Math.PI, false);
-            ctx.fill();
+            ctx.moveTo(start.x, start.y);
+            ctx.bezierCurveTo(start.x, start.y - d, start.x + d, start.y, start.x, start.y);
+            ctx.stroke();
         } else {
-            // Regular link: draw clickable area at the curve midpoint
             if (even) {
                 curve = Math.floor(-(index / 2))
             } else {
@@ -312,12 +342,16 @@ export default function GraphView({
             }
 
             const curvature = curve * 0.1
-            const midX = (start.x + end.x) / 2 + (end.y - start.y) * (curvature / 2);
-            const midY = (start.y + end.y) / 2 + (start.x - end.x) * (curvature / 2);
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const cpX = (start.x + end.x) / 2 + (dy / dist) * curvature * dist;
+            const cpY = (start.y + end.y) / 2 + (-dx / dist) * curvature * dist;
 
             ctx.beginPath();
-            ctx.arc(midX, midY, 5, 0, 2 * Math.PI, false);
-            ctx.fill();
+            ctx.moveTo(start.x, start.y);
+            ctx.quadraticCurveTo(cpX, cpY, end.x, end.y);
+            ctx.stroke();
         }
     }, [graph.Elements.links])
 
@@ -344,6 +378,7 @@ export default function GraphView({
                 nodePointerAreaPaint={nodePointerAreaPaint}
                 linkCanvasObject={linkCanvasObject}
                 linkPointerAreaPaint={linkPointerAreaPaint}
+                linkLineDash={linkLineDash}
                 cooldownTicks={cooldownTicks}
             />
         </div>

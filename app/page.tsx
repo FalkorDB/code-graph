@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react';
-import { Chat } from './components/chat';
 import { Graph, GraphData, Node } from './components/model';
 import { AlignRight, BookOpen, BoomBox, Download, Github, HomeIcon, Search, X } from 'lucide-react';
 import Link from 'next/link';
@@ -22,6 +21,7 @@ import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
 import type { GraphNode } from '@falkordb/canvas';
 import dynamic from 'next/dynamic';
 
+const Chat = dynamic(() => import('./components/chat').then(mod => mod.Chat), { ssr: false });
 const CodeGraph = dynamic(() => import('./components/code-graph').then(mod => mod.CodeGraph), { ssr: false });
 
 type Tip = {
@@ -202,6 +202,8 @@ export default function Home() {
 
   const handleSearchSubmit = (node: any, canvasRef: GraphRef) => {
     const canvas = canvasRef.current
+
+    debugger
 
     if (canvas) {
       let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
@@ -477,9 +479,9 @@ export default function Home() {
               selectedPathId={selectedPathId}
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
-              setData={setData}
               paths={paths}
               setPaths={setPaths}
+              setCooldownTicks={setCooldownTicks}
             />
           </Panel>
         </PanelGroup>
@@ -601,10 +603,10 @@ export default function Home() {
                     selectedPathId={selectedPathId}
                     isPathResponse={isPathResponse}
                     setIsPathResponse={setIsPathResponse}
-                    setData={setData}
                     setChatOpen={setChatOpen}
                     paths={paths}
                     setPaths={setPaths}
+                    setCooldownTicks={setCooldownTicks}
                   />
                 </DrawerContent>
               </Drawer>

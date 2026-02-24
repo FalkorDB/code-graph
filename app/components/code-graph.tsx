@@ -182,7 +182,7 @@ export function CodeGraph({
         if (nodes.length === 0) return;
 
         const expandedNodes: Node[] = []
-        const deleteIdsMap = new Map()
+        const deleteIdsMap = new Set()
 
         graph.Elements = {
             nodes: graph.Elements.nodes.filter(node => {
@@ -192,7 +192,7 @@ export function CodeGraph({
 
                 if (!isTarget) return true
 
-                deleteIdsMap.set(node.id, true)
+                deleteIdsMap.add(node.id)
                 const deleted = graph.NodesMap.delete(Number(node.id))
 
                 if (deleted && node.expand) {
@@ -204,7 +204,7 @@ export function CodeGraph({
             links: graph.Elements.links
         }
 
-        deleteNeighbors(expandedNodes)
+        deleteNeighbors(expandedNodes)?.forEach(id => deleteIdsMap.add(id))
 
         graph.removeLinks()
 
@@ -273,6 +273,8 @@ export function CodeGraph({
                 nodes: [...currentData.nodes, ...newGraphData.nodes],
                 links: [...currentData.links, ...newGraphData.links]
             })
+
+            setCooldownTicks(-1)
         } else {
             const deleteNodes = nodes.filter(n => n.expand)
             if (deleteNodes.length > 0) {
@@ -287,6 +289,7 @@ export function CodeGraph({
                     currentData.links = currentData.links.filter(link => !deleteIdsMap.has(Number(link.source.id)) && !deleteIdsMap.has(Number(link.target.id)))
 
                     canvasRef.current?.setGraphData(currentData)
+                    setCooldownTicks(-1)
                 }
             }
         }

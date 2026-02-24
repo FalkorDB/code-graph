@@ -9,7 +9,7 @@ import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
-import { GraphNode } from "@falkordb/canvas";
+import { dataToGraphData, GraphLink, GraphNode } from "@falkordb/canvas";
 
 interface Props {
     repo: string
@@ -19,7 +19,6 @@ interface Props {
     selectedPathId: number | undefined
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
-    setData: Dispatch<SetStateAction<GraphData>>
     canvasRef: GraphRef
     messages: Message[]
     setMessages: Dispatch<SetStateAction<Message[]>>
@@ -27,6 +26,7 @@ interface Props {
     setQuery: Dispatch<SetStateAction<string>>
     selectedPath: PathData | undefined
     setSelectedPath: Dispatch<SetStateAction<PathData | undefined>>
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     setChatOpen?: Dispatch<SetStateAction<boolean>>
     paths: PathData[]
     setPaths: Dispatch<SetStateAction<PathData[]>>
@@ -52,7 +52,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, canvasRef, paths, setPaths }: Props) {
+export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setCooldownTicks, canvasRef, paths, setPaths }: Props) {
 
     const [sugOpen, setSugOpen] = useState(false);
 
@@ -273,27 +273,86 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             return
         }
 
-        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
-        formattedPaths.forEach((p: any) => graph.extend(p, false, path))
-
+        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((_n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
+        const elements = formattedPaths.reduce<GraphData>(
+            (acc, p) => {
+                const el = graph.extend(p, false, path)
+                acc.nodes.push(...el.nodes)
+                acc.links.push(...el.links)
+                return acc
+            },
+            { nodes: [], links: [] }
+        )
         setPaths(formattedPaths)
         setMessages((prev) => [...prev.slice(0, -1), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
         setIsPathResponse(true)
 
         const currentData = canvas.getGraphData();
 
-        const nodesSet = new Set<number>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => n.id)));
-        const linksSet = new Set<number>(formattedPaths.flatMap(p => p.links.map((l: any) => l.id)));
+        const nodesMap = new Map<number, GraphNode>(currentData.nodes.map(n => [n.id, n]))
+        const linksMap = new Map<number, GraphLink>(currentData.links.map(l => [l.id, l]))
 
-        currentData.nodes.forEach(n => {
-            n.data.isPath = nodesSet.has(n.id);
+        formattedPaths.flatMap(p => p.nodes).forEach(n => {
+            const node = nodesMap.get(n.id);
+            if (node) {
+                node.data.isPath = true;
+            }
         });
-        currentData.links.forEach(l => {
-            l.data.isPath = linksSet.has(l.id);
-            l.color = linksSet.has(l.id) ? PATH_COLOR : l.color;
+        formattedPaths.flatMap(p => p.links).forEach(l => {
+            const link = linksMap.get(l.id);
+
+            if (link) {
+                link.data.isPath = true;
+                link.color = PATH_COLOR;
+            }
         });
 
-        canvas.setGraphData(currentData)
+        // Filter for only new elements
+        const newDataElements = {
+            nodes: elements.nodes.filter(n => !nodesMap.has(n.id))
+                .map(({ category, color, data, id, isPath, isPathSelected, visible }) => ({
+                    color,
+                    id,
+                    labels: [category],
+                    data: {
+                        ...data,
+                        isPath,
+                        isPathSelected
+                    },
+                    visible,
+                })),
+            links: elements.links.filter(l => !linksMap.has(l.id))
+                .map(({ color, id, source, target, data, isPath, isPathSelected, visible, label }) => ({
+                    color: isPath ? PATH_COLOR : color,
+                    id,
+                    source,
+                    target,
+                    data: {
+                        ...data,
+                        isPath,
+                        isPathSelected
+                    },
+                    visible,
+                    relationship: label,
+                }))
+        }
+
+        // Convert only new data to GraphData format
+        const newGraphData = dataToGraphData(
+            newDataElements,
+            undefined,
+            new Map(currentData.nodes.map(n => [n.id, n]))
+        )
+
+        // Merge with existing data
+        canvasRef.current?.setGraphData({
+            nodes: [...currentData.nodes, ...newGraphData.nodes],
+            links: [...currentData.links, ...newGraphData.links]
+        })
+
+        if (elements.nodes.length !== 0 || elements.links.length !== 0) {
+            setCooldownTicks(-1)
+        }
 
         setTimeout(() => {
             const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
