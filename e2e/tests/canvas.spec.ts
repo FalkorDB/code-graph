@@ -176,8 +176,7 @@ test.describe("Canvas tests", () => {
   });
 
   nodesPath.forEach(({firstNode, secondNode}) => {
-    // BUG: canvas.getGraphData() returns stale data - isPath property not syncing after path selection
-    test.only(`Verify successful node path connection in canvas between ${firstNode} and ${secondNode} via UI`, async () => {
+    test(`Verify successful node path connection in canvas between ${firstNode} and ${secondNode} via UI`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.clickOnShowPathBtn("Show the path");
