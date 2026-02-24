@@ -590,7 +590,7 @@ export default class CodeGraph extends BasePage {
         await this.waitForCanvasAnimationToEnd();
         // Wait for the graph data to be available on window object (set by handleEngineStop)
         await this.page.waitForFunction(() => {
-            const data = (window as any).graph?.();
+            const data = (window as any).graphDesktop();
             // Check both possible structures: { nodes } or { elements: { nodes } }
             return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
                            (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
@@ -598,7 +598,7 @@ export default class CodeGraph extends BasePage {
             { timeout: 5000 });
 
         const graphData = await this.page.evaluate(() => {
-            return (window as any).graph?.();
+            return (window as any).graphDesktop();
         });
 
         let transformData: any = null;
