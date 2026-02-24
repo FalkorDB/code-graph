@@ -269,8 +269,9 @@ export default function Home() {
 
   const handleDownloadImage = async () => {
     try {
-      const canvases = document.querySelectorAll('.force-graph-container canvas') as NodeListOf<HTMLCanvasElement>;
-      if (!canvases) {
+      const canvases = Array.from(document.querySelectorAll('falkordb-canvas').values()).map(canvas => canvas.shadowRoot?.querySelector('canvas')).filter((c): c is HTMLCanvasElement => !!c);
+      
+      if (canvases.length === 0) {
         toast({
           title: "Error",
           description: "Canvas not found",
