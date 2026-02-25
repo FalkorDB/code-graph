@@ -200,10 +200,8 @@ export default function Home() {
     return graph.extend(json.result.neighbors, true)
   }
 
-  const handleSearchSubmit = (node: any, canvasRef: GraphRef) => {
+  const handleSearchSubmit = async (node: any, canvasRef: GraphRef) => {
     const canvas = canvasRef.current
-
-    debugger
 
     if (canvas) {
       let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
@@ -216,11 +214,58 @@ export default function Home() {
 
           setZoomedNodes([chartNode])
           graph.visibleLinks(true, [chartNode!.id])
-          setData({ ...graph.Elements })
+
+          const currentData = canvas.getGraphData()
+
+          const { dataToGraphData } = await import('@falkordb/canvas')
+          const graphNode = dataToGraphData({
+            nodes: [{
+              color: chartNode.color,
+              id: chartNode.id,
+              labels: [chartNode.category],
+              visible: chartNode.visible,
+              data: {
+                ...chartNode.data,
+                isPath: chartNode.isPath,
+                isPathSelected: chartNode.isPathSelected,
+              }
+            }], links: []
+          }).nodes[0]
+
+          if (graphNode) {
+            currentData.nodes.push(graphNode)
+          }
+
+          canvas.setGraphData(currentData)
+
+
+          setTimeout(() => {
+            canvas.zoomToFit(4, (n: GraphNode) => n.id === chartNode!.id)
+          }, 0)
+          setSearchNode(chartNode)
+          setOptionsOpen(false)
+          return
         }
+
         chartNode.visible = true
         graph.visibleLinks(true, [chartNode!.id])
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData()
+
+        const graphNode = currentData.nodes.find(n => n.id === chartNode!.id)
+        if (graphNode) {
+          graphNode.visible = true
+        }
+
+        currentData.links.forEach(canvasLink => {
+          const appLink = graph.LinksMap.get(canvasLink.id)
+
+          if (appLink) {
+            canvasLink.visible = appLink.visible
+          }
+        })
+
+        canvas.setGraphData(currentData)
       }
 
       setTimeout(() => {
@@ -240,7 +285,7 @@ export default function Home() {
     graph.Categories.find(c => c.name === name)!.show = show
 
     graph.Elements.nodes.forEach(node => {
-      if (!(node.category === name)) return
+      if (node.category !== name) return
       node.visible = show
     })
 
@@ -255,6 +300,7 @@ export default function Home() {
         canvasNode.visible = appNode.visible;
       }
     });
+
     currentData.links.forEach(canvasLink => {
       const appLink = graph.LinksMap.get(canvasLink.id);
 
@@ -272,7 +318,7 @@ export default function Home() {
   const handleDownloadImage = async () => {
     try {
       const canvases = Array.from(document.querySelectorAll('falkordb-canvas').values()).map(canvas => canvas.shadowRoot?.querySelector('canvas')).filter((c): c is HTMLCanvasElement => !!c);
-      
+
       if (canvases.length === 0) {
         toast({
           title: "Error",
