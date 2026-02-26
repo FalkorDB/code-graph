@@ -103,7 +103,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get searchBarList(): Locator {
-        return this.page.locator('div[data-name="search-bar-list"]');
+        return this.scopedLocator('div[data-name="search-bar-list"]');
     }
 
     private get searchBarListFirstButtonInput(): Locator {
@@ -444,11 +444,9 @@ export default class CodeGraph extends BasePage {
     }
 
     async getSearchBarInputValue(): Promise<string | null> {
-        let res: string | null = null;
-        await interactWhenVisible(this.searchBarListFirstButtonInput, async (el) => {
-            res = (await el.innerText())?.trim() ?? null;
-        }, 'searchBarListFirstButtonInput');
-        return res;
+        const isVisible = await waitForElementToBeVisible(this.searchBarListFirstButtonInput);
+        if (!isVisible) return null;
+        return (await this.searchBarListFirstButtonInput.innerText())?.trim() ?? null;
     }
 
     async scrollToBottomInSearchBarList(): Promise<void> {

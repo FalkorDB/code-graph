@@ -11,7 +11,8 @@ const categorizeCharacters = (characters: string[], expectedRes: boolean): { cha
 
 export const specialCharacters: { character: string; expectedRes: boolean }[] = [
   ...categorizeCharacters(['%', '*', '(', ')', '-', '[', ']', '{', '}', ';', ':', '"', '|', '~'], false),
-  ...categorizeCharacters(['!', '@', '$', '^', '_', '=', '+', "'", ',', '.', '<', '>', '/', '?', '\\', '`', '&', '#'], true)
+  ...categorizeCharacters(['!', '@', '$', '^', '=', '+', "'", ',', '<', '>', '/', '?', '\\', '`', '&', '#'], false),
+  ...categorizeCharacters(['_', '.'], true)
 ];
 
 export const nodesPath: { firstNode: string; secondNode: string }[] = [
