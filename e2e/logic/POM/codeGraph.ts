@@ -103,7 +103,11 @@ export default class CodeGraph extends BasePage {
     }
 
     private get searchBarList(): Locator {
-        return this.scopedLocator("//div[@data-name='search-bar-list']");
+        return this.page.locator('div[data-name="search-bar-list"]');
+    }
+
+    private get searchBarListFirstButtonInput(): Locator {
+        return this.searchBarList.locator("button").first().locator('div p').first();
     }
 
     /* Chat Locators */
@@ -245,8 +249,12 @@ export default class CodeGraph extends BasePage {
         return this.scopedLocator(`//div[@data-name='node-details-panel']//button[@title='Copy src to clipboard']`);
     }
 
+    private get canvasTooltip(): Locator {
+        return this.page.locator('.float-tooltip-kap').first();
+    }
+
     private get nodeToolTip(): (node: string) => Locator {
-        return (node: string) => this.page.locator(`.float-tooltip-kap:has-text("${node}")`);
+        return (node: string) => this.page.locator('.float-tooltip-kap').filter({ hasText: node });
     }
 
     private get downloadImageBtn(): Locator {
@@ -435,8 +443,12 @@ export default class CodeGraph extends BasePage {
         await button.click();
     }
 
-    async getSearchBarInputValue(): Promise<string> {
-        return await this.searchBarInput.inputValue();
+    async getSearchBarInputValue(): Promise<string | null> {
+        let res: string | null = null;
+        await interactWhenVisible(this.searchBarListFirstButtonInput, async (el) => {
+            res = (await el.innerText())?.trim() ?? null;
+        }, 'searchBarListFirstButtonInput');
+        return res;
     }
 
     async scrollToBottomInSearchBarList(): Promise<void> {
@@ -696,6 +708,11 @@ export default class CodeGraph extends BasePage {
 
     async isNodeToolTipVisible(node: string): Promise<boolean> {
         return await waitForElementToBeVisible(this.nodeToolTip(node));
+    }
+
+    async getNodeToolTipContent(): Promise<string> {
+        await waitForElementToBeVisible(this.canvasTooltip);
+        return (await this.canvasTooltip.innerText()).trim();
     }
 
     async getGraphDetails(): Promise<any> {
