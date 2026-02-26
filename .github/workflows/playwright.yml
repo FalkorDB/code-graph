@@ -36,7 +36,7 @@ jobs:
       run: |
         npm install
         npm run build
-        NEXTAUTH_SECRET=SECRET npm start & npx playwright test --reporter=dot,list
+        NEXTAUTH_SECRET=SECRET npm start & npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
     - name: Ensure required directories exist
       run: |
         mkdir -p playwright-report
