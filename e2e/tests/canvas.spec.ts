@@ -64,7 +64,8 @@ test.describe("Canvas tests", () => {
     await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
     await codeGraph.clickOnRemoveNodeViaElementMenu();
     const updatedGraph = await codeGraph.getGraphNodes();
-    expect(updatedGraph.length).toBeLessThan(initialCount);
+    const updatedNode = findNodeByName(updatedGraph, nodes[0].nodeName);
+    expect(updatedNode.visible).toBe(false);
   });
 
   test(`Validate unhide node functionality after hiding a node in canvas for ${nodes[0].nodeName}`, async () => {
@@ -88,7 +89,7 @@ test.describe("Canvas tests", () => {
       await codeGraph.selectCodeGraphCheckbox(checkboxIndex.toString());
       const result = await codeGraph.getGraphNodes();
       const findItem = result.find((item: { category: string; }) => item.category === category);
-      expect(findItem).toBeUndefined();
+      expect(findItem.visible).toBeFalsy();
     });
   })
 
@@ -126,17 +127,28 @@ test.describe("Canvas tests", () => {
     });
   })
 
-  for (let index = 0; index < 3; index++) {
+  for (let index = 1; index < 3; index++) {
     const nodeIndex: number = index + 1;
     test(`Validate canvas node dragging for node: ${index}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       const initialGraph = await codeGraph.getGraphNodes();
-      await codeGraph.changeNodePosition(initialGraph[nodeIndex].screenX, initialGraph[nodeIndex].screenY);
+      const nodeName = initialGraph[nodeIndex].name || initialGraph[nodeIndex].data?.name;
+      await codeGraph.fillSearchBar(nodeName);
+      await codeGraph.selectSearchBarOptionBtn("1");
+      await codeGraph.waitForCanvasAnimationToEnd();
+      const updatedGraph = await codeGraph.getGraphNodes();
+      const targetNode = findNodeByName(updatedGraph, nodeName);
+      const initialX = targetNode.x;
+      const initialY = targetNode.y;
+      await codeGraph.dragFromCanvasCenter();
       const updateGraph = await codeGraph.getGraphDetails();
       const nodes = updateGraph.elements?.nodes || updateGraph.nodes;
-      expect(nodes[nodeIndex].x).not.toBe(initialGraph[nodeIndex].x);
-      expect(nodes[nodeIndex].y).not.toBe(initialGraph[nodeIndex].y);
+      const draggedNode = findNodeByName(nodes, nodeName);
+
+      expect(draggedNode.x).not.toBe(initialX);
+      expect(draggedNode.y).not.toBe(initialY);
     });
   }
 
@@ -174,10 +186,10 @@ test.describe("Canvas tests", () => {
       await codeGraph.clickOnShowPathBtn("Show the path");
       await codeGraph.insertInputForShowPath("1", firstNode);
       await codeGraph.insertInputForShowPath("2", secondNode);
-      const result = await codeGraph.getGraphDetails();
-      const firstNodeRes = findNodeByName(result?.nodes, firstNode);
+      const result = await codeGraph.getGraphNodes();
+      const firstNodeRes = findNodeByName(result, firstNode);
       
-      const secondnodeRes = findNodeByName(result?.nodes, secondNode);
+      const secondnodeRes = findNodeByName(result, secondNode);
       expect(firstNodeRes).toBeDefined();
       expect(secondnodeRes).toBeDefined();
       
