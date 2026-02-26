@@ -520,6 +520,16 @@ export default class CodeGraph extends BasePage {
         await this.page.mouse.up();
     }
 
+    async dragFromCanvasCenter(): Promise<void> {
+        const box = (await this.canvasElement.boundingBox())!;
+        const centerX = box.x + box.width / 2;
+        const centerY = box.y + box.height / 2;
+        await this.page.mouse.move(centerX, centerY);
+        await this.page.mouse.down();
+        await this.page.mouse.move(centerX + 100, centerY + 50);
+        await this.page.mouse.up();
+    }
+
     async isNodeDetailsPanel(): Promise<boolean> {
         await this.page.waitForTimeout(500);
         return this.nodeDetailsPanel.isVisible();
@@ -586,20 +596,24 @@ export default class CodeGraph extends BasePage {
         return Promise.all(elements.map(element => element.innerHTML()));
     }
 
-    async getGraphNodes(): Promise<any[]> {
+    private async waitForGraphData(): Promise<any> {
         await this.waitForCanvasAnimationToEnd();
-        // Wait for the graph data to be available on window object (set by handleEngineStop)
+        // Wait for the graph data to be available
         await this.page.waitForFunction(() => {
-            const data = (window as any).graphDesktop();
-            // Check both possible structures: { nodes } or { elements: { nodes } }
+            const data = (window as any).graphDesktop?.();
             return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
                 (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
-        },
-            { timeout: 5000 });
+        }, { timeout: 5000 });
 
-        const graphData = await this.page.evaluate(() => {
-            return (window as any).graphDesktop();
-        });
+        // Safety guard: wait for engine to fully stop and data to settle
+        await this.page.waitForTimeout(3000);
+        await this.waitForCanvasAnimationToEnd();
+
+        return await this.page.evaluate(() => (window as any).graphDesktop());
+    }
+
+    async getGraphNodes(): Promise<any[]> {
+        const graphData = await this.waitForGraphData();
 
         let transformData: any = null;
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -686,21 +700,7 @@ export default class CodeGraph extends BasePage {
 
     async getGraphDetails(): Promise<any> {
         await this.canvasElementBeforeGraphSelection.waitFor({ state: 'detached' });
-        await this.waitForCanvasAnimationToEnd();
-
-        // Wait for the graph function to be available and return data
-        await this.page.waitForFunction(() => {
-            const data = (window as any).graph?.();
-            // Check both possible structures: { nodes } or { elements: { nodes } }
-            return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
-                (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
-        }, { timeout: 5000 });
-
-        const graphData = await this.page.evaluate(() => {
-            return (window as any).graph?.();
-        });
-
-        return graphData;
+        return await this.waitForGraphData();
     }
 
     async waitForCanvasAnimationToEnd(timeout = 4500): Promise<void> {
