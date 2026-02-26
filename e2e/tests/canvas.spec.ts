@@ -57,9 +57,12 @@ test.describe("Canvas tests", () => {
 
   test(`Validate node hide functionality via element menu in canvas for ${nodes[0].nodeName}`, async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
     await codeGraph.selectGraph(GRAPHRAG_SDK);
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
     const initialGraph = await codeGraph.getGraphNodes();
-    const initialCount = initialGraph.length;
     const targetNode = findNodeByName(initialGraph, nodes[0].nodeName);
     await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
     await codeGraph.clickOnRemoveNodeViaElementMenu();
