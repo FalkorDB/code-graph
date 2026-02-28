@@ -479,10 +479,9 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnRemoveNodeViaElementMenu(): Promise<void> {
-        const button = this.elementMenuButton("Remove");
-        const isVisible = await waitForElementToBeVisible(button);
-        if (!isVisible) throw new Error("'Remove' button is not visible!");
-        await button.click();
+        await interactWhenVisible(
+            this.elementMenuButton("Remove"), (el) => el.click(), 'Remove button'
+        );
     }
 
     async nodeClick(x: number, y: number): Promise<void> {
@@ -546,10 +545,9 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnViewNode(): Promise<void> {
-        const button = this.elementMenuButton("View Node");
-        const isButtonVisible = await waitForElementToBeVisible(button);
-        if (!isButtonVisible) throw new Error("'View Node' button is not visible!");
-        await button.click();
+        await interactWhenVisible(
+            this.elementMenuButton("View Node"), (el) => el.click(), 'View Node button'
+        );
     }
 
     async getNodeDetailsHeader(): Promise<string> {
@@ -582,10 +580,9 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnCopyToClipboard(): Promise<string> {
-        const button = this.elementMenuButton("Copy src to clipboard");
-        const isVisible = await waitForElementToBeVisible(button);
-        if (!isVisible) throw new Error("View Node button is not visible!");
-        await button.click();
+        await interactWhenVisible(
+            this.elementMenuButton("Copy src to clipboard"), (el) => el.click(), 'Copy src to clipboard button'
+        );
         return await this.page.evaluate(() => navigator.clipboard.readText());
     }
 
@@ -594,14 +591,12 @@ export default class CodeGraph extends BasePage {
     }
 
     async getNodeDetailsPanelElements(): Promise<string[]> {
-        const button = this.elementMenuButton("View Node");
-        const isVisible = await waitForElementToBeVisible(button);
-        if (!isVisible) throw new Error("View Node button is not visible!");
-        await button.click();
-
-        const isPanelVisible = await waitForElementToBeVisible(this.nodedetailsPanelElements.first());
-        if (!isPanelVisible) throw new Error("Node details panel did not appear!");
-
+        await interactWhenVisible(
+            this.elementMenuButton("View Node"), (el) => el.click(), 'View Node button'
+        );
+        await interactWhenVisible(
+            this.nodedetailsPanelElements.first(), async () => {}, 'Node details panel'
+        );
         const elements = await this.nodedetailsPanelElements.all();
         return Promise.all(elements.map(element => element.innerHTML()));
     }
@@ -689,11 +684,21 @@ export default class CodeGraph extends BasePage {
     }
 
     async rightClickAtCanvasCenter(): Promise<void> {
+        await this.waitForCanvasAnimationToEnd();
         const boundingBox = await this.canvasElement.boundingBox();
         if (!boundingBox) throw new Error('Canvas bounding box not found');
         const centerX = boundingBox.x + boundingBox.width / 2;
         const centerY = boundingBox.y + boundingBox.height / 2;
-        await this.page.mouse.click(centerX, centerY, { button: 'right' });
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            await this.page.mouse.move(centerX, centerY);
+            await this.page.waitForTimeout(500);
+            await this.page.mouse.click(centerX, centerY, { button: 'right' });
+            if (await this.elementMenu.isVisible()) {
+                return;
+            }
+            await this.page.waitForTimeout(1000);
+        }
+        throw new Error('Element menu not visible after right-clicking at canvas center');
     }
 
     async hoverAtCanvasCenter(): Promise<void> {
