@@ -4,12 +4,12 @@ import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
 import { Message, MessageTypes, Path, PathData } from "@/lib/utils";
 import Input from "./Input";
-import { Graph, GraphData, Link, Node } from "./model";
+import { Graph, GraphData, Node } from "./model";
 import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
-import { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
+import { dataToGraphData, GraphLink, GraphNode } from "@falkordb/canvas";
 
 interface Props {
     repo: string
@@ -19,19 +19,20 @@ interface Props {
     selectedPathId: number | undefined
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
-    setData: Dispatch<SetStateAction<GraphData>>
-    chartRef: GraphRef
+    canvasRef: GraphRef
     messages: Message[]
     setMessages: Dispatch<SetStateAction<Message[]>>
     query: string
     setQuery: Dispatch<SetStateAction<string>>
     selectedPath: PathData | undefined
     setSelectedPath: Dispatch<SetStateAction<PathData | undefined>>
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     setChatOpen?: Dispatch<SetStateAction<boolean>>
     paths: PathData[]
     setPaths: Dispatch<SetStateAction<PathData[]>>
 }
 
+const PATH_COLOR = "#ffde21";
 const SUGGESTIONS = [
     "List a few recursive functions",
     "What is the name of the most used method?",
@@ -51,7 +52,7 @@ const RemoveLastPath = (messages: Message[]) => {
     return messages
 }
 
-export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData, chartRef, paths, setPaths }: Props) {
+export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setCooldownTicks, canvasRef, paths, setPaths }: Props) {
 
     const [sugOpen, setSugOpen] = useState(false);
 
@@ -91,9 +92,9 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
     }, [isPathResponse])
 
     const handleSetSelectedPath = (p: PathData) => {
-        const chart = chartRef.current
+        const canvas = canvasRef.current
 
-        if (!chart) return
+        if (!canvas) return
         setSelectedPath(prev => {
             if (prev) {
                 if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
@@ -138,16 +139,39 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             })
             graph.extend(elements, true, { start: p.nodes[0], end: p.nodes[p.nodes.length - 1] })
             graph.getElements().filter(e => "source" in e ? p.links.some(l => l.id === e.id) : p.nodes.some(n => n.id === e.id)).forEach(e => {
-                if ((e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id) || "source" in e) {
+                if (e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id || "source" in e) {
                     e.isPathSelected = true
                 } else {
                     e.isPath = true
                 }
             });
         }
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData();
+
+        const nodesSet = new Set<number>(p.nodes.map((n: Node) => n.id));
+        const linksSet = new Set<number>(p.links.map((l: any) => l.id));
+
+        currentData.nodes.forEach(n => {
+            if (nodesSet.has(n.id)) {
+                if (n.id === p.nodes[0].id || n.id === p.nodes[p.nodes.length - 1].id) {
+                    n.data.isPathSelected = true;
+                } else {
+                    n.data.isPath = true;
+                }
+            }
+        });
+        currentData.links.forEach(l => {
+            if (linksSet.has(l.id)) {
+                l.data.isPathSelected = true;
+                l.color = PATH_COLOR;
+            }
+        });
+
+        canvas.setGraphData(currentData)
+
         setTimeout(() => {
-            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => p.nodes.some(node => node.id === n.id));
+            canvas.zoomToFit(2, (n: GraphNode) => p.nodes.some(node => node.id === n.id));
         }, 0)
         setChatOpen && setChatOpen(false)
     }
@@ -206,21 +230,29 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
     }
 
     const handleSubmit = async () => {
-        const chart = chartRef.current
+        const canvas = canvasRef.current
 
-        if (!chart) return
+        if (!canvas) return
 
         setSelectedPath(undefined)
 
         if (!path?.start?.id || !path.end?.id) return
 
+        const pathMessage = [{
+            type: MessageTypes.Response,
+            text: "Please select a starting point and the end point. Select or press relevant item on the graph"
+        }, { type: MessageTypes.Path }]
+
         setPath(undefined)
+        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.Pending }])
 
         const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
         })
 
         if (!result.ok) {
+            setMessages((prev) => [...prev.slice(0, -1), ...pathMessage])
+            setPath({})
             toast({
                 variant: "destructive",
                 title: "Uh oh! Something went wrong.",
@@ -232,6 +264,8 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         const json = await result.json()
 
         if (json.result.paths.length === 0) {
+            setMessages((prev) => [...prev.slice(0, -1), ...pathMessage])
+            setPath({})
             toast({
                 title: `No path found`,
                 description: `no path found between node ${path.start.name} - ${path.end.name}`,
@@ -239,15 +273,90 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             return
         }
 
-        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
-        formattedPaths.forEach((p: any) => graph.extend(p, false, path))
-
+        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((_n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
+        const elements = formattedPaths.reduce<GraphData>(
+            (acc, p) => {
+                const el = graph.extend(p, false, path)
+                acc.nodes.push(...el.nodes)
+                acc.links.push(...el.links)
+                return acc
+            },
+            { nodes: [], links: [] }
+        )
         setPaths(formattedPaths)
-        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
+        setMessages((prev) => [...prev.slice(0, -1), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
         setIsPathResponse(true)
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData();
+
+        const nodesMap = new Map<number, GraphNode>(currentData.nodes.map(n => [n.id, n]))
+        const linksMap = new Map<number, GraphLink>(currentData.links.map(l => [l.id, l]))
+
+        formattedPaths.flatMap(p => p.nodes).forEach(n => {
+            const node = nodesMap.get(n.id);
+            if (node) {
+                node.data.isPath = true;
+            }
+        });
+        formattedPaths.flatMap(p => p.links).forEach(l => {
+            const link = linksMap.get(l.id);
+
+            if (link) {
+                link.data.isPath = true;
+                link.color = PATH_COLOR;
+            }
+        });
+
+        // Filter for only new elements
+        const newDataElements = {
+            nodes: elements.nodes.filter(n => !nodesMap.has(n.id))
+                .map(({ category, color, data, id, isPath, isPathSelected, visible }) => ({
+                    color,
+                    id,
+                    labels: [category],
+                    data: {
+                        ...data,
+                        isPath,
+                        isPathSelected
+                    },
+                    visible,
+                })),
+            links: elements.links.filter(l => !linksMap.has(l.id))
+                .map(({ color, id, source, target, data, isPath, isPathSelected, visible, label }) => ({
+                    color: isPath ? PATH_COLOR : color,
+                    id,
+                    source,
+                    target,
+                    data: {
+                        ...data,
+                        isPath,
+                        isPathSelected
+                    },
+                    visible,
+                    relationship: label,
+                }))
+        }
+
+        // Convert only new data to GraphData format
+        const newGraphData = dataToGraphData(
+            newDataElements,
+            undefined,
+            new Map(currentData.nodes.map(n => [n.id, n]))
+        )
+
+        // Merge with existing data
+        canvasRef.current?.setGraphData({
+            nodes: [...currentData.nodes, ...newGraphData.nodes],
+            links: [...currentData.links, ...newGraphData.links]
+        })
+
+        if (elements.nodes.length !== 0 || elements.links.length !== 0) {
+            setCooldownTicks(-1)
+        }
+
         setTimeout(() => {
-            chart.zoomToFit(1000, 150, (n: NodeObject<Node>) => formattedPaths.some(p => p.nodes.some(node => node.id === n.id)));
+            const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
+            canvas.zoomToFit(2, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));
         }, 0)
     }
 
@@ -257,6 +366,10 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 disabled={isSendMessage}
                 className={cn("Tip", className)}
                 onClick={() => {
+                    const canvas = canvasRef.current
+
+                    if (!canvas) return
+
                     setSugOpen(false)
                     setMessages(prev => [
                         ...RemoveLastPath(prev),
@@ -269,16 +382,26 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                             e.isPath = false
                             e.isPathSelected = false
                         })
+
+                        const currentData = canvas.getGraphData();
+
+                        [...currentData.nodes, ...currentData.links].forEach(element => {
+                            element.data.isPath = false
+                            element.data.isPathSelected = false
+
+                            if ("source" in element) {
+                                element.color = "#999999"
+                            }
+                        })
+
+                        canvas.setGraphData(currentData)
                     }
 
-                    setTimeout(() => setMessages(prev => [...prev, {
+                    setMessages(prev => [...prev, {
                         type: MessageTypes.Response,
                         text: "Please select a starting point and the end point. Select or press relevant item on the graph"
-                    }]), 300)
-                    setTimeout(() => {
-                        setMessages(prev => [...prev, { type: MessageTypes.Path }])
-                        setPath({})
-                    }, 4000)
+                    }, { type: MessageTypes.Path }])
+                    setPath({})
                 }}
             >
                 <p className="text-center w-full">Show the path</p>

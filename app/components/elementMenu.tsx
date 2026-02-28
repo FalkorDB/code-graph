@@ -6,6 +6,7 @@ import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints
 import DataPanel from "./dataPanel";
 import { Path } from "@/lib/utils";
 import { Position } from "./graphView";
+import { GraphNode } from "@falkordb/canvas";
 
 interface Props {
     obj: Node | Link | undefined;
@@ -14,7 +15,7 @@ interface Props {
     handleRemove: (ids: number[], type: "nodes" | "links") => void;
     position: Position | undefined;
     url: string;
-    handleExpand: (nodes: Node[], expand: boolean) => void;
+    handleExpand: (nodes: Node[],  expand: boolean) => void;
     parentRef: RefObject<HTMLDivElement>;
 }
 
@@ -29,9 +30,9 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
 
     if (!obj || !position) return null
 
-    const objURL = obj.category === "File"
-        ? `${url}/tree/master/${obj.path}/${obj.name}`
-        : `${url}/tree/master/${obj.path}#L${obj.src_start}-L${obj.src_end + 1}`
+    const objURL = "category" in obj && obj.category === "File"
+        ? `${url}/tree/master/${obj.data.path}/${obj.data.name}`
+        : `${url}/tree/master/${obj.data.path}#L${obj.data.src_start}-L${obj.data.src_end + 1}`
 
     return (
         <>
@@ -41,11 +42,11 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                     setContainerWidth(ref.clientWidth)
                 }}
                 className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
+                id="elementMenu"
                 style={{
                     left: Math.max(8, Math.min(position.x - containerWidth / 2, (parentRef?.current?.clientWidth || 0) - containerWidth - 8)),
                     top: Math.max(8, Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - containerWidth - 8)),
                 }}
-                id="elementMenu"
             >
                 {
                     objects.some(o => o.id === obj.id) && objects.length > 1 ?
@@ -55,7 +56,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                 <button
                                     className="p-2"
                                     title="Create a path"
-                                    onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].name }, end: { id: Number(objects[1].id), name: objects[1].name } })}
+                                    onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].data.name }, end: { id: Number(objects[1].id), name: objects[1].data.name } })}
                                 >
                                     <Waypoints color="white" />
                                 </button>
@@ -89,11 +90,11 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                         title="Copy src to clipboard"
                                         onClick={async () => {
                                             try {
-                                                await navigator.clipboard.writeText(obj.src || "");
+                                                await navigator.clipboard.writeText(obj.data.src || "");
                                             } catch (err) {
                                                 // Fallback for older browsers
                                                 const textArea = document.createElement('textarea');
-                                                textArea.value = obj.src || "";
+                                                textArea.value = obj.data.src || "";
                                                 textArea.style.position = 'fixed';
                                                 textArea.style.left = '-999999px';
                                                 document.body.appendChild(textArea);

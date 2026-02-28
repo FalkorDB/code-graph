@@ -3,7 +3,7 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import urls from "../config/urls.json";
 import { ApiCalls } from "../logic/api/apiCalls";
 import CodeGraph from "../logic/POM/codeGraph";
-import { CHAT_OPTTIONS_COUNT, GRAPHRAG_SDK, Node_Question, } from "../config/constants";
+import { CHAT_OPTTIONS_COUNT, GRAPHRAG_SDK, Node_Question } from "../config/constants";
 import { delay } from "../logic/utils";
 import { nodesPath } from "../config/testData";
 
@@ -73,7 +73,7 @@ test.describe("Chat tests", () => {
     const identicalResponses = responses.every((value) => value === responses[0]);
     expect(identicalResponses).toBe(true);
   });
-
+  
   test(`Validate UI response matches API response for a given question in chat`, async () => {
     const api = new ApiCalls();
     const apiResponse = await api.askQuestion(GRAPHRAG_SDK, Node_Question);

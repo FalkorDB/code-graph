@@ -1,12 +1,10 @@
 'use client'
 
-import { MutableRefObject, useEffect, useRef, useState } from 'react';
-import { Chat } from './components/chat';
-import { Graph, GraphData, Link as LinkType, Node } from './components/model';
+import { useEffect, useRef, useState } from 'react';
+import { Graph, GraphData, Node } from './components/model';
 import { AlignRight, BookOpen, BoomBox, Download, Github, HomeIcon, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { CodeGraph } from './components/code-graph';
 import { toast } from '@/components/ui/use-toast';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import Image from 'next/image';
@@ -17,11 +15,14 @@ import { Progress } from '@/components/ui/progress';
 import { Carousel, CarouselApi, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import Input from './components/Input';
-import { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
 import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
-import { cn, handleZoomToFit, Message, Path, PathData, PathNode } from '@/lib/utils';
-import { GraphContext } from './components/provider';
+import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
+import type { GraphNode } from '@falkordb/canvas';
+import dynamic from 'next/dynamic';
+
+const Chat = dynamic(() => import('./components/chat').then(mod => mod.Chat), { ssr: false });
+const CodeGraph = dynamic(() => import('./components/code-graph').then(mod => mod.CodeGraph), { ssr: false });
 
 type Tip = {
   title: string
@@ -67,8 +68,8 @@ export default function Home() {
   const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
-  const desktopChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
-  const mobileChartRef = useRef<ForceGraphMethods<Node, LinkType>>()
+  const desktopChartRef = useRef<GraphRef["current"]>(null)
+  const mobileChartRef = useRef<GraphRef["current"]>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [searchNode, setSearchNode] = useState<PathNode>({});
@@ -82,6 +83,7 @@ export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
   const [zoomedNodes, setZoomedNodes] = useState<Node[]>([])
+  const [hasHiddenElements, setHasHiddenElements] = useState(false);
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -140,29 +142,37 @@ export default function Home() {
   }
 
   async function onFetchGraph(graphName: string) {
+    try {
+      const result = await fetch(`/api/repo/${prepareArg(graphName)}`, {
+        method: 'GET'
+      })
 
-    setGraph(Graph.empty())
+      if (!result.ok) {
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Something went wrong.",
+          description: await result.text(),
+        })
+        return
+      }
 
-    const result = await fetch(`/api/repo/${prepareArg(graphName)}`, {
-      method: 'GET'
-    })
+      const json = await result.json()
+      const g = Graph.create(json.result.entities, graphName)
+      setGraph(g)
 
-    if (!result.ok) {
+      if (cooldownTicks === 0) setCooldownTicks(-1)
+
+      setIsPathResponse(false)
+      chatPanel.current?.expand()
+      // @ts-ignore
+      window.graph = g
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Uh oh! Something went wrong.",
-        description: await result.text(),
+        description: "Failed to load repository graph. Please try again.",
       })
-      return
     }
-
-    const json = await result.json()
-    const g = Graph.create(json.result.entities, graphName)
-    setGraph(g)
-    setIsPathResponse(false)
-    chatPanel.current?.expand()
-    // @ts-ignore
-    window.graph = g
   }
 
   // Send the user query to the server to expand a node
@@ -190,51 +200,126 @@ export default function Home() {
     return graph.extend(json.result.neighbors, true)
   }
 
-  const handleSearchSubmit = (node: any, chartRef: MutableRefObject<ForceGraphMethods<Node, LinkType> | undefined>) => {
-    const chart = chartRef.current
+  const handleSearchSubmit = async (node: any, canvasRef: GraphRef) => {
+    const canvas = canvasRef.current
 
-    if (chart) {
+    if (canvas) {
       let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
 
       if (!chartNode?.visible) {
         if (!chartNode) {
           chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
-          setCooldownTicks(undefined)
+
+          if (cooldownTicks === 0) setCooldownTicks(-1)
+
           setZoomedNodes([chartNode])
           graph.visibleLinks(true, [chartNode!.id])
-          setData({ ...graph.Elements })
+
+          const currentData = canvas.getGraphData()
+
+          const { dataToGraphData } = await import('@falkordb/canvas')
+          const graphNode = dataToGraphData({
+            nodes: [{
+              color: chartNode.color,
+              id: chartNode.id,
+              labels: [chartNode.category],
+              visible: chartNode.visible,
+              data: {
+                ...chartNode.data,
+                isPath: chartNode.isPath,
+                isPathSelected: chartNode.isPathSelected,
+              }
+            }], links: []
+          }).nodes[0]
+
+          if (graphNode) {
+            currentData.nodes.push(graphNode)
+          }
+
+          canvas.setGraphData(currentData)
+
+
+          setTimeout(() => {
+            canvas.zoomToFit(4, (n: GraphNode) => n.id === chartNode!.id)
+          }, 0)
+          setSearchNode(chartNode)
+          setOptionsOpen(false)
           return
         }
+
         chartNode.visible = true
         graph.visibleLinks(true, [chartNode!.id])
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData()
+
+        const graphNode = currentData.nodes.find(n => n.id === chartNode!.id)
+        if (graphNode) {
+          graphNode.visible = true
+        }
+
+        currentData.links.forEach(canvasLink => {
+          const appLink = graph.LinksMap.get(canvasLink.id)
+
+          if (appLink) {
+            canvasLink.visible = appLink.visible
+          }
+        })
+
+        canvas.setGraphData(currentData)
       }
 
       setTimeout(() => {
-        handleZoomToFit(chartRef, 4, (n: NodeObject<Node>) => n.id === chartNode!.id)
+        canvas.zoomToFit(4, (n: GraphNode) => n.id === chartNode!.id)
       }, 0)
       setSearchNode(chartNode)
       setOptionsOpen(false)
     }
   }
 
-  function onCategoryClick(name: string, show: boolean) {
+  function onCategoryClick(name: string, show: boolean, canvasRef: GraphRef) {
+
+    const canvas = canvasRef.current;
+
+    if (!canvas) return
+
     graph.Categories.find(c => c.name === name)!.show = show
 
     graph.Elements.nodes.forEach(node => {
-      if (!(node.category === name)) return
+      if (node.category !== name) return
       node.visible = show
     })
 
     graph.visibleLinks(show)
 
-    setData({ ...graph.Elements })
+    const currentData = canvas.getGraphData();
+
+    currentData.nodes.forEach(canvasNode => {
+      const appNode = graph.NodesMap.get(canvasNode.id);
+
+      if (appNode) {
+        canvasNode.visible = appNode.visible;
+      }
+    });
+
+    currentData.links.forEach(canvasLink => {
+      const appLink = graph.LinksMap.get(canvasLink.id);
+
+      if (appLink) {
+        canvasLink.visible = appLink.visible;
+      }
+    });
+
+    canvas.setGraphData(currentData);
+
+    setCooldownTicks(cooldownTicks === undefined ? undefined : -1);
+    setHasHiddenElements(graph.getElements().some(element => !element.visible));
   }
 
   const handleDownloadImage = async () => {
     try {
-      const canvases = document.querySelectorAll('.force-graph-container canvas') as NodeListOf<HTMLCanvasElement>;
-      if (!canvases) {
+      const canvases = Array.from(document.querySelectorAll('falkordb-canvas').values()).map(canvas => canvas.shadowRoot?.querySelector('canvas')).filter((c): c is HTMLCanvasElement => !!c);
+
+      if (canvases.length === 0) {
         toast({
           title: "Error",
           description: "Canvas not found",
@@ -385,12 +470,13 @@ export default function Home() {
           <div className='h-2.5 bg-gradient-to-r from-[#EC806C] via-[#B66EBD] to-[#7568F2]' />
         </header>
         <PanelGroup direction="horizontal" className="w-full h-full">
-          <Panel defaultSize={70} className="flex flex-col" minSize={50}>
+          <Panel defaultSize={graph.Id ? 70 : 100} className="flex flex-col" minSize={50}>
             <CodeGraph
+              id="desktop"
               graph={graph}
               data={data}
               setData={setData}
-              chartRef={desktopChartRef}
+              canvasRef={desktopChartRef}
               options={options}
               setOptions={setOptions}
               onFetchGraph={onFetchGraph}
@@ -407,10 +493,12 @@ export default function Home() {
               setSearchNode={setSearchNode}
               cooldownTicks={cooldownTicks}
               setCooldownTicks={setCooldownTicks}
-              onCategoryClick={onCategoryClick}
+              onCategoryClick={(name, show) => onCategoryClick(name, show, desktopChartRef)}
               handleDownloadImage={handleDownloadImage}
               zoomedNodes={zoomedNodes}
               setZoomedNodes={setZoomedNodes}
+              hasHiddenElements={hasHiddenElements}
+              setHasHiddenElements={setHasHiddenElements}
             />
           </Panel>
           <PanelResizeHandle className={cn(!graph.Id && 'hidden')} />
@@ -429,7 +517,7 @@ export default function Home() {
               setQuery={setQuery}
               selectedPath={selectedPath}
               setSelectedPath={setSelectedPath}
-              chartRef={desktopChartRef}
+              canvasRef={desktopChartRef}
               setPath={setPath}
               path={path}
               repo={graph.Id}
@@ -437,9 +525,9 @@ export default function Home() {
               selectedPathId={selectedPathId}
               isPathResponse={isPathResponse}
               setIsPathResponse={setIsPathResponse}
-              setData={setData}
               paths={paths}
               setPaths={setPaths}
+              setCooldownTicks={setCooldownTicks}
             />
           </Panel>
         </PanelGroup>
@@ -505,10 +593,11 @@ export default function Home() {
         )}
         <div className='flex flex-col grow'>
           <CodeGraph
+            id="mobile"
             graph={graph}
             data={data}
             setData={setData}
-            chartRef={mobileChartRef}
+            canvasRef={mobileChartRef}
             options={options}
             setOptions={setOptions}
             onFetchGraph={onFetchGraph}
@@ -525,10 +614,12 @@ export default function Home() {
             searchNode={searchNode}
             cooldownTicks={cooldownTicks}
             setCooldownTicks={setCooldownTicks}
-            onCategoryClick={onCategoryClick}
+            onCategoryClick={(name, show) => onCategoryClick(name, show, desktopChartRef)}
             handleDownloadImage={handleDownloadImage}
             zoomedNodes={zoomedNodes}
             setZoomedNodes={setZoomedNodes}
+            hasHiddenElements={hasHiddenElements}
+            setHasHiddenElements={setHasHiddenElements}
           />
           {graph.Id && (
             <div className='flex items-center p-4 gap-4'>
@@ -550,7 +641,7 @@ export default function Home() {
                     setQuery={setQuery}
                     selectedPath={selectedPath}
                     setSelectedPath={setSelectedPath}
-                    chartRef={mobileChartRef}
+                    canvasRef={mobileChartRef}
                     setPath={setPath}
                     path={path}
                     repo={graph.Id}
@@ -558,10 +649,10 @@ export default function Home() {
                     selectedPathId={selectedPathId}
                     isPathResponse={isPathResponse}
                     setIsPathResponse={setIsPathResponse}
-                    setData={setData}
                     setChatOpen={setChatOpen}
                     paths={paths}
                     setPaths={setPaths}
+                    setCooldownTicks={setCooldownTicks}
                   />
                 </DrawerContent>
               </Drawer>
@@ -578,7 +669,9 @@ export default function Home() {
                   </VisuallyHidden>
                   <Toolbar
                     className='bg-transparent absolute -top-14 left-0 w-full justify-between px-6'
-                    chartRef={mobileChartRef}
+                    canvasRef={mobileChartRef}
+                    setCooldownTicks={setCooldownTicks}
+                    cooldownTicks={cooldownTicks}
                   />
                   <Input
                     className='border-2 border-gray-500'
@@ -588,7 +681,7 @@ export default function Home() {
                     handleSubmit={(node) => handleSearchSubmit(node, mobileChartRef)}
                     node={searchNode}
                   />
-                  <Labels categories={graph.Categories} onClick={onCategoryClick} />
+                  <Labels categories={graph.Categories} onClick={(name, show) => onCategoryClick(name, show, mobileChartRef)} />
                   <div className='flex flex-col gap-2 items-center'>
                     <button
                       className='control-button'

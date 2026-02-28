@@ -1,4 +1,3 @@
-import { LinkObject, NodeObject } from 'react-force-graph-2d'
 import { Path } from '@/lib/utils'
 
 export interface GraphData {
@@ -13,34 +12,35 @@ export interface Category {
 
 export interface Label {
   name: string,
-  textWidth: number,
-  textHeight: number,
 }
 
-export type Node = NodeObject<{
+export interface Node {
   id: number,
-  name: string,
   category: string,
   color: string,
+  visible: boolean,
   collapsed: boolean,
   expand: boolean,
-  visible: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-  [key: string]: any,
-}>
-
-export type Link = LinkObject<Node, {
+  data: {
+    name: string,
+    [key: string]: any,
+  }
+}
+export interface Link {
   id: number,
-  source: Node,
-  target: Node,
+  source: number,
+  target: number,
   label: string,
   visible: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-  curve: number,
-  [key: string]: any,
-}>
+  color: string,
+  data: {
+    [key: string]: any,
+  },
+}
 
 const COLORS_ORDER_NAME = [
   "blue",
@@ -115,7 +115,7 @@ export class Graph {
     this.elements = elements;
   }
 
-  get EdgesMap(): Map<number, Link> {
+  get LinksMap(): Map<number, Link> {
     return this.linksMap;
   }
 
@@ -163,18 +163,18 @@ export class Graph {
 
       node = {
         id: nodeData.id,
-        name: nodeData.name,
         color: getCategoryColorValue(category.index),
         category: category.name,
         expand: false,
         visible: true,
         collapsed,
         isPath: !!path,
-        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id
+        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id,
+        data: {
+          ...nodeData.properties,
+        }
       }
-      Object.entries(nodeData.properties).forEach(([key, value]) => {
-        node[key] = value
-      })
+
       this.nodesMap.set(nodeData.id, node)
       this.elements.nodes.push(node)
       newElements.nodes.push(node)
@@ -197,14 +197,17 @@ export class Graph {
       if (!source) {
         source = {
           id: edgeData.src_node,
-          name: edgeData.src_node,
           color: getCategoryColorValue(),
           category: "",
           expand: false,
           visible: true,
           collapsed,
           isPath: !!path,
-          isPathSelected: path?.start?.id === edgeData.src_node || path?.end?.id === edgeData.src_node
+          isPathSelected: path?.start?.id === edgeData.src_node || path?.end?.id === edgeData.src_node,
+          data: {
+            name: edgeData.src_node
+          }
+
         }
         this.nodesMap.set(edgeData.src_node, source)
       }
@@ -212,68 +215,43 @@ export class Graph {
       if (!target) {
         target = {
           id: edgeData.dest_node,
-          name: edgeData.dest_node,
           color: getCategoryColorValue(),
           category: "",
           expand: false,
           visible: true,
           collapsed,
           isPath: !!path,
-          isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node
+          isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node,
+          data: {
+            name: edgeData.dest_node
+          }
         }
         this.nodesMap.set(edgeData.dest_node, target)
       }
 
       let label = this.labelsMap.get(edgeData.relation)
       if (!label) {
-        label = { name: edgeData.relation, textWidth: 0, textHeight: 0 }
+        label = { name: edgeData.relation }
         this.labelsMap.set(edgeData.relation, label)
         this.labels.push(label)
       }
 
       link = {
         id: edgeData.id,
-        source,
-        target,
+        source: edgeData.src_node,
+        target: edgeData.dest_node,
         label: edgeData.relation,
         visible: true,
-        expand: false,
-        collapsed,
+        color: "#999999",
         isPathSelected: false,
         isPath: !!path,
-        curve: 0
+        data: { ...edgeData.properties }
       }
+
       this.linksMap.set(edgeData.id, link)
       this.elements.links.push(link)
       newElements.links.push(link)
     })
-
-    newElements.links.forEach(link => {
-      const start = link.source
-      const end = link.target
-      const sameNodesLinks = this.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
-      const index = sameNodesLinks.findIndex(l => l.id === link.id) ?? 0
-      const even = index % 2 === 0
-      let curve
-
-      if (start.id === end.id) {
-        if (even) {
-          curve = Math.floor(-(index / 2)) - 3
-        } else {
-          curve = Math.floor((index + 1) / 2) + 2
-        }
-      } else {
-        if (even) {
-          curve = Math.floor(-(index / 2))
-        } else {
-          curve = Math.floor((index + 1) / 2)
-        }
-
-      }
-
-      link.curve = curve * 0.1
-    })
-
 
     return newElements
   }
@@ -282,7 +260,7 @@ export class Graph {
     this.elements = {
       nodes: this.elements.nodes,
       links: this.elements.links.map(link => {
-        if (this.elements.nodes.map(n => n.id).includes(link.source.id) && this.elements.nodes.map(n => n.id).includes(link.target.id)) {
+        if (this.nodesMap.get(link.source) && this.nodesMap.get(link.target)) {
           return link
         }
         this.linksMap.delete(link.id)
@@ -291,15 +269,15 @@ export class Graph {
   }
 
   public visibleLinks(visible: boolean, ids?: number[]) {
-    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source.id) || ids.includes(link.target.id)) : this.elements.links
+    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source) || ids.includes(link.target)) : this.elements.links
 
     elements.forEach(link => {
-      if (visible && this.elements.nodes.map(n => n.id).includes(link.source.id) && link.source.visible && this.elements.nodes.map(n => n.id).includes(link.target.id) && link.target.visible) {
+      if (visible && this.nodesMap.get(link.source)?.visible && this.nodesMap.get(link.target)?.visible) {
         // eslint-disable-next-line no-param-reassign
         link.visible = true
       }
 
-      if (!visible && ((this.elements.nodes.map(n => n.id).includes(link.source.id) && !link.source.visible) || (this.elements.nodes.map(n => n.id).includes(link.target.id) && !link.target.visible))) {
+      if (!visible && (this.nodesMap.get(link.source)?.visible === false || this.nodesMap.get(link.target)?.visible === false)) {
         // eslint-disable-next-line no-param-reassign
         link.visible = false
       }
