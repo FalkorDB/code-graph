@@ -464,17 +464,17 @@ export default class CodeGraph extends BasePage {
     /* Canvas functionality */
 
     async clickZoomIn(): Promise<void> {
-        await this.zoomInBtn.click();
+        await interactWhenVisible(this.zoomInBtn, (el) => el.click(), 'Zoom In button');
         await this.waitForCanvasAnimationToEnd();
     }
 
     async clickZoomOut(): Promise<void> {
-        await this.zoomOutBtn.click();
+        await interactWhenVisible(this.zoomOutBtn, (el) => el.click(), 'Zoom Out button');
         await this.waitForCanvasAnimationToEnd();
     }
 
     async clickCenter(): Promise<void> {
-        await this.centerBtn.click();
+        await interactWhenVisible(this.centerBtn, (el) => el.click(), 'Center button');
         await this.waitForCanvasAnimationToEnd();
     }
 
