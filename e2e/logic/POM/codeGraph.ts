@@ -266,7 +266,7 @@ export default class CodeGraph extends BasePage {
         await this.page.waitForLoadState('networkidle');
         const [newPage] = await Promise.all([
             this.page.waitForEvent('popup'),
-            this.falkorDBLogo.click(),
+            interactWhenVisible(this.falkorDBLogo, (el) => el.click(), 'FalkorDB Logo'),
         ]);
         return newPage
     }
@@ -275,15 +275,13 @@ export default class CodeGraph extends BasePage {
         await this.page.waitForLoadState('networkidle');
         const [newPage] = await Promise.all([
             this.page.waitForEvent('popup'),
-            this.navBaritem(navItem).click(),
+            interactWhenVisible(this.navBaritem(navItem), (el) => el.click(), `NavBar item: ${navItem}`),
         ]);
         return newPage
     }
 
     async clickCreateNewProjectBtn(): Promise<void> {
-        const isVisible = await waitForElementToBeVisible(this.createNewProjectBtn);
-        if (!isVisible) throw new Error("'Create New Project' button is not visible!");
-        await this.createNewProjectBtn.click();
+        await interactWhenVisible(this.createNewProjectBtn, (el) => el.click(), 'Create New Project button');
     }
 
     async isCreateNewProjectDialog(): Promise<boolean> {
@@ -291,7 +289,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnTipBtn(): Promise<void> {
-        await this.tipBtn.click();
+        await interactWhenVisible(this.tipBtn, (el) => el.click(), 'Tip button');
     }
 
     async isTipMenuVisible(): Promise<boolean> {
@@ -300,31 +298,27 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnTipMenuCloseBtn(): Promise<void> {
-        const isVisible = await waitForElementToBeVisible(this.tipMenuCloseBtn);
-        if (!isVisible) throw new Error("'Tip Menu Close' button is not visible!");
-        await this.tipMenuCloseBtn.click();
+        await interactWhenVisible(this.tipMenuCloseBtn, (el) => el.click(), 'Tip Menu Close button');
     }
 
 
     /* Chat functionality */
     async clickOnShowPathBtn(selection: string): Promise<void> {
-        await this.showPathBtn(selection).click();
+        await interactWhenVisible(this.showPathBtn(selection), (el) => el.click(), `Show Path button: ${selection}`);
     }
 
     async clickAskQuestionBtn(): Promise<void> {
-        const isVisible = await waitForElementToBeVisible(this.askquestionBtn);
-        if (!isVisible) throw new Error("'Ask Question' button is not visible!");
-        await this.askquestionBtn.click();
+        await interactWhenVisible(this.askquestionBtn, (el) => el.click(), 'Ask Question button');
     }
 
     async sendMessage(message: string) {
         await waitToBeEnabled(this.askquestionBtn);
-        await this.askquestionInput.fill(message);
-        await this.askquestionBtn.click();
+        await interactWhenVisible(this.askquestionInput, (el) => el.fill(message), 'Ask question input');
+        await interactWhenVisible(this.askquestionBtn, (el) => el.click(), 'Ask Question button');
     }
 
     async clickOnLightBulbBtn(): Promise<void> {
-        await this.lightbulbBtn.click();
+        await interactWhenVisible(this.lightbulbBtn, (el) => el.click(), 'Light Bulb button');
     }
 
     async getTextInLastChatElement(): Promise<string> {
@@ -366,8 +360,8 @@ export default class CodeGraph extends BasePage {
     }
 
     async insertInputForShowPath(inputNum: string, node: string): Promise<void> {
-        await this.selectInputForShowPath(inputNum).fill(node);
-        await this.selectFirstPathOption(inputNum).click();
+        await interactWhenVisible(this.selectInputForShowPath(inputNum), (el) => el.fill(node), `Path input ${inputNum}`);
+        await interactWhenVisible(this.selectFirstPathOption(inputNum), (el) => el.click(), `Path option ${inputNum}`);
     }
 
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
@@ -382,15 +376,14 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnNotificationErrorCloseBtn(): Promise<void> {
-        const isVisible = await waitForElementToBeVisible(this.notificationErrorCloseBtn);
-        if (!isVisible) throw new Error("Notification error close button is not visible!");
-        await this.notificationErrorCloseBtn.click();
+        await interactWhenVisible(this.notificationErrorCloseBtn, (el) => el.click(), 'Notification Error Close button');
     }
 
     async selectAndGetQuestionInOptionsMenu(questionNumber: string): Promise<string> {
         const question = this.selectQuestionInMenu(questionNumber);
-        await question.click();
-        return await question.innerText();
+        const text = await question.innerText();
+        await interactWhenVisible(question, (el) => el.click(), `Question option ${questionNumber}`);
+        return text;
     }
 
     async getLastQuestionInChat(): Promise<string> {
@@ -401,35 +394,33 @@ export default class CodeGraph extends BasePage {
 
     /* CodeGraph functionality */
     async selectGraph(graph: string | number): Promise<void> {
-        await this.comboBoxbtn.click();
+        await interactWhenVisible(this.comboBoxbtn, (el) => el.click(), 'ComboBox button');
         if (typeof graph === 'number') {
-            await this.selectGraphInComboBoxById(graph.toString()).waitFor({ state: 'visible' })
-            await this.selectGraphInComboBoxById(graph.toString()).click();
+            await interactWhenVisible(this.selectGraphInComboBoxById(graph.toString()), (el) => el.click(), `Graph option ${graph}`);
         } else {
-            await this.selectGraphInComboBoxByName(graph).waitFor({ state: 'visible' })
-            await this.selectGraphInComboBoxByName(graph).click();
+            await interactWhenVisible(this.selectGraphInComboBoxByName(graph), (el) => el.click(), `Graph option ${graph}`);
         }
         await this.page.waitForTimeout(2000); // graph animation delay
     }
 
     async createProject(url: string): Promise<void> {
         await this.clickCreateNewProjectBtn();
-        await this.typeUrlInput.fill(url);
-        await this.createBtnInCreateProjectDialog.click();
+        await interactWhenVisible(this.typeUrlInput, (el) => el.fill(url), 'URL input');
+        await interactWhenVisible(this.createBtnInCreateProjectDialog, (el) => el.click(), 'Create button');
         await this.createProjectWaitDialog.waitFor({ state: 'hidden' });
     }
 
     async isGraphCreated(graph: string): Promise<boolean> {
-        await this.comboBoxbtn.click();
+        await interactWhenVisible(this.comboBoxbtn, (el) => el.click(), 'ComboBox button');
         return await this.dialogCreatedGraphsList(graph).isVisible();
     }
 
     async fillSearchBar(searchValue: string): Promise<void> {
-        await this.searchBarInput.fill(searchValue);
+        await interactWhenVisible(this.searchBarInput, (el) => el.fill(searchValue), 'Search bar input');
     }
 
     async getSearchAutoCompleteCount(): Promise<number> {
-        await this.searchBarAutoCompleteOptions.first().waitFor({ state: 'visible' });
+        await interactWhenVisible(this.searchBarAutoCompleteOptions.first(), async () => {}, 'Search auto-complete options');
         return await this.searchBarAutoCompleteOptions.count();
     }
 
@@ -438,9 +429,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async selectSearchBarOptionBtn(buttonNum: string): Promise<void> {
-        const button = this.searchBarOptionBtn(buttonNum);
-        await button.waitFor({ state: "visible" })
-        await button.click();
+        await interactWhenVisible(this.searchBarOptionBtn(buttonNum), (el) => el.click(), `Search bar option ${buttonNum}`);
     }
 
     async getSearchBarInputValue(): Promise<string | null> {
@@ -501,12 +490,12 @@ export default class CodeGraph extends BasePage {
 
 
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
-        await this.codeGraphCheckbox(checkbox).click();
+        await interactWhenVisible(this.codeGraphCheckbox(checkbox), (el) => el.click(), `Checkbox ${checkbox}`);
     }
 
     async clickOnClearGraphBtn(): Promise<void> {
         await this.page.mouse.click(10, 10);
-        await this.clearGraphBtn.click();
+        await interactWhenVisible(this.clearGraphBtn, (el) => el.click(), 'Clear Graph button');
     }
 
     async clickOnUnhideNodesBtn(): Promise<void> {
@@ -563,7 +552,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnNodeDetailsCloseBtn(): Promise<void> {
-        await this.nodedetailsPanelcloseBtn.click();
+        await interactWhenVisible(this.nodedetailsPanelcloseBtn, (el) => el.click(), 'Node Details Close button');
     }
 
     async getMetricsPanelInfo(): Promise<{ nodes: string, edges: string }> {
@@ -573,9 +562,7 @@ export default class CodeGraph extends BasePage {
     }
 
     async clickOnCopyToClipboardNodePanelDetails(): Promise<string> {
-        const isButtonVisible = await waitForElementToBeVisible(this.copyToClipboardNodePanelDetails);
-        if (!isButtonVisible) throw new Error("'copy to clipboard button is not visible!");
-        await this.copyToClipboardNodePanelDetails.click();
+        await interactWhenVisible(this.copyToClipboardNodePanelDetails, (el) => el.click(), 'Copy to clipboard button');
         return await this.page.evaluate(() => navigator.clipboard.readText());
     }
 
@@ -677,7 +664,7 @@ export default class CodeGraph extends BasePage {
         await this.page.waitForLoadState('networkidle');
         const [download] = await Promise.all([
             this.page.waitForEvent('download'),
-            this.downloadImageBtn.click(),
+            interactWhenVisible(this.downloadImageBtn, (el) => el.click(), 'Download Image button'),
         ]);
 
         return download;
