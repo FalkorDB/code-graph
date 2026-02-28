@@ -73,10 +73,12 @@ test.describe("Canvas tests", () => {
 
   test(`Validate unhide node functionality after hiding a node in canvas for ${nodes[0].nodeName}`, async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
     await codeGraph.selectGraph(GRAPHRAG_SDK);
-    const initialGraph = await codeGraph.getGraphNodes();
-    const targetNode = findNodeByName(initialGraph, nodes[0].nodeName);
-    await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
+    await codeGraph.rightClickAtCanvasCenter();
     await codeGraph.clickOnRemoveNodeViaElementMenu();
     await codeGraph.clickOnUnhideNodesBtn();
     const updatedGraph = await codeGraph.getGraphNodes();
