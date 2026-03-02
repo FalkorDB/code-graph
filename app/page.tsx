@@ -368,7 +368,7 @@ export default function Home() {
         <header className="flex flex-col text-xl">
           <div className="flex items-center justify-between py-4 px-8">
             <div className="flex gap-4 items-center">
-              <Link href="https://www.falkordb.com" target='_blank'>
+              <Link href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
                 <Image src="/logo_02.svg" alt="FalkorDB" width={27.73} height={23.95} />
               </Link>
               <h1 className='font-bold text-[22px]'>
@@ -376,15 +376,15 @@ export default function Home() {
               </h1>
             </div>
             <ul className="flex gap-4 items-center font-medium">
-              <Link title="Home" className="flex gap-2.5 items-center p-4" href="https://www.falkordb.com" target='_blank'>
+              <Link title="Home" className="flex gap-2.5 items-center p-4" href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
                 <HomeIcon />
                 <p>Main Website</p>
               </Link>
-              <Link title="Github" className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank'>
+              <Link title="Github" className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
                 <Github />
                 <p>Github</p>
               </Link>
-              <Link title="Discord" className="flex gap-2.5 items-center p-4" href="https://discord.gg/falkordb" target='_blank'>
+              <Link title="Discord" className="flex gap-2.5 items-center p-4" href="https://discord.gg/falkordb" target='_blank' rel="noopener noreferrer">
                 <BoomBox />
                 <p>Discord</p>
               </Link>
@@ -534,7 +534,7 @@ export default function Home() {
       </div>
       <div className='flex flex-col md:hidden h-full overflow-hidden' id='mobile'>
         <header className='flex justify-center items-center relative bg-gray-100'>
-          <Link href="https://www.falkordb.com" target='_blank'>
+          <Link href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
             <Image priority style={{ width: 'auto', height: '70px', background: "transparent" }} src="/code-graph-logo.svg" alt="FalkorDB" width={0} height={0} />
           </Link>
           <button className='absolute top-6 right-4' onClick={() => setMenuOpen(prev => !prev)}>
@@ -546,17 +546,17 @@ export default function Home() {
           <div className='absolute bottom-0 top-[70px] left-0 right-0 z-20 bg-white shadow-lg'>
             <ul className='h-full flex flex-col gap-16 p-8 items-center'>
               <li>
-                <Link href="https://github.com/FalkorDB/code-graph" target='_blank'>
+                <Link href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
                   <p>Github</p>
                 </Link>
               </li>
               <li>
-                <Link href="https://discord.gg/falkordb" target='_blank'>
+                <Link href="https://discord.gg/falkordb" target='_blank' rel="noopener noreferrer">
                   <p>Discord</p>
                 </Link>
               </li>
               <li>
-                <Link href="https://www.falkordb.com" target='_blank'>
+                <Link href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
                   <p>Main Website</p>
                 </Link>
               </li>
@@ -614,7 +614,7 @@ export default function Home() {
             searchNode={searchNode}
             cooldownTicks={cooldownTicks}
             setCooldownTicks={setCooldownTicks}
-            onCategoryClick={(name, show) => onCategoryClick(name, show, desktopChartRef)}
+            onCategoryClick={(name, show) => onCategoryClick(name, show, mobileChartRef)}
             handleDownloadImage={handleDownloadImage}
             zoomedNodes={zoomedNodes}
             setZoomedNodes={setZoomedNodes}
