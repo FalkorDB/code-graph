@@ -13,4 +13,5 @@ updates:
     groups:
       npm-minor-patch:
         update-types:
-          - "patch"      
+          - "patch"
+      
