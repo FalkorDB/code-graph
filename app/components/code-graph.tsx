@@ -105,7 +105,7 @@ export function CodeGraph({
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Delete') {
-                if (selectedObj && selectedObjects.length === 0) return
+                if (selectedObjects.length === 0 && !selectedObj) return
                 handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined), "nodes");
             }
         };
