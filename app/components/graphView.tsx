@@ -164,7 +164,10 @@ export default function GraphView({
     }, [zoomedNodes, cooldownTicks, canvasRef])
 
     const nodeCanvasObject = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        if (!node.x || !node.y) return
+        if (node.x === undefined || node.y === undefined) {
+            node.x = 0;
+            node.y = 0;
+        }
 
         const isHovered = !!hoverElement && !('source' in hoverElement) && hoverElement.id === node.id
         const isSelected = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id
@@ -231,7 +234,10 @@ export default function GraphView({
     }, [selectedObj, selectedObjects, isPathResponse, hoverElement])
 
     const nodePointerAreaPaint = useCallback((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        if (!node.x || !node.y) return
+        if (node.x === undefined || node.y === undefined) {
+            node.x = 0;
+            node.y = 0;
+        }
 
         ctx.fillStyle = color;
         ctx.beginPath();

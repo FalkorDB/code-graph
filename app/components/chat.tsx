@@ -97,7 +97,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         if (!canvas) return
         setSelectedPath(prev => {
             if (prev) {
-                if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
+                if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((el: any) => el.id === e.id)))) {
                     graph.getElements().forEach(link => {
                         const { id } = link
 

@@ -210,6 +210,8 @@ export class Graph {
 
         }
         this.nodesMap.set(edgeData.src_node, source)
+        this.elements.nodes.push(source)
+        newElements.nodes.push(source)
       }
 
       if (!target) {
@@ -227,6 +229,8 @@ export class Graph {
           }
         }
         this.nodesMap.set(edgeData.dest_node, target)
+        this.elements.nodes.push(target)
+        newElements.nodes.push(target)
       }
 
       let label = this.labelsMap.get(edgeData.relation)

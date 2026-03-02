@@ -128,12 +128,3 @@
 ::-webkit-scrollbar-thumb:hover {
   background-color: #a8bbbf;
 }
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
