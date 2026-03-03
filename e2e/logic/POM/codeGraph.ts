@@ -21,10 +21,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get scopedLocator(): (selector: string) => Locator {
-        return (selector: string) => {
-            const scoped = selector.startsWith("//") ? `.${selector}` : selector;
-            return this.container.locator(scoped);
-        };
+        return (selector: string) => this.container.locator(selector);
     }
 
     /* NavBar Locators*/
