@@ -6,7 +6,7 @@ interface Props {
     options: string[]
     setOptions: (options: string[]) => void
     selectedValue: string
-    onSelectedValue: (value: string) => void
+    onSelectedValue: (value: string) => Promise<void>
 
 }
 

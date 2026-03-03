@@ -46,6 +46,7 @@ test.describe("Node details panel tests", () => {
       await codeGraph.waitForCanvasAnimationToEnd();
       const graphData = await codeGraph.getGraphNodes();
       const targetNode = findNodeByName(graphData, node.nodeName);
+      expect(targetNode).toBeDefined();
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       await codeGraph.clickOnViewNode();
       await codeGraph.clickOnNodeDetailsCloseBtn();
@@ -63,6 +64,7 @@ test.describe("Node details panel tests", () => {
       await codeGraph.waitForCanvasAnimationToEnd();
       const graphData = await codeGraph.getGraphNodes();
       const targetNode = findNodeByName(graphData, node.nodeName);
+      expect(targetNode).toBeDefined();
       await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
       expect(await codeGraph.getNodeDetailsHeader()).toContain(node.nodeName.toUpperCase())
     })

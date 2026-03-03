@@ -1,5 +1,4 @@
-import { Link, Node } from "@/app/components/model"
-import FalkorDBCanvas, { GraphNode } from "@falkordb/canvas"
+import FalkorDBCanvas from "@falkordb/canvas"
 import { type ClassValue, clsx } from "clsx"
 import { MutableRefObject } from "react"
 import { twMerge } from "tailwind-merge"
