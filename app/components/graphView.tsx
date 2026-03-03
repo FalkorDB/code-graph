@@ -250,6 +250,10 @@ export default function GraphView({
         return null
     }, [])
 
+    const mobileBreakpointRaw = Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT)
+    const mobileBreakpoint = Number.isFinite(mobileBreakpointRaw) ? mobileBreakpointRaw : 0
+    const isDesktop = screenSize > mobileBreakpoint
+
     return (
         <div className="relative w-full md:h-full h-1 grow">
             <div className="md:hidden absolute bottom-4 right-4 z-10">
@@ -261,11 +265,11 @@ export default function GraphView({
                 id={id}
                 data={data}
                 canvasRef={canvasRef}
-                onNodeClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}
+                onNodeClick={isDesktop || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}
                 onNodeHover={handleNodeHover}
                 onNodeRightClick={handleRightClick}
                 isNodeSelected={isNodeSelected}
-                onLinkClick={screenSize > Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT) && isPathResponse ? handleLinkClick : handleRightClick}
+                onLinkClick={isDesktop && isPathResponse ? handleLinkClick : handleRightClick}
                 onLinkHover={handleLinkHover}
                 onLinkRightClick={handleRightClick}
                 isLinkSelected={isLinkSelected}

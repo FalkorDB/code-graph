@@ -1,8 +1,8 @@
 import { toast } from "@/components/ui/use-toast";
-import { Dispatch, FormEvent, MutableRefObject, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
-import { Message, MessageTypes, Path, PathData } from "@/lib/utils";
+import { Message, MessageTypes, Path, PathData, PATH_COLOR } from "@/lib/utils";
 import Input from "./Input";
 import { Graph, GraphData, Node } from "./model";
 import { cn, GraphRef } from "@/lib/utils";
@@ -32,7 +32,6 @@ interface Props {
     setPaths: Dispatch<SetStateAction<PathData[]>>
 }
 
-const PATH_COLOR = "#ffde21";
 const SUGGESTIONS = [
     "List a few recursive functions",
     "What is the name of the most used method?",

@@ -70,7 +70,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                         >
                                             {value}
                                         </SyntaxHighlighter>
-                                        : typeof value === "object" ?
+                                        : typeof value === "object" && value !== null ?
                                             <JSONTree
                                                 data={Object.fromEntries(Object.entries(value).filter(([k]) => !excludedProperties.includes(k)))}
                                                 theme={{
@@ -91,22 +91,22 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                                     base0E: '#ae81ff',
                                                     base0F: '#cc6633'
                                                 }}
-                                                valueRenderer={(valueAsString, value, keyPath) => {
+                                                valueRenderer={(_valueAsString, value, keyPath) => {
                                                     if (keyPath === "src") {
                                                         return <SyntaxHighlighter
                                                             language="python"
                                                             style={{
-                                                                    ...dark,
-                                                                    hljs: {
-                                                                        ...dark.hljs,
-                                                                        maxHeight: `9rem`,
-                                                                        background: '#343434',
-                                                                        padding: 2,
-                                                                    }
-                                                                }}
-                                                            >
-                                                                {value as string}
-                                                            </SyntaxHighlighter>
+                                                                ...dark,
+                                                                hljs: {
+                                                                    ...dark.hljs,
+                                                                    maxHeight: `9rem`,
+                                                                    background: '#343434',
+                                                                    padding: 2,
+                                                                }
+                                                            }}
+                                                        >
+                                                            {value as string}
+                                                        </SyntaxHighlighter>
                                                     }
                                                     return <span className="text-white">{value as string}</span>
                                                 }}
@@ -132,18 +132,9 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                             <a
                                 className="flex items-center gap-2 p-2"
                                 href={url}
+                                rel="noopener noreferrer"
                                 target="_blank"
                                 title="Go to repo"
-                                onClick={() => {
-                                    const newTab = window.open(url, '_blank');
-
-                                    if (!obj.data.src_start || !obj.data.src_end || !newTab) return
-
-                                    newTab.scroll({
-                                        top: obj.data.src_start,
-                                        behavior: 'smooth'
-                                    })
-                                }}
                             >
                                 <SquareArrowOutUpRight color="white" />
                                 Go to repo

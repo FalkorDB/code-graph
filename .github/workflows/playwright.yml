@@ -38,6 +38,7 @@ jobs:
         npm run build
         NEXTAUTH_SECRET=SECRET npm start & npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
     - name: Ensure required directories exist
+      if: always()
       run: |
         mkdir -p playwright-report
         mkdir -p playwright-report/artifacts

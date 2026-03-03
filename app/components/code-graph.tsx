@@ -105,7 +105,8 @@ export function CodeGraph({
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Delete') {
-                if (selectedObjects.length === 0 && !selectedObj) return
+                if (selectedObjects.length === 0 && (!selectedObj || "source" in selectedObj)) return
+                
                 handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined), "nodes");
             }
         };
@@ -174,7 +175,7 @@ export function CodeGraph({
 
     async function handleSelectedValue(value: string) {
         setGraphName(value)
-        onFetchGraph(value)
+        await onFetchGraph(value)
     }
 
     const deleteNeighbors = (nodes: Node[]) => {

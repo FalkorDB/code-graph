@@ -64,10 +64,12 @@ test.describe("Canvas tests", () => {
     await codeGraph.waitForCanvasAnimationToEnd();
     const initialGraph = await codeGraph.getGraphNodes();
     const targetNode = findNodeByName(initialGraph, nodes[0].nodeName);
+    expect(targetNode).toBeDefined();
     await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
     await codeGraph.clickOnRemoveNodeViaElementMenu();
     const updatedGraph = await codeGraph.getGraphNodes();
     const updatedNode = findNodeByName(updatedGraph, nodes[0].nodeName);
+    expect(updatedNode).toBeDefined();
     expect(updatedNode.visible).toBe(false);
   });
 

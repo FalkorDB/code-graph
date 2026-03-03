@@ -3,7 +3,7 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import urls from "../config/urls.json";
 import { ApiCalls } from "../logic/api/apiCalls";
 import CodeGraph from "../logic/POM/codeGraph";
-import { CHAT_OPTTIONS_COUNT, GRAPHRAG_SDK, Node_Question } from "../config/constants";
+import { CHAT_OPTIONS_COUNT, GRAPHRAG_SDK, Node_Question } from "../config/constants";
 import { delay } from "../logic/utils";
 import { nodesPath } from "../config/testData";
 
@@ -23,7 +23,7 @@ test.describe("Chat tests", () => {
     await chat.selectGraph(GRAPHRAG_SDK);
     await chat.clickOnLightBulbBtn();
     const count = await chat.getLastChatElementButtonCount();
-    expect(count).toBe(CHAT_OPTTIONS_COUNT);
+    expect(count).toBe(CHAT_OPTIONS_COUNT);
   });
 
   test(`Validate that multiple consecutive questions receive individual answers`, async () => {
