@@ -1,26 +1,27 @@
 "use client"
 
 import { Dispatch, RefObject, SetStateAction, useEffect, useState } from "react";
-import { Node } from "./model";
+import { Link, Node } from "./model";
 import { ChevronsLeftRight, Copy, EyeOff, Globe, Maximize2, Minimize2, Waypoints } from "lucide-react";
 import DataPanel from "./dataPanel";
-import { Path } from "../page";
+import { Path } from "@/lib/utils";
 import { Position } from "./graphView";
+import { GraphNode } from "@falkordb/canvas";
 
 interface Props {
-    obj: Node | undefined;
+    obj: Node | Link | undefined;
     objects: Node[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
-    handleRemove: (nodes: number[]) => void;
+    handleRemove: (ids: number[], type: "nodes" | "links") => void;
     position: Position | undefined;
     url: string;
-    handelExpand: (nodes: Node[], expand: boolean) => void;
+    handleExpand: (nodes: Node[],  expand: boolean) => void;
     parentRef: RefObject<HTMLDivElement>;
 }
 
 
-export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handelExpand, parentRef }: Props) {
-    const [currentObj, setCurrentObj] = useState<Node>();
+export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handleExpand, parentRef }: Props) {
+    const [currentObj, setCurrentObj] = useState<Node | Link>();
     const [containerWidth, setContainerWidth] = useState(0);
 
     useEffect(() => {
@@ -29,9 +30,9 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
 
     if (!obj || !position) return null
 
-    const objURL = obj.category === "File"
-        ? `${url}/tree/master/${obj.path}/${obj.name}`
-        : `${url}/tree/master/${obj.path}#L${obj.src_start}-L${obj.src_end + 1}`
+    const objURL = "category" in obj && obj.category === "File"
+        ? `${url}/tree/master/${obj.data.path}/${obj.data.name}`
+        : `${url}/tree/master/${obj.data.path}#L${obj.data.src_start}-L${obj.data.src_end + 1}`
 
     return (
         <>
@@ -43,8 +44,8 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                 className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
                 id="elementMenu"
                 style={{
-                    left: Math.max(-34, Math.min(position.x - 33 - containerWidth / 2, (parentRef?.current?.clientWidth || 0) + 32 - containerWidth)),
-                    top: Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - 9),
+                    left: Math.max(8, Math.min(position.x - containerWidth / 2, (parentRef?.current?.clientWidth || 0) - containerWidth - 8)),
+                    top: Math.max(8, Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - containerWidth - 8)),
                 }}
             >
                 {
@@ -55,7 +56,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                 <button
                                     className="p-2"
                                     title="Create a path"
-                                    onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].name }, end: { id: Number(objects[1].id), name: objects[1].name } })}
+                                    onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].data.name }, end: { id: Number(objects[1].id), name: objects[1].data.name } })}
                                 >
                                     <Waypoints color="white" />
                                 </button>
@@ -63,49 +64,77 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove(objects.map(o => o.id))}
+                                onClick={() => handleRemove(objects.map(o => o.id), "nodes")}
                             >
                                 <EyeOff color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand(objects, true)}
+                                onClick={() => handleExpand(objects, true)}
                             >
                                 <Maximize2 color="white" />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handelExpand(objects, false)}
+                                onClick={() => handleExpand(objects, false)}
                             >
                                 <Minimize2 color="white" />
                             </button>
                         </>
                         : <>
-                            <button
-                                className="p-2"
-                                title="Copy src to clipboard"
-                                onClick={() => navigator.clipboard.writeText(obj.src || "")}
-                            >
-                                <Copy color="white" />
-                            </button>
+                            {
+                                "category" in obj &&
+                                <>
+                                    <button
+                                        className="p-2"
+                                        title="Copy src to clipboard"
+                                        onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(obj.data.src || "");
+                                            } catch (err) {
+                                                // Fallback for older browsers
+                                                const textArea = document.createElement('textarea');
+                                                textArea.value = obj.data.src || "";
+                                                textArea.style.position = 'fixed';
+                                                textArea.style.left = '-999999px';
+                                                document.body.appendChild(textArea);
+                                                textArea.select();
+                                                try {
+                                                    document.execCommand('copy');
+                                                } catch (e) {
+                                                    console.error('Failed to copy text: ', e);
+                                                }
+                                                document.body.removeChild(textArea);
+                                            }
+                                        }}
+                                    >
+                                        <Copy color="white" />
+                                    </button>
+                                </>
+                            }
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove([obj.id])}
+                                onClick={() => handleRemove([obj.id], "category" in obj ? "nodes" : "links")}
                             >
                                 <EyeOff color="white" />
                             </button>
-                            <a
-                                className="p-2"
-                                href={objURL}
-                                target="_blank"
-                                title="Go to repo"
-                                onClick={() => {
-                                    window.open(objURL, '_blank');
-                                }}
-                            >
-                                <Globe color="white" />
-                            </a>
+                            {
+                                "category" in obj &&
+                                <>
+                                    <a
+                                        className="p-2"
+                                        href={objURL}
+                                        target="_blank"
+                                        title="Go to repo"
+                                        onClick={() => {
+                                            window.open(objURL, '_blank');
+                                        }}
+                                    >
+                                        <Globe color="white" />
+                                    </a>
+                                </>
+                            }
                             <button
                                 className="flex p-2"
                                 title="View Node"
@@ -113,18 +142,23 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             >
                                 <ChevronsLeftRight color="white" />
                             </button>
-                            <button
-                                className="p-2"
-                                onClick={() => handelExpand([obj], true)}
-                            >
-                                <Maximize2 color="white" />
-                            </button>
-                            <button
-                                className="p-2"
-                                onClick={() => handelExpand([obj], false)}
-                            >
-                                <Minimize2 color="white" />
-                            </button>
+                            {
+                                "category" in obj &&
+                                <>
+                                    <button
+                                        className="p-2"
+                                        onClick={() => handleExpand([obj as Node], true)}
+                                    >
+                                        <Maximize2 color="white" />
+                                    </button>
+                                    <button
+                                        className="p-2"
+                                        onClick={() => handleExpand([obj as Node], false)}
+                                    >
+                                        <Minimize2 color="white" />
+                                    </button>
+                                </>
+                            }
                         </>
                 }
             </div>

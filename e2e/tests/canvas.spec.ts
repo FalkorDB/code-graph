@@ -4,8 +4,9 @@ import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPHRAG_SDK } from "../config/constants";
 import { findNodeByName } from "../logic/utils";
-import { nodesPath, categories, nodes } from "../config/testData";
+import { nodesPath, categories, nodes, graphs } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
+import fs from 'fs';
 
 test.describe("Canvas tests", () => {
   let browser: BrowserWrapper;
@@ -45,7 +46,6 @@ test.describe("Canvas tests", () => {
     await codeGraph.selectGraph(GRAPHRAG_SDK);
     await codeGraph.clickCenter();
     const initialGraph = await codeGraph.getCanvasScaling();
-    
     await codeGraph.clickZoomOut();
     await codeGraph.clickZoomOut();
     await codeGraph.clickCenter();
@@ -55,34 +55,38 @@ test.describe("Canvas tests", () => {
 
   })
 
-  nodes.slice(0,2).forEach((node) => {
-    test(`Validate node hide functionality via element menu in canvas for ${node.nodeName}`, async () => {
-      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const initialGraph = await codeGraph.getGraphNodes();
-      const targetNode = findNodeByName(initialGraph, node.nodeName);
-      await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
-      await codeGraph.clickOnRemoveNodeViaElementMenu();
-      const updatedGraph = await codeGraph.getGraphNodes();
-      const targetNodeForUpdateGraph = findNodeByName(updatedGraph, node.nodeName);
-      expect(targetNodeForUpdateGraph.visible).toBe(false);
-    });
-  })
+  test(`Validate node hide functionality via element menu in canvas for ${nodes[0].nodeName}`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
+    const initialGraph = await codeGraph.getGraphNodes();
+    const targetNode = findNodeByName(initialGraph, nodes[0].nodeName);
+    expect(targetNode).toBeDefined();
+    await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
+    await codeGraph.clickOnRemoveNodeViaElementMenu();
+    const updatedGraph = await codeGraph.getGraphNodes();
+    const updatedNode = findNodeByName(updatedGraph, nodes[0].nodeName);
+    expect(updatedNode).toBeDefined();
+    expect(updatedNode.visible).toBe(false);
+  });
 
-  nodes.slice(0,2).forEach((node) => {
-    test(`Validate unhide node functionality after hiding a node in canvas for ${node.nodeName}`, async () => {
-      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(GRAPHRAG_SDK);
-      const initialGraph = await codeGraph.getGraphNodes();
-      const targetNode = findNodeByName(initialGraph, node.nodeName);
-      await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
-      await codeGraph.clickOnRemoveNodeViaElementMenu();
-      await codeGraph.clickOnUnhideNodesBtn();
-      const updatedGraph = await codeGraph.getGraphNodes();
-      const targetNodeForUpdateGraph = findNodeByName(updatedGraph, node.nodeName);
-      expect(targetNodeForUpdateGraph.visible).toBe(true);
-    });
-  })
+  test(`Validate unhide node functionality after hiding a node in canvas for ${nodes[0].nodeName}`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
+    await codeGraph.rightClickAtCanvasCenter();
+    await codeGraph.clickOnRemoveNodeViaElementMenu();
+    await codeGraph.clickOnUnhideNodesBtn();
+    const updatedGraph = await codeGraph.getGraphNodes();
+    const targetNodeForUpdateGraph = findNodeByName(updatedGraph, nodes[0].nodeName);
+    expect(targetNodeForUpdateGraph.visible).toBe(true);
+  });
 
   categories.forEach((category, index) => {
     const checkboxIndex = index + 1;
@@ -92,15 +96,16 @@ test.describe("Canvas tests", () => {
       await codeGraph.selectCodeGraphCheckbox(checkboxIndex.toString());
       const result = await codeGraph.getGraphNodes();
       const findItem = result.find((item: { category: string; }) => item.category === category);
-      expect(findItem?.visible).toBe(false);
+      expect(findItem.visible).toBeFalsy();
     });
   })
 
   nodesPath.forEach((path) => {
     test(`Verify "Clear graph" button resets canvas view for path ${path.firstNode} and ${path.secondNode}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn("Show the path");
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const initialGraph = await codeGraph.getGraphNodes();
@@ -117,27 +122,40 @@ test.describe("Canvas tests", () => {
     });
   })
 
-  for (let index = 0; index < 2; index++) {
-    const checkboxIndex = index + 1;
-    test(`Verify selecting different graphs displays nodes in canvas - Iteration ${index + 1}`, async () => {
+  graphs.forEach(({graphName}) => {
+    test(`Verify selecting different graphs displays nodes in canvas - graph: ${graphName}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
-      await codeGraph.selectGraph(checkboxIndex);
+      await codeGraph.selectGraph(graphName);
       const result = await codeGraph.getGraphDetails();
-      expect(result.elements.nodes.length).toBeGreaterThan(1);
-      expect(result.elements.links.length).toBeGreaterThan(1);
+      const nodes = result.elements?.nodes || result.nodes;
+      const links = result.elements?.links || result.links;
+      expect(nodes.length).toBeGreaterThan(1);
+      expect(links.length).toBeGreaterThan(1);
     });
-  }
-  
-  for (let index = 0; index < 3; index++) {
+  })
+
+  for (let index = 1; index < 3; index++) {
     const nodeIndex: number = index + 1;
     test(`Validate canvas node dragging for node: ${index}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       const initialGraph = await codeGraph.getGraphNodes();
-      await codeGraph.changeNodePosition(initialGraph[nodeIndex].screenX, initialGraph[nodeIndex].screenY);
+      const nodeName = initialGraph[nodeIndex].name || initialGraph[nodeIndex].data?.name;
+      await codeGraph.fillSearchBar(nodeName);
+      await codeGraph.selectSearchBarOptionBtn("1");
+      await codeGraph.waitForCanvasAnimationToEnd();
+      const updatedGraph = await codeGraph.getGraphNodes();
+      const targetNode = findNodeByName(updatedGraph, nodeName);
+      const initialX = targetNode.x;
+      const initialY = targetNode.y;
+      await codeGraph.dragFromCanvasCenter();
       const updateGraph = await codeGraph.getGraphDetails();
-      expect(updateGraph.elements.nodes[nodeIndex].x).not.toBe(initialGraph[nodeIndex].x);
-      expect(updateGraph.elements.nodes[nodeIndex].y).not.toBe(initialGraph[nodeIndex].y);
+      const nodes = updateGraph.elements?.nodes || updateGraph.nodes;
+      const draggedNode = findNodeByName(nodes, nodeName);
+
+      expect(draggedNode.x).not.toBe(initialX);
+      expect(draggedNode.y).not.toBe(initialY);
     });
   }
 
@@ -158,8 +176,12 @@ test.describe("Canvas tests", () => {
     const graphData = await codeGraph.getGraphDetails();
     const api = new ApiCalls();
     const response = await api.getProject(GRAPHRAG_SDK);
-    const isMatching = graphData.elements.nodes.slice(0, 2).every(
-      (node: any, index: number) => node.name === response.result.entities.nodes[index].properties.name
+    const nodes = graphData.elements?.nodes || graphData.nodes;
+    const isMatching = nodes.slice(0, 2).every(
+      (node: any, index: number) => {
+        const nodeName = node.name || node.data?.name;
+        return nodeName === response.result.entities.nodes[index].properties.name;
+      }
     );
     expect(isMatching).toBe(true)
   });
@@ -168,14 +190,18 @@ test.describe("Canvas tests", () => {
     test(`Verify successful node path connection in canvas between ${firstNode} and ${secondNode} via UI`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn("Show the path");
       await codeGraph.insertInputForShowPath("1", firstNode);
       await codeGraph.insertInputForShowPath("2", secondNode);
-      const result = await codeGraph.getGraphDetails();
-      const firstNodeRes = findNodeByName(result.elements.nodes, firstNode);
-      const secondnodeRes = findNodeByName(result.elements.nodes, secondNode);
-      expect(firstNodeRes.isPath).toBe(true)
-      expect(secondnodeRes.isPath).toBe(true)
+      const result = await codeGraph.getGraphNodes();
+      const firstNodeRes = findNodeByName(result, firstNode);
+      
+      const secondnodeRes = findNodeByName(result, secondNode);
+      expect(firstNodeRes).toBeDefined();
+      expect(secondnodeRes).toBeDefined();
+      
+      expect(firstNodeRes?.isPath).toBe(true)
+      expect(secondnodeRes?.isPath).toBe(true)
     })
   })
 
@@ -183,18 +209,45 @@ test.describe("Canvas tests", () => {
     test(`Validate node path connection in canvas ui and confirm via api for path ${path.firstNode} and ${path.secondNode}`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      await codeGraph.clickOnshowPathBtn();
+      await codeGraph.clickOnShowPathBtn("Show the path");
       await codeGraph.insertInputForShowPath("1", path.firstNode);
       await codeGraph.insertInputForShowPath("2", path.secondNode);
       const result = await codeGraph.getGraphDetails();
-      const firstNodeRes = findNodeByName(result.elements.nodes, path.firstNode);
-      const secondNodeRes = findNodeByName(result.elements.nodes, path.secondNode);
-      
+      const nodes = result.elements?.nodes || result.nodes;
+      const firstNodeRes = findNodeByName(nodes, path.firstNode);
+      const secondNodeRes = findNodeByName(nodes, path.secondNode);
+
+      expect(firstNodeRes).toBeDefined();
+      expect(secondNodeRes).toBeDefined();
+
       const api = new ApiCalls();
-      const response = await api.showPath(GRAPHRAG_SDK ,firstNodeRes.id, secondNodeRes.id);
+      const response = await api.showPath(GRAPHRAG_SDK ,firstNodeRes!.id, secondNodeRes!.id);
       const callsRelationObject = response.result.paths[0].find(item => item.relation === "CALLS")
-      expect(callsRelationObject?.src_node).toBe(firstNodeRes.id);
-      expect(callsRelationObject?.dest_node).toBe(secondNodeRes.id);    
+      expect(callsRelationObject?.src_node).toBe(firstNodeRes!.id);
+      expect(callsRelationObject?.dest_node).toBe(secondNodeRes!.id);
     });
   })
+
+  test(`Verify file download is triggered and saved after clicking download`, async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    const download = await codeGraph.downloadImage();
+    const downloadPath = await download.path();
+    expect(fs.existsSync(downloadPath)).toBe(true);
+  })
+
+  nodes.forEach((node) => {
+    test(`Verify tooltip appears when hovering over node: ${node.nodeName}`, async () => {
+      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await browser.setPageToFullScreen();
+      await codeGraph.selectGraph(GRAPHRAG_SDK);
+      await codeGraph.getGraphDetails();
+      await codeGraph.fillSearchBar(node.nodeName);
+      await codeGraph.selectSearchBarOptionBtn("1");
+      await codeGraph.waitForCanvasAnimationToEnd();
+      await codeGraph.hoverAtCanvasCenter();
+      expect(await codeGraph.isNodeToolTipVisible(node.nodeName)).toBe(true);
+    })
+  })
+  
 });

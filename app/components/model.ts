@@ -1,5 +1,4 @@
-import { LinkObject, NodeObject } from 'react-force-graph-2d'
-import { Path } from '../page'
+import { Path } from '@/lib/utils'
 
 export interface GraphData {
   nodes: Node[],
@@ -11,32 +10,37 @@ export interface Category {
   show: boolean,
 }
 
-export type Node = NodeObject<{
-  id: number,
+export interface Label {
   name: string,
+}
+
+export interface Node {
+  id: number,
   category: string,
   color: string,
+  visible: boolean,
   collapsed: boolean,
   expand: boolean,
-  visible: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-  [key: string]: any,
-}>
-
-export type Link = LinkObject<Node, {
+  data: {
+    name: string,
+    [key: string]: any,
+  }
+}
+export interface Link {
   id: number,
-  source: Node,
-  target: Node,
+  source: number,
+  target: number,
   label: string,
   visible: boolean,
-  expand: boolean,
-  collapsed: boolean,
   isPathSelected: boolean,
   isPath: boolean,
-  curve: number,
-  [key: string]: any,
-}>
+  color: string,
+  data: {
+    [key: string]: any,
+  },
+}
 
 const COLORS_ORDER_NAME = [
   "blue",
@@ -52,7 +56,7 @@ const COLORS_ORDER = [
   "#80E6E6",
 ]
 
-export function getCategoryColorValue(index: number): string {
+export function getCategoryColorValue(index: number = 0): string {
   return COLORS_ORDER[index % COLORS_ORDER.length]
 }
 
@@ -64,18 +68,21 @@ export class Graph {
 
   private id: string;
   private categories: Category[];
+  private labels: Label[];
   private elements: GraphData;
-
   private categoriesMap: Map<string, Category>;
+  private labelsMap: Map<string, Label>;
   private nodesMap: Map<number, Node>;
   private linksMap: Map<number, Link>;
 
-  private constructor(id: string, categories: Category[], elements: GraphData,
-    categoriesMap: Map<string, Category>, nodesMap: Map<number, Node>, edgesMap: Map<number, Link>) {
+  private constructor(id: string, categories: Category[], labels: Label[], elements: GraphData,
+    categoriesMap: Map<string, Category>, labelsMap: Map<string, Label>, nodesMap: Map<number, Node>, edgesMap: Map<number, Link>) {
     this.id = id;
     this.categories = categories;
+    this.labels = labels;
     this.elements = elements;
     this.categoriesMap = categoriesMap;
+    this.labelsMap = labelsMap;
     this.nodesMap = nodesMap;
     this.linksMap = edgesMap;
   }
@@ -92,6 +99,14 @@ export class Graph {
     return this.categoriesMap;
   }
 
+  get Labels(): Label[] {
+    return this.labels;
+  }
+
+  get LabelsMap(): Map<string, Label> {
+    return this.labelsMap;
+  }
+
   get Elements(): GraphData {
     return this.elements;
   }
@@ -100,7 +115,7 @@ export class Graph {
     this.elements = elements;
   }
 
-  get EdgesMap(): Map<number, Link> {
+  get LinksMap(): Map<number, Link> {
     return this.linksMap;
   }
 
@@ -113,7 +128,7 @@ export class Graph {
   }
 
   public static empty(): Graph {
-    return new Graph("", [], { nodes: [], links: [] }, new Map<string, Category>(), new Map<number, Node>(), new Map<number, Link>())
+    return new Graph("", [], [], { nodes: [], links: [] }, new Map<string, Category>(), new Map<string, Label>(), new Map<number, Node>(), new Map<number, Link>())
   }
 
   public static create(results: any, graphName: string): Graph {
@@ -148,18 +163,18 @@ export class Graph {
 
       node = {
         id: nodeData.id,
-        name: nodeData.name,
         color: getCategoryColorValue(category.index),
         category: category.name,
         expand: false,
         visible: true,
         collapsed,
         isPath: !!path,
-        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id
+        isPathSelected: path?.start?.id === nodeData.id || path?.end?.id === nodeData.id,
+        data: {
+          ...nodeData.properties,
+        }
       }
-      Object.entries(nodeData.properties).forEach(([key, value]) => {
-        node[key] = value
-      })
+
       this.nodesMap.set(nodeData.id, node)
       this.elements.nodes.push(node)
       newElements.nodes.push(node)
@@ -176,21 +191,67 @@ export class Graph {
         return
       }
 
-      let sourceId = edgeData.src_node;
-      let destinationId = edgeData.dest_node
+      let source = this.nodesMap.get(edgeData.src_node)
+      let target = this.nodesMap.get(edgeData.dest_node)
+
+      if (!source) {
+        source = {
+          id: edgeData.src_node,
+          color: getCategoryColorValue(),
+          category: "",
+          expand: false,
+          visible: true,
+          collapsed,
+          isPath: !!path,
+          isPathSelected: path?.start?.id === edgeData.src_node || path?.end?.id === edgeData.src_node,
+          data: {
+            name: edgeData.src_node
+          }
+
+        }
+        this.nodesMap.set(edgeData.src_node, source)
+        this.elements.nodes.push(source)
+        newElements.nodes.push(source)
+      }
+
+      if (!target) {
+        target = {
+          id: edgeData.dest_node,
+          color: getCategoryColorValue(),
+          category: "",
+          expand: false,
+          visible: true,
+          collapsed,
+          isPath: !!path,
+          isPathSelected: path?.start?.id === edgeData.dest_node || path?.end?.id === edgeData.dest_node,
+          data: {
+            name: edgeData.dest_node
+          }
+        }
+        this.nodesMap.set(edgeData.dest_node, target)
+        this.elements.nodes.push(target)
+        newElements.nodes.push(target)
+      }
+
+      let label = this.labelsMap.get(edgeData.relation)
+      if (!label) {
+        label = { name: edgeData.relation }
+        this.labelsMap.set(edgeData.relation, label)
+        this.labels.push(label)
+      }
 
       link = {
         id: edgeData.id,
-        source: sourceId,
-        target: destinationId,
+        source: edgeData.src_node,
+        target: edgeData.dest_node,
         label: edgeData.relation,
         visible: true,
-        expand: false,
-        collapsed,
+        color: "#999999",
         isPathSelected: false,
         isPath: !!path,
-        curve: 0
+        data: { ...edgeData.properties }
       }
+
       this.linksMap.set(edgeData.id, link)
       this.elements.links.push(link)
       newElements.links.push(link)
@@ -203,7 +264,7 @@ export class Graph {
     this.elements = {
       nodes: this.elements.nodes,
       links: this.elements.links.map(link => {
-        if (this.elements.nodes.map(n => n.id).includes(link.source.id) && this.elements.nodes.map(n => n.id).includes(link.target.id)) {
+        if (this.nodesMap.get(link.source) && this.nodesMap.get(link.target)) {
           return link
         }
         this.linksMap.delete(link.id)
@@ -212,15 +273,15 @@ export class Graph {
   }
 
   public visibleLinks(visible: boolean, ids?: number[]) {
-    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source.id) || ids.includes(link.target.id)) : this.elements.links
+    const elements = ids ? this.elements.links.filter(link => ids.includes(link.source) || ids.includes(link.target)) : this.elements.links
 
     elements.forEach(link => {
-      if (visible && this.elements.nodes.map(n => n.id).includes(link.source.id) && link.source.visible && this.elements.nodes.map(n => n.id).includes(link.target.id) && link.target.visible) {
+      if (visible && this.nodesMap.get(link.source)?.visible && this.nodesMap.get(link.target)?.visible) {
         // eslint-disable-next-line no-param-reassign
         link.visible = true
       }
 
-      if (!visible && ((this.elements.nodes.map(n => n.id).includes(link.source.id) && !link.source.visible) || (this.elements.nodes.map(n => n.id).includes(link.target.id) && !link.target.visible))) {
+      if (!visible && (this.nodesMap.get(link.source)?.visible === false || this.nodesMap.get(link.target)?.visible === false)) {
         // eslint-disable-next-line no-param-reassign
         link.visible = false
       }

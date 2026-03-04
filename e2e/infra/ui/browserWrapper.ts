@@ -1,4 +1,4 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { chromium, Browser, BrowserContext, Page } from '@playwright/test';
 import BasePage from './basePage';
 
 export default class BrowserWrapper {

@@ -1,50 +1,70 @@
-import { CircleDot, Minus, Plus } from "lucide-react";
+import { Download, Fullscreen, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils"
-import { RefObject } from "react";
+import { GraphRef } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
-    chartRef: RefObject<any>
+    canvasRef: GraphRef
     className?: string
+    handleDownloadImage?: () => void
+    setCooldownTicks: (ticks?: 0) => void
+    cooldownTicks: number | undefined
 }
 
-export function Toolbar({ chartRef, className }: Props) {
+export function Toolbar({ canvasRef, className, handleDownloadImage, setCooldownTicks, cooldownTicks }: Props) {
 
     const handleZoomClick = (changefactor: number) => {
-        const chart = chartRef.current
-        if (chart) {
-            chart.zoom(chart.zoom() * changefactor)
+        const canvas = canvasRef.current
+
+        if (canvas) {
+            canvas.zoom(canvas.getZoom() * changefactor)
         }
     }
 
     const handleCenterClick = () => {
-        const chart = chartRef.current
-        if (chart) {
-            chart.zoomToFit(1000, 40)
+        const canvas = canvasRef.current
+
+        if (canvas) {
+            canvas.zoomToFit()
         }
     }
 
     return (
-        <div className={cn("bg-white flex flex-row rounded overflow-hidden", className)}>
+        <div className={cn("flex flex-row items-center rounded overflow-hidden p-1", className)}>
+            <Switch
+                className="ml-4 pointer-events-auto data-[state=unchecked]:bg-border"
+                checked={cooldownTicks !== 0}
+                onCheckedChange={() => {
+                    setCooldownTicks(cooldownTicks !== 0 ? 0 : undefined)
+                }}
+            />
             <button
-                className="border p-2"
+                className="control-button"
                 onClick={() => handleZoomClick(0.9)}
                 title="Zoom Out"
             >
-                <Minus />
+                <ZoomOut />
             </button>
             <button
-                className="border p-2"
+                className="control-button"
                 onClick={() => handleCenterClick()}
                 title="Center"
             >
-                <CircleDot />
+                <Fullscreen />
             </button>
             <button
-                className="border p-2"
+                className="control-button"
                 onClick={() => handleZoomClick(1.1)}
                 title="Zoom In"
             >
-                <Plus />
+                <ZoomIn />
+            </button>
+            <button
+                className="hidden md:block control-button"
+                title="downloadImage"
+                onClick={handleDownloadImage}
+            >
+                <Download />
             </button>
         </div>
     )

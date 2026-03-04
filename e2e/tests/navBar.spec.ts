@@ -21,7 +21,7 @@ test.describe(' Navbar tests', () => {
   })
 
   const navitems: { navItem: string; expectedRes: string }[] = [
-    { navItem: "Home", expectedRes: urls.falkorDBUrl },
+    { navItem: "Main Website", expectedRes: urls.falkorDBUrl },
     { navItem: "Github", expectedRes: urls.falkorDbGithubUrl }
   ];  
 
@@ -41,9 +41,9 @@ test.describe(' Navbar tests', () => {
 
   test("Validate Tip popup visibility and closure functionality", async () => {
     const navBar = await browser.createNewPage(CodeGraph, urls.baseUrl);
-    await navBar.clickonTipBtn();
+    await navBar.clickOnTipBtn();
     expect(await navBar.isTipMenuVisible()).toBe(true);
-    await navBar.clickonTipMenuCloseBtn();
+    await navBar.clickOnTipMenuCloseBtn();
     expect(await navBar.isTipMenuVisible()).toBe(false);
   });
 });

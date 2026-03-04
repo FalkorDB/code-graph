@@ -1,40 +1,55 @@
-import { Dispatch, RefObject, SetStateAction, useContext, useEffect, useRef, useState } from "react";
-import { GraphData, Node } from "./model";
-import { GraphContext } from "./provider";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { GitFork, Search, X } from "lucide-react";
+import { Download, GitFork, Search, X } from "lucide-react";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { Path, PathNode } from '../page';
+import { Path, PATH_COLOR } from "@/lib/utils";
 import Input from './Input';
 // import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
-import dynamic from 'next/dynamic';
-import { Position } from "./graphView";
+import type { Position } from "./graphView";
 import { prepareArg } from '../utils';
-
-const GraphView = dynamic(() => import('./graphView'));
+import { GraphRef } from "@/lib/utils";
+import { dataToGraphData } from "@falkordb/canvas";
+import type { Node as CanvasNode, Link as CanvasLink, GraphData as CanvasData } from "@falkordb/canvas";
+import GraphView from "./graphView";
 
 interface Props {
+    id: "desktop" | "mobile"
+    graph: Graph,
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
-    onFetchGraph: (graphName: string) => void,
+    onFetchGraph: (graphName: string) => Promise<void>,
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
     options: string[]
     setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
-    chartRef: RefObject<any>
+    canvasRef: GraphRef
     selectedValue: string
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
     isPathResponse: boolean | undefined
     setIsPathResponse: Dispatch<SetStateAction<boolean | undefined>>
+    handleSearchSubmit: (node: any) => void
+    searchNode: any
+    setSearchNode: Dispatch<SetStateAction<any>>
+    cooldownTicks: number | undefined
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
+    onCategoryClick: (name: string, show: boolean) => void
+    handleDownloadImage: () => void
+    zoomedNodes: Node[]
+    setZoomedNodes: Dispatch<SetStateAction<Node[]>>
+    hasHiddenElements: boolean
+    setHasHiddenElements: Dispatch<SetStateAction<boolean>>
 }
 
 export function CodeGraph({
+    id,
+    graph,
     data,
     setData,
     onFetchGraph,
@@ -43,29 +58,35 @@ export function CodeGraph({
     setOptions,
     isShowPath,
     setPath,
-    chartRef,
+    canvasRef,
     selectedValue,
     setSelectedPathId,
     isPathResponse,
     setIsPathResponse,
-    selectedPathId
+    selectedPathId,
+    handleSearchSubmit,
+    searchNode,
+    setSearchNode,
+    cooldownTicks,
+    setCooldownTicks,
+    onCategoryClick,
+    handleDownloadImage,
+    zoomedNodes,
+    setZoomedNodes,
+    hasHiddenElements,
+    setHasHiddenElements
 }: Props) {
 
-    let graph = useContext(GraphContext)
-
     const [url, setURL] = useState("");
-    const [selectedObj, setSelectedObj] = useState<Node>();
+    const [selectedObj, setSelectedObj] = useState<Node | Link>();
     const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
     const [position, setPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
-    const [searchNode, setSearchNode] = useState<PathNode>({});
     const [commits, setCommits] = useState<any[]>([]);
     const [nodesCount, setNodesCount] = useState<number>(0);
     const [edgesCount, setEdgesCount] = useState<number>(0);
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
-    const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
-    const [cooldownTime, setCooldownTime] = useState<number>(0)
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -78,10 +99,15 @@ export function CodeGraph({
     }, [selectedValue])
 
     useEffect(() => {
+        setHasHiddenElements(graph.getElements().some(element => !element.visible))
+    }, [data, graph.Id])
+
+    useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Delete') {
-                if (selectedObj && selectedObjects.length === 0) return
-                handelRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined));
+                if (selectedObjects.length === 0 && (!selectedObj || "source" in selectedObj)) return
+                
+                handleRemove([...selectedObjects.map(obj => obj.id), selectedObj?.id].filter(id => id !== undefined), "nodes");
             }
         };
 
@@ -144,50 +170,49 @@ export function CodeGraph({
         }
 
         run()
+
     }, [graphName])
 
-    function handleSelectedValue(value: string) {
+    async function handleSelectedValue(value: string) {
         setGraphName(value)
-        onFetchGraph(value)
-    }
-
-    function onCategoryClick(name: string, show: boolean) {
-        graph.Categories.find(c => c.name === name)!.show = show
-
-        graph.Elements.nodes.forEach(node => {
-            if (!(node.category === name)) return
-            node.visible = show
-        })
-
-        graph.visibleLinks(show)
-
-        setData({ ...graph.Elements })
+        await onFetchGraph(value)
     }
 
     const deleteNeighbors = (nodes: Node[]) => {
+
         if (nodes.length === 0) return;
 
+        const expandedNodes: Node[] = []
+        const deleteIdsMap = new Set()
+
         graph.Elements = {
-            nodes: graph.Elements.nodes.map(node => {
-                const isTarget = graph.Elements.links.some(link => link.target.id === node.id && nodes.some(n => n.id === link.source.id));
+            nodes: graph.Elements.nodes.filter(node => {
+                if (!node.collapsed) return true
 
-                if (!isTarget || !node.collapsed) return node
+                const isTarget = graph.Elements.links.some(link => link.target === node.id && nodes.some(n => n.id === link.source));
 
-                if (node.expand) {
-                    node.expand = false
-                    deleteNeighbors([node])
+                if (!isTarget) return true
+
+                deleteIdsMap.add(node.id)
+                const deleted = graph.NodesMap.delete(Number(node.id))
+
+                if (deleted && node.expand) {
+                    expandedNodes.push(node)
                 }
 
-                graph.NodesMap.delete(Number(node.id))
-            }).filter(node => node !== undefined),
+                return false
+            }),
             links: graph.Elements.links
         }
 
+        deleteNeighbors(expandedNodes)?.forEach(id => deleteIdsMap.add(id))
+
         graph.removeLinks()
+
+        return deleteIdsMap
     }
 
     const handleExpand = async (nodes: Node[], expand: boolean) => {
-
         if (expand) {
             const elements = await onFetchNode(nodes.map(n => n.id))
 
@@ -198,61 +223,123 @@ export function CodeGraph({
                 })
                 return
             }
+
+            const currentData = canvasRef.current?.getGraphData()
+
+            if (!currentData) return
+
+            // Get existing IDs
+            const existingNodeIds = new Set(currentData.nodes.map(n => n.id))
+            const existingLinkIds = new Set(currentData.links.map(l => l.id))
+
+            // Filter for only new elements
+            const newDataElements = {
+                nodes: elements.nodes.filter(n => !existingNodeIds.has(n.id))
+                    .map(({ category, color, data, id, isPath, isPathSelected, visible }) => ({
+                        color: isPath ? PATH_COLOR : color,
+                        id,
+                        labels: [category],
+                        data: {
+                            ...data,
+                            isPath,
+                            isPathSelected
+                        },
+                        visible,
+                    } as CanvasNode)),
+                links: elements.links.filter(l => !existingLinkIds.has(l.id))
+                    .map(({ color, id, source, target, data, isPath, isPathSelected, visible, label }) => ({
+                        color: isPath ? PATH_COLOR : color,
+                        id,
+                        source,
+                        target,
+                        data: {
+                            ...data,
+                            isPath,
+                            isPathSelected
+                        },
+                        visible,
+                        relationship: label,
+                    } as CanvasLink))
+            }
+
+            // Convert only new data to GraphData format
+            const newGraphData = dataToGraphData(
+                newDataElements,
+                undefined,
+                new Map(currentData.nodes.map(n => [n.id, n]))
+            )
+
+            // Merge with existing data
+            canvasRef.current?.setGraphData({
+                nodes: [...currentData.nodes, ...newGraphData.nodes],
+                links: [...currentData.links, ...newGraphData.links]
+            })
+
+            setCooldownTicks(-1)
         } else {
             const deleteNodes = nodes.filter(n => n.expand)
             if (deleteNodes.length > 0) {
-                deleteNeighbors(deleteNodes);
+                const deleteIdsMap = deleteNeighbors(deleteNodes);
+
+                if (!deleteIdsMap || deleteIdsMap.size === 0) return
+
+                const currentData = canvasRef.current?.getGraphData()
+
+                if (currentData) {
+                    currentData.nodes = currentData.nodes.filter(node => !deleteIdsMap.has(Number(node.id)))
+                    currentData.links = currentData.links.filter(link => !deleteIdsMap.has(Number(link.source.id)) && !deleteIdsMap.has(Number(link.target.id)))
+
+                    canvasRef.current?.setGraphData(currentData)
+                    setCooldownTicks(-1)
+                }
             }
         }
 
         nodes.forEach((node) => {
             node.expand = expand
         })
-        
+
         setSelectedObj(undefined)
-        setData({ ...graph.Elements })
     }
 
-    const handelSearchSubmit = (node: any) => {
-        const n = { name: node.properties.name, id: node.id }
+    const handleRemove = (ids: number[], type: "nodes" | "links") => {
+        const canvas = canvasRef.current
 
-        let chartNode = graph.Elements.nodes.find(n => n.id == node.id)
+        if (!canvas) return
 
-        if (!chartNode?.visible) {
-            if (!chartNode) {
-                chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
-            } else {
-                chartNode.visible = true
-                setCooldownTicks(undefined)
-                setCooldownTime(1000)
-            }
-            graph.visibleLinks(true, [chartNode.id])
-        }
-
-        setSearchNode(n)
-        setData({ ...graph.Elements })
-
-        const chart = chartRef.current
-
-        if (chart) {
-            chart.centerAt(chartNode.x, chartNode.y, 1000);
-        }
-    }
-
-    const handelRemove = (ids: number[]) => {
-        graph.Elements.nodes.forEach(node => {
-            if (!ids.includes(node.id)) return
-            node.visible = false
+        graph.Elements[type].forEach(element => {
+            if (!ids.includes(element.id)) return
+            element.visible = false
         })
 
-        graph.visibleLinks(false, ids)
+        const currentData = canvas.getGraphData()
 
-        setData({ ...graph.Elements })
+        currentData[type].forEach(element => {
+            if (!ids.includes(Number(element.id))) return
+            element.visible = false
+        })
+
+        if (type === "nodes") {
+            currentData.links.forEach((link) => {
+                if (ids.includes(link.source.id) || ids.includes(link.target.id)) {
+                    link.visible = false
+                }
+            })
+        }
+
+        canvas.setGraphData(currentData)
+        graph.visibleLinks(false, ids)
+        setHasHiddenElements(true)
+
+        setSelectedObj(undefined)
+        setSelectedObjects([])
+        setCooldownTicks(-1)
     }
 
     return (
-        <div className="h-full w-full flex flex-col gap-4 p-8 bg-gray-100">
-            <header className="flex flex-col gap-4">
+        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 pt-0 md:p-8 md:bg-gray-100">
+            <header className="flex flex-col gap-4 relative">
+                <div className="absolute md:hidden inset-x-0 top-8 h-[50%] bg-gray-100 -mx-8 -mt-8 px-8 border-b border-gray-400" />
                 <Combobox
                     options={options}
                     setOptions={setOptions}
@@ -264,15 +351,16 @@ export function CodeGraph({
                 <main ref={containerRef} className="bg-white h-1 grow">
                     {
                         graph.Id ?
-                            <div className="h-full relative border">
-                                <div className="w-full absolute top-0 left-0 flex justify-between p-4 z-10 pointer-events-none">
-                                    <div className='flex gap-4'>
+                            <div className="h-full relative border flex flex-col md:block">
+                                <div className="flex w-full absolute top-0 left-0 justify-between p-4 z-10 pointer-events-none">
+                                    <div className='hidden md:flex gap-4'>
                                         <Input
                                             graph={graph}
-                                            value={searchNode.name}
-                                            onValueChange={({ name }) => setSearchNode({ name })}
+                                            onValueChange={(node) => setSearchNode(node)}
                                             icon={<Search />}
-                                            handleSubmit={handelSearchSubmit}
+                                            handleSubmit={(node) => {
+                                                handleSearchSubmit(node)
+                                            }}
                                             node={searchNode}
                                         />
                                         <Labels categories={graph.Categories} onClick={onCategoryClick} />
@@ -283,11 +371,29 @@ export function CodeGraph({
                                             <button
                                                 className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
                                                 onClick={() => {
+                                                    const canvas = canvasRef.current
+
+                                                    if (!canvas) return
+
                                                     graph.getElements().forEach((element) => {
                                                         element.isPath = false
                                                         element.isPathSelected = false
                                                     })
+
+                                                    const currentData = canvas.getGraphData();
+
+                                                    [...currentData.nodes, ...currentData.links].forEach(element => {
+                                                        element.data.isPath = false
+                                                        element.data.isPathSelected = false
+
+                                                        if ("source" in element) {
+                                                            element.color = "#999999"
+                                                        }
+                                                    })
+
+                                                    canvas.setGraphData(currentData)
                                                     setIsPathResponse(false)
+                                                    setCooldownTicks(-1)
                                                 }}
                                             >
                                                 <X size={15} />
@@ -295,17 +401,28 @@ export function CodeGraph({
                                             </button>
                                         }
                                         {
-                                            (graph.Elements.nodes.some(e => !e.visible)) &&
+                                            hasHiddenElements &&
                                             <button
                                                 className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
                                                 onClick={() => {
-                                                    graph.Categories.forEach(c => c.show = true)
-                                                    graph.Elements.nodes.forEach((element) => {
-                                                        element.visible = true
-                                                    })
-                                                    graph.visibleLinks(true)
+                                                    const canvas = canvasRef.current;
 
-                                                    setData({ ...graph.Elements })
+                                                    if (!canvas) return;
+
+                                                    graph.Categories.forEach(c => c.show = true);
+                                                    graph.getElements().forEach((element) => {
+                                                        element.visible = true
+                                                    });
+
+                                                    const currentData = canvas.getGraphData();
+
+                                                    [...currentData.nodes, ...currentData.links].forEach(element => {
+                                                        element.visible = true
+                                                    });
+
+                                                    canvas.setGraphData(currentData);
+                                                    setHasHiddenElements(false);
+                                                    setCooldownTicks(-1);
                                                 }}
                                             >
                                                 <X size={15} />
@@ -314,12 +431,48 @@ export function CodeGraph({
                                         }
                                     </div>
                                 </div>
-                                <div data-name="canvas-info-panel" className="w-full absolute bottom-0 left-0 flex justify-between items-center p-4 z-10 pointer-events-none">
-                                    <div data-name="metrics-panel" className="flex gap-4 text-gray-500">
+                                <ElementMenu
+                                    obj={selectedObj}
+                                    objects={selectedObjects}
+                                    setPath={(path) => {
+                                        setPath(path)
+                                        setSelectedObj(undefined)
+                                    }}
+                                    handleRemove={handleRemove}
+                                    position={position}
+                                    url={url}
+                                    handleExpand={handleExpand}
+                                    parentRef={containerRef}
+                                />
+                                <GraphView
+                                    id={id}
+                                    data={data}
+                                    setData={setData}
+                                    graph={graph}
+                                    chartRef={canvasRef}
+                                    selectedObj={selectedObj}
+                                    selectedObjects={selectedObjects}
+                                    setSelectedObj={setSelectedObj}
+                                    setSelectedObjects={setSelectedObjects}
+                                    setPosition={setPosition}
+                                    handleExpand={handleExpand}
+                                    isShowPath={isShowPath}
+                                    setPath={setPath}
+                                    isPathResponse={isPathResponse}
+                                    selectedPathId={selectedPathId}
+                                    setSelectedPathId={setSelectedPathId}
+                                    cooldownTicks={cooldownTicks}
+                                    setCooldownTicks={setCooldownTicks}
+                                    setZoomedNodes={setZoomedNodes}
+                                    zoomedNodes={zoomedNodes}
+                                />
+                                <div data-name="canvas-info-panel" className="w-full md:absolute md:bottom-0 md:left-0 md:flex md:justify-between md:items-center md:p-4 z-10 pointer-events-none">
+                                    <div data-name="metrics-panel" className="flex gap-4 justify-center bg-gray-100 md:bg-transparent md:text-gray-500 p-2 md:p-0">
                                         <p>{nodesCount} Nodes</p>
+                                        <p className="md:hidden">|</p>
                                         <p>{edgesCount} Edges</p>
                                     </div>
-                                    <div className='flex gap-4'>
+                                    <div className='hidden md:flex gap-4'>
                                         {
                                             commitIndex !== commits.length &&
                                             <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
@@ -340,50 +493,18 @@ export function CodeGraph({
                                             </div>
                                         }
                                         <Toolbar
-                                            className="pointer-events-auto"
-                                            chartRef={chartRef}
+                                            className="gap-4"
+                                            canvasRef={canvasRef}
+                                            handleDownloadImage={handleDownloadImage}
+                                            setCooldownTicks={setCooldownTicks}
+                                            cooldownTicks={cooldownTicks}
                                         />
                                     </div>
                                 </div>
-                                <ElementMenu
-                                    obj={selectedObj}
-                                    objects={selectedObjects}
-                                    setPath={(path) => {
-                                        setPath(path)
-                                        setSelectedObj(undefined)
-                                    }}
-                                    handleRemove={handelRemove}
-                                    position={position}
-                                    url={url}
-                                    handelExpand={handleExpand}
-                                    parentRef={containerRef}
-                                />
-                                <GraphView
-                                    data={data}
-                                    setData={setData}
-                                    graph={graph}
-                                    chartRef={chartRef}
-                                    selectedObj={selectedObj}
-                                    selectedObjects={selectedObjects}
-                                    setSelectedObj={setSelectedObj}
-                                    setSelectedObjects={setSelectedObjects}
-                                    setPosition={setPosition}
-                                    onFetchNode={onFetchNode}
-                                    deleteNeighbors={deleteNeighbors}
-                                    isShowPath={isShowPath}
-                                    setPath={setPath}
-                                    isPathResponse={isPathResponse}
-                                    selectedPathId={selectedPathId}
-                                    setSelectedPathId={setSelectedPathId}
-                                    cooldownTicks={cooldownTicks}
-                                    setCooldownTicks={setCooldownTicks}
-                                    cooldownTime={cooldownTime}
-                                    setCooldownTime={setCooldownTime}
-                                />
                             </div>
                             : <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                                <GitFork size={100} color="gray" />
-                                <h1 className="text-4xl">Select a repo to show its graph here</h1>
+                                <GitFork className="md:w-24 md:h-24 w-16 h-16" color="gray" />
+                                <h1 className="md:text-4xl text-2xl text-center">Select a repo to show its graph here</h1>
                             </div>
                     }
                 </main>

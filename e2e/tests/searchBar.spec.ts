@@ -3,8 +3,8 @@ import BrowserWrapper from "../infra/ui/browserWrapper";
 import CodeGraph from "../logic/POM/codeGraph";
 import urls from "../config/urls.json";
 import { GRAPHRAG_SDK } from "../config/constants";
+import { nodes, searchData, specialCharacters } from "../config/testData";
 import { delay } from "../logic/utils";
-import { searchData, specialCharacters } from "../config/testData";
 import { ApiCalls } from "../logic/api/apiCalls";
 
 test.describe("search bar tests", () => {
@@ -23,7 +23,6 @@ test.describe("search bar tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.fillSearchBar(searchInput);
-      await delay(1000);
       const textList = await codeGraph.getSearchBarElementsText();
       textList.forEach((text) => {
         expect(text.toLowerCase()).toContain(searchInput);
@@ -36,7 +35,6 @@ test.describe("search bar tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.fillSearchBar(searchInput);
-      await codeGraph.selectSearchBarOptionBtn("1");
       expect(await codeGraph.getSearchBarInputValue()).toBe(
         completedSearchInput
       );
@@ -58,8 +56,8 @@ test.describe("search bar tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.fillSearchBar(character);
-      await delay(1000);
-      expect((await codeGraph.getSearchBarInputValue()).includes(character)).toBe(expectedRes);
+      const res = await codeGraph.getSearchBarInputValue();
+      expect(res !== null && res.includes(character)).toBe(expectedRes);
     });
   });
 
@@ -72,6 +70,21 @@ test.describe("search bar tests", () => {
       const api = new ApiCalls();
       const response = await api.searchAutoComplete(GRAPHRAG_SDK, searchInput);
       expect(count).toBe(response.result.completions.length);
+    });
+  })
+
+  nodes.forEach(({nodeName})=> {
+    test(`Verify canvas focuses on node ${nodeName} after search`, async () => {
+      const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+      await browser.setPageToFullScreen();
+      await codeGraph.selectGraph(GRAPHRAG_SDK);
+      await codeGraph.getGraphDetails();
+      await codeGraph.fillSearchBar(nodeName);
+      await codeGraph.selectSearchBarOptionBtn("1");
+      await codeGraph.waitForCanvasAnimationToEnd();
+      await codeGraph.rightClickAtCanvasCenter();
+      expect(await codeGraph.getNodeToolTipContent()).toContain(nodeName);
+
     });
   })
 })

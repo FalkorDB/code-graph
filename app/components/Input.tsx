@@ -1,12 +1,11 @@
 import { toast } from "@/components/ui/use-toast"
 import { getCategoryColorName, getCategoryColorValue, Graph } from "./model"
 import { useEffect, useRef, useState } from "react"
-import { PathNode } from "../page"
+import { PathNode } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import { prepareArg } from "../utils"
 
 interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
-    value?: string
     graph: Graph
     onValueChange: (node: PathNode) => void
     handleSubmit?: (node: any) => void
@@ -16,7 +15,7 @@ interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
     scrollToBottom?: () => void
 }
 
-export default function Input({ value, onValueChange, handleSubmit, graph, icon, node, className, parentClassName, scrollToBottom, ...props }: Props) {
+export default function Input({ onValueChange, handleSubmit, graph, icon, node, className, parentClassName, scrollToBottom, ...props }: Props) {
 
     const [open, setOpen] = useState(false)
     const [options, setOptions] = useState<any[]>([])
@@ -38,15 +37,13 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
         let isLastRequest = true
         const timeout = setTimeout(async () => {
 
-            if (!value || node?.id) {
-                if (!value) {
-                    setOptions([])
-                }
+            if (!node?.name) {
+                setOptions([])
                 setOpen(false)
                 return
             }
 
-            const result = await fetch(`/api/repo/${prepareArg(graph.Id)}/?prefix=${prepareArg(value)}`, {
+            const result = await fetch(`/api/repo/${prepareArg(graph.Id)}/?prefix=${prepareArg(node?.name)}`, {
                 method: 'POST'
             })
 
@@ -66,7 +63,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
 
             setOptions(completions || [])
 
-            if (completions?.length > 0) {
+            if (completions?.length > 0 && !node?.id) {
                 setOpen(true)
             } else {
                 setOpen(false)
@@ -77,7 +74,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
             clearTimeout(timeout)
             isLastRequest = false
         }
-    }, [value, graph.Id])
+    }, [node?.name, graph.Id])
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         const container = containerRef.current
@@ -87,6 +84,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 const option = options.find((o, i) => i === selectedOption)
                 if (!option) return
                 if (handleSubmit) {
+                    onValueChange({ name: option.properties.name, id: option.id })
                     handleSubmit(option)
                 } else {
                     if (!open) return
@@ -133,7 +131,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
 
     return (
         <div
-            className={cn("w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
+            className={cn("w-full md:w-[20dvw] relative pointer-events-none rounded-md gap-4", parentClassName)}
             data-name='search-bar'
         >
             <input
@@ -144,7 +142,8 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 }}
                 onKeyDown={handleKeyDown}
                 className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
-                value={value || ""}
+                placeholder="Search for nodes in the graph"
+                value={node?.name || ""}
                 onChange={(e) => {
                     const newVal = e.target.value
                     const invalidChars = /[%*()\-\[\]{};:"|~]/;
@@ -168,7 +167,7 @@ export default function Input({ value, onValueChange, handleSubmit, graph, icon,
                 open &&
                 <div
                     ref={containerRef}
-                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md max-h-[50dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md md:max-h-[50dvh] h-[25dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
                     data-name='search-bar-list'
                     style={{
                         top: inputHeight + 16

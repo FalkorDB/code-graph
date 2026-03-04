@@ -21,7 +21,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: lts/*
+        node-version: 24
     - name: Install dependencies
       run: npm ci
     - name: Install Playwright Browsers
@@ -36,17 +36,22 @@ jobs:
       run: |
         npm install
         npm run build
-        NEXTAUTH_SECRET=SECRET npm start &
-        npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
+        NEXTAUTH_SECRET=SECRET npm start & npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
+    - name: Ensure required directories exist
+      if: always()
+      run: |
+        mkdir -p playwright-report
+        mkdir -p playwright-report/artifacts
     - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
+      if: always()
       with:
         name: playwright-report-shard-${{ matrix.shard }}
         path: playwright-report/
         retention-days: 30
-    - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
+    - name: Upload failed test screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
       with:
-        name: test-results-shard-${{ matrix.shard }}
-        path: test-results/
+        name: failed-test-screenshots-shard-${{ matrix.shard }}
+        path: playwright-report/artifacts/
         retention-days: 30

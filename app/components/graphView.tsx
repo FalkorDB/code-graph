@@ -1,9 +1,12 @@
+'use client'
 
-import ForceGraph2D from 'react-force-graph-2d';
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, RefObject, SetStateAction, useEffect, useRef } from 'react';
-import { toast } from '@/components/ui/use-toast';
-import { Path } from '../page';
+import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
+import { Path, PATH_COLOR } from '@/lib/utils';
+import { Fullscreen } from 'lucide-react';
+import { GraphRef } from '@/lib/utils';
+import ForceGraph from './ForceGraph';
+import { GraphLink, GraphNode } from '@falkordb/canvas';
 
 export interface Position {
     x: number,
@@ -14,14 +17,14 @@ interface Props {
     data: GraphData
     setData: Dispatch<SetStateAction<GraphData>>
     graph: Graph
-    chartRef: RefObject<any>
-    selectedObj: Node | undefined
-    setSelectedObj: Dispatch<SetStateAction<Node | undefined>>
+    chartRef: GraphRef
+    id: "desktop" | "mobile"
+    selectedObj: Node | Link | undefined
+    setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
-    onFetchNode: (nodeIds: number[]) => Promise<GraphData>
-    deleteNeighbors: (nodes: Node[]) => void
+    handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     isPathResponse: boolean | undefined
@@ -29,267 +32,255 @@ interface Props {
     setSelectedPathId: (selectedPathId: number) => void
     cooldownTicks: number | undefined
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
-    cooldownTime: number | undefined
-    setCooldownTime: Dispatch<SetStateAction<number>>
+    setZoomedNodes: Dispatch<SetStateAction<Node[]>>
+    zoomedNodes: Node[]
 }
 
-const PATH_COLOR = "#ffde21"
 const NODE_SIZE = 6;
 const PADDING = 2;
 
 export default function GraphView({
     data,
-    setData,
     graph,
-    chartRef,
+    chartRef: canvasRef,
+    id,
     selectedObj,
     setSelectedObj,
     selectedObjects,
     setSelectedObjects,
     setPosition,
-    onFetchNode,
-    deleteNeighbors,
+    handleExpand,
     isShowPath,
     setPath,
     isPathResponse,
     selectedPathId,
     setSelectedPathId,
     cooldownTicks,
-    cooldownTime,
     setCooldownTicks,
-    setCooldownTime
+    zoomedNodes,
+    setZoomedNodes
 }: Props) {
 
-    const parentRef = useRef<HTMLDivElement>(null)
+    const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
+    const [screenSize, setScreenSize] = useState<number>(0)
+    const [hoverElement, setHoverElement] = useState<Node | Link | null>()
 
     useEffect(() => {
-        setCooldownTime(4000)
-        setCooldownTicks(undefined)
-    }, [graph.Id])
+        const handleResize = () => {
+            setScreenSize(window.innerWidth)
+        }
 
-    useEffect(() => {
-        setCooldownTime(1000)
-        setCooldownTicks(undefined)
-    }, [graph.getElements().length])
+        handleResize()
 
-    const unsetSelectedObjects = (evt?: MouseEvent) => {
+        window.addEventListener('resize', handleResize)
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+        }
+    }, [])
+
+    const unsetSelectedObjects = useCallback((evt?: MouseEvent) => {
         if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
         setSelectedObj(undefined)
         setSelectedObjects([])
-    }
+    }, [selectedObj, selectedObjects, setSelectedObj, setSelectedObjects])
 
-    const handelNodeClick = (node: Node, evt: MouseEvent) => {
-        if (isShowPath) {
-            setPath(prev => {
-                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
-                    return ({ start: { id: Number(node.id), name: node.name } })
-                } else {
-                    return ({ end: { id: Number(node.id), name: node.name }, start: prev.start })
-                }
-            })
-            return
-        }
-
-        if (evt.ctrlKey) {
-            if (selectedObjects.some(obj => obj.id === node.id)) {
-                setSelectedObjects(selectedObjects.filter(obj => obj.id !== node.id))
+    const handleRightClick = useCallback((element: Node | Link, evt: MouseEvent) => {
+        if (evt.ctrlKey && "category" in element) {
+            if (selectedObjects.some(obj => obj.id === element.id)) {
+                setSelectedObjects(selectedObjects.filter(obj => obj.id !== element.id))
                 return
             } else {
-                setSelectedObjects([...selectedObjects, node])
+                setSelectedObjects([...selectedObjects, element as Node])
             }
         } else {
             setSelectedObjects([])
         }
 
-        setSelectedObj(node)
+        setSelectedObj(element)
         setPosition({ x: evt.clientX, y: evt.clientY })
-    }
+    }, [selectedObjects, setSelectedObjects, setSelectedObj, setPosition])
 
-    const handelLinkClick = (link: Link, evt: MouseEvent) => {
+    const handleLinkClick = (link: Link, evt: MouseEvent) => {
         unsetSelectedObjects(evt)
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
     }
 
-    const handelNodeRightClick = async (node: Node) => {
-        const expand = !node.expand
-        if (expand) {
-            const elements = await onFetchNode([node.id])
+    const handleNodeHover = useCallback((node: Node | null) => {
+        setHoverElement(node)
+    }, [])
 
-            if (elements.nodes.length === 0) {
-                toast({
-                    title: `No neighbors found`,
-                    description: `No neighbors found`,
-                })
-                return
-            }
+    const handleLinkHover = useCallback((link: Link | null) => {
+        setHoverElement(link)
+    }, [])
+
+    const isNodeSelected = useCallback((node: GraphNode) => {
+        if (isPathResponse) {
+            return node.data.isPathSelected
         } else {
-            deleteNeighbors([node]);
+            return selectedObjects.some(obj => "category" in obj && obj.id === node.id) || (selectedObj && "category" in selectedObj && selectedObj?.id === node.id) || (hoverElement && ('category' in hoverElement) && hoverElement.id === node.id)
+        }
+    }, [isPathResponse, selectedObjects, selectedObj, hoverElement])
+
+    const isLinkSelected = useCallback((link: GraphLink) => {
+        if (isPathResponse) {
+            return link.data.isPathSelected
+        } else {
+            return selectedObjects.some(obj => "source" in obj && obj.id === link.id) || (selectedObj && "source" in selectedObj && selectedObj?.id === link.id) || (hoverElement && 'source' in hoverElement && hoverElement.id === link.id)
+        }
+    }, [isPathResponse, selectedObjects, selectedObj, hoverElement])
+
+    const handleNodeClick = useCallback(async (node: Node) => {
+        const now = new Date()
+        const { date, name } = lastClick.current
+
+        const isDoubleClick = now.getTime() - date.getTime() < 1000 && name === node.data.name
+        lastClick.current = { date: now, name: node.data.name }
+
+        if (isDoubleClick) {
+            handleExpand([node], !node.expand)
+        } else if (isShowPath) {
+            setPath(prev => {
+                if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
+                    return ({ start: { id: Number(node.id), name: node.data.name } })
+                } else {
+                    return ({ end: { id: Number(node.id), name: node.data.name }, start: prev.start })
+                }
+            })
+            return
+        }
+    }, [handleExpand, isShowPath, setPath])
+
+    const handleEngineStop = useCallback(() => {
+        if (zoomedNodes.length > 0) {
+            canvasRef.current?.zoomToFit(zoomedNodes.length === 1 ? 4 : 1, (n: GraphNode) => zoomedNodes.some(node => node.id === n.id))
+            setZoomedNodes([])
         }
 
-        node.expand = expand
+        if (cooldownTicks !== -1) return
 
-        setSelectedObj(undefined)
-        setData({ ...graph.Elements })
-    }
+        setCooldownTicks(0)
+    }, [zoomedNodes, cooldownTicks, canvasRef])
+
+    const nodeCanvasObject = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D) => {
+        if (node.x === undefined || node.y === undefined) {
+            node.x = 0;
+            node.y = 0;
+        }
+
+        const isHovered = !!hoverElement && !('source' in hoverElement) && hoverElement.id === node.id
+        const isSelected = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id
+
+        if (isPathResponse) {
+            if (node.data.isPathSelected) {
+                ctx.fillStyle = node.color;
+                ctx.strokeStyle = PATH_COLOR;
+                ctx.lineWidth = 1.5
+            } else if (node.data.isPath) {
+                ctx.fillStyle = node.color;
+                ctx.strokeStyle = PATH_COLOR;
+                ctx.lineWidth = 1
+            } else {
+                ctx.fillStyle = '#E5E5E5';
+                ctx.strokeStyle = 'gray';
+                ctx.lineWidth = 1
+            }
+        } else if (isPathResponse === undefined) {
+            if (node.data.isPathSelected) {
+                ctx.fillStyle = node.color;
+                ctx.strokeStyle = PATH_COLOR;
+                ctx.lineWidth = 1.5
+            } else if (node.data.isPath) {
+                ctx.fillStyle = node.color;
+                ctx.strokeStyle = PATH_COLOR;
+                ctx.lineWidth = 1
+            } else {
+                ctx.fillStyle = node.color;
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
+            }
+        } else {
+            ctx.fillStyle = node.color;
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
+        }
+
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, NODE_SIZE + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
+        ctx.stroke();
+        ctx.fill();
+
+        ctx.fillStyle = 'black';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '2px Arial';
+        let name = node.data.name || "";
+        const textWidth = ctx.measureText(name).width;
+        const ellipsis = '...';
+        const ellipsisWidth = ctx.measureText(ellipsis).width;
+        const nodeSize = (NODE_SIZE + ctx.lineWidth / 2) * 2 - PADDING;
+
+        // truncate text if it's too long
+        if (textWidth > nodeSize) {
+            while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
+                name = name.slice(0, -1);
+            }
+            name += ellipsis;
+        }
+
+        // add label
+        ctx.fillText(name, node.x, node.y);
+    }, [selectedObj, selectedObjects, isPathResponse, hoverElement])
+
+    const nodePointerAreaPaint = useCallback((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+        if (node.x === undefined || node.y === undefined) {
+            node.x = 0;
+            node.y = 0;
+        }
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, NODE_SIZE + 2 + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
+        ctx.fill();
+    }, [])
+
+    const linkLineDash = useCallback((link: GraphLink) => {
+        if (link.data.isPath && !link.data.isPathSelected) return [5, 5]
+        return null
+    }, [])
+
+    const mobileBreakpointRaw = Number(process.env.NEXT_PUBLIC_MOBILE_BREAKPOINT)
+    const mobileBreakpoint = Number.isFinite(mobileBreakpointRaw) ? mobileBreakpointRaw : 0
+    const isDesktop = screenSize > mobileBreakpoint
 
     return (
-        <div ref={parentRef} className="relative w-fill h-full">
-            <ForceGraph2D
-                ref={chartRef}
-                height={parentRef.current?.clientHeight || 0}
-                width={parentRef.current?.clientWidth || 0}
-                graphData={data}
-                nodeVisibility="visible"
-                linkVisibility="visible"
-                linkCurvature="curve"
-                linkDirectionalArrowRelPos={1}
-                linkDirectionalArrowColor={(link) => (link.isPath || link.isPathSelected) ? PATH_COLOR : link.color}
-                linkDirectionalArrowLength={(link) => link.source.id === link.target.id ? 0 : (link.id === selectedObj?.id || link.isPathSelected) ? 3 : 2}
-                nodeRelSize={NODE_SIZE}
-                linkLineDash={(link) => (link.isPath && !link.isPathSelected) ? [5, 5] : []}
-                linkColor={(link) => (link.isPath || link.isPathSelected) ? PATH_COLOR : link.color}
-                linkWidth={(link) => (link.id === selectedObj?.id || link.isPathSelected) ? 2 : 1}
-                nodeCanvasObjectMode={() => 'after'}
-                linkCanvasObjectMode={() => 'after'}
-                nodeCanvasObject={(node, ctx) => {
-                    if (!node.x || !node.y) return
-
-                    if (isPathResponse) {
-                        if (node.isPathSelected) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 1
-                        } else if (node.isPath) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 0.5
-                        } else {
-                            ctx.fillStyle = '#E5E5E5';
-                            ctx.strokeStyle = 'gray';
-                            ctx.lineWidth = 0.5
-                        }
-                    } else if (isPathResponse === undefined) {
-                        if (node.isPathSelected) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 1
-                        } else if (node.isPath) {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = PATH_COLOR;
-                            ctx.lineWidth = 0.5
-                        } else {
-                            ctx.fillStyle = node.color;
-                            ctx.strokeStyle = 'black';
-                            ctx.lineWidth = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id ? 1 : 0.5
-                        }
-                    } else {
-                        ctx.fillStyle = node.color;
-                        ctx.strokeStyle = 'black';
-                        ctx.lineWidth = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id ? 1 : 0.5
-                    }
-
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
-                    ctx.stroke();
-                    ctx.fill();
-
-                    ctx.fillStyle = 'black';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.font = '4px Arial';
-                    const textWidth = ctx.measureText(node.name).width;
-                    const ellipsis = '...';
-                    const ellipsisWidth = ctx.measureText(ellipsis).width;
-                    const nodeSize = NODE_SIZE * 2 - PADDING;
-                    let { name } = { ...node }
-
-                    // truncate text if it's too long
-                    if (textWidth > nodeSize) {
-                        while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
-                            name = name.slice(0, -1);
-                        }
-                        name += ellipsis;
-                    }
-
-                    // add label
-                    ctx.fillText(name, node.x, node.y);
-                }}
-                linkCanvasObject={(link, ctx) => {
-                    const start = link.source;
-                    const end = link.target;
-
-                    if (!start.x || !start.y || !end.x || !end.y) return
-
-                    const sameNodesLinks = graph.Elements.links.filter(l => (l.source.id === start.id && l.target.id === end.id) || (l.target.id === start.id && l.source.id === end.id))
-                    const index = sameNodesLinks.findIndex(l => l.id === link.id) || 0
-                    const even = index % 2 === 0
-                    let curve
-
-                    if (start.id === end.id) {
-                        if (even) {
-                            curve = Math.floor(-(index / 2)) - 3
-                        } else {
-                            curve = Math.floor((index + 1) / 2) + 2
-                        }
-
-                        link.curve = curve * 0.1
-                        
-                        const radius = NODE_SIZE * link.curve * 6.2;
-                        const angleOffset = -Math.PI / 4; // 45 degrees offset for text alignment
-                        const textX = start.x + radius * Math.cos(angleOffset);
-                        const textY = start.y + radius * Math.sin(angleOffset);
-
-                        ctx.save();
-                        ctx.translate(textX, textY);
-                        ctx.rotate(-angleOffset);
-                    } else {
-                        if (even) {
-                            curve = Math.floor(-(index / 2))
-                        } else {
-                            curve = Math.floor((index + 1) / 2)
-                        }
-
-                        link.curve = curve * 0.1
-                        
-                        const midX = (start.x + end.x) / 2 + (end.y - start.y) * (link.curve / 2);
-                        const midY = (start.y + end.y) / 2 + (start.x - end.x) * (link.curve / 2);
-
-                        let textAngle = Math.atan2(end.y - start.y, end.x - start.x)
-
-                        // maintain label vertical orientation for legibility
-                        if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
-                        if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
-
-                        ctx.save();
-                        ctx.translate(midX, midY);
-                        ctx.rotate(textAngle);
-                    }
-
-                    // add label
-                    ctx.globalAlpha = 1;
-                    ctx.fillStyle = 'black';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.font = '2px Arial';
-                    ctx.fillText(link.label, 0, 0);
-                    ctx.restore()
-                }}
-                onNodeClick={handelNodeClick}
-                onNodeDragEnd={(n, translate) => setPosition(prev => {
-                    return prev && { x: prev.x + translate.x * chartRef.current.zoom(), y: prev.y + translate.y * chartRef.current.zoom() }
-                })}
-                onNodeRightClick={handelNodeRightClick}
-                onLinkClick={handelLinkClick}
-                onBackgroundRightClick={unsetSelectedObjects}
+        <div className="relative w-full md:h-full h-1 grow">
+            <div className="md:hidden absolute bottom-4 right-4 z-10">
+                <button className='control-button' onClick={() => canvasRef.current?.zoomToFit()}>
+                    <Fullscreen />
+                </button>
+            </div>
+            <ForceGraph
+                id={id}
+                data={data}
+                canvasRef={canvasRef}
+                onNodeClick={isDesktop || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}
+                onNodeHover={handleNodeHover}
+                onNodeRightClick={handleRightClick}
+                isNodeSelected={isNodeSelected}
+                onLinkClick={isDesktop && isPathResponse ? handleLinkClick : handleRightClick}
+                onLinkHover={handleLinkHover}
+                onLinkRightClick={handleRightClick}
+                isLinkSelected={isLinkSelected}
                 onBackgroundClick={unsetSelectedObjects}
+                onBackgroundRightClick={unsetSelectedObjects}
                 onZoom={() => unsetSelectedObjects()}
-                onEngineStop={() => {
-                    setCooldownTicks(0)
-                    setCooldownTime(0)
-                }}
+                onEngineStop={handleEngineStop}
+                nodeCanvasObject={nodeCanvasObject}
+                nodePointerAreaPaint={nodePointerAreaPaint}
+                linkLineDash={linkLineDash}
                 cooldownTicks={cooldownTicks}
-                cooldownTime={cooldownTime}
             />
         </div>
     )

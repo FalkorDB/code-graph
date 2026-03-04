@@ -1,79 +1,15 @@
 import { toast } from "@/components/ui/use-toast";
 import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { AlignLeft, ArrowDown, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
-import { Path } from "../page";
+import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
+import { Message, MessageTypes, Path, PathData, PATH_COLOR } from "@/lib/utils";
 import Input from "./Input";
-import { Graph, GraphData } from "./model";
-import { cn } from "@/lib/utils";
+import { Graph, GraphData, Node } from "./model";
+import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { prepareArg } from "../utils";
-
-type PathData = {
-    nodes: any[]
-    links: any[]
-}
-
-enum MessageTypes {
-    Query,
-    Response,
-    Path,
-    PathResponse,
-    Pending,
-    Text,
-}
-
-const EDGE_STYLE = {
-    "line-color": "gray",
-    "target-arrow-color": "gray",
-    "opacity": 0.5,
-}
-
-
-const PATH_EDGE_STYLE = {
-    width: 0.5,
-    "line-style": "dashed",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.3,
-    "target-arrow-color": "#FF66B3",
-    "opacity": 1
-}
-
-const SELECTED_PATH_EDGE_STYLE = {
-    width: 1,
-    "line-style": "solid",
-    "line-color": "#FF66B3",
-    "arrow-scale": 0.6,
-    "target-arrow-color": "#FF66B3",
-};
-
-const NODE_STYLE = {
-    "border-width": 0.5,
-    "color": "gray",
-    "border-color": "black",
-    "background-color": "gray",
-    "opacity": 0.5
-}
-
-const PATH_NODE_STYLE = {
-    "border-width": 0.5,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-}
-
-const SELECTED_PATH_NODE_STYLE = {
-    "border-width": 1,
-    "border-color": "#FF66B3",
-    "border-opacity": 1,
-};
-
-interface Message {
-    type: MessageTypes;
-    text?: string;
-    paths?: { nodes: any[], links: any[] }[];
-    graphName?: string;
-}
+import { dataToGraphData, GraphLink, GraphNode } from "@falkordb/canvas";
 
 interface Props {
     repo: string
@@ -83,7 +19,17 @@ interface Props {
     selectedPathId: number | undefined
     isPathResponse: boolean | undefined
     setIsPathResponse: (isPathResponse: boolean | undefined) => void
-    setData: Dispatch<SetStateAction<GraphData>>
+    canvasRef: GraphRef
+    messages: Message[]
+    setMessages: Dispatch<SetStateAction<Message[]>>
+    query: string
+    setQuery: Dispatch<SetStateAction<string>>
+    selectedPath: PathData | undefined
+    setSelectedPath: Dispatch<SetStateAction<PathData | undefined>>
+    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
+    setChatOpen?: Dispatch<SetStateAction<boolean>>
+    paths: PathData[]
+    setPaths: Dispatch<SetStateAction<PathData[]>>
 }
 
 const SUGGESTIONS = [
@@ -94,31 +40,34 @@ const SUGGESTIONS = [
     "Show a calling path between the drop_edge_range_index function and _query, only return function(s) names",
 ]
 
-const RemoveLastPath = (messages: Message[]) => {
-    const index = messages.findIndex((m) => m.type === MessageTypes.Path)
-
-    if (index !== -1) {
-        messages = [...messages.slice(0, index - 2), ...messages.slice(index + 1)];
-        messages = RemoveLastPath(messages)
-    }
-
-    return messages
+type RemoveLastPathResult = {
+    messages: Message[]
+    insertIndex: number
 }
 
-export function Chat({ repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setData }: Props) {
+const RemoveLastPath = (messages: Message[]): RemoveLastPathResult => {
+    // Find the last Path message so we know where the user was in the conversation
+    const index = messages.findLastIndex((m) => m.type === MessageTypes.Path)
 
-    // Holds the messages in the chat
-    const [messages, setMessages] = useState<Message[]>([]);
+    if (index === -1) {
+        return { messages, insertIndex: messages.length }
+    }
 
-    // Holds the messages in the chat
-    const [paths, setPaths] = useState<PathData[]>([]);
+    const groupStart = Math.max(0, index - 2)
+    const hasMessagesAfter = index < messages.length - 1
+    const cleaned = [...messages.slice(0, groupStart), ...messages.slice(index + 1)]
 
-    const [selectedPath, setSelectedPath] = useState<PathData>();
+    // Recurse to strip any remaining Path groups
+    const { messages: finalMessages } = RemoveLastPath(cleaned)
 
-    // Holds the user input while typing
-    const [query, setQuery] = useState('');
+    // If there were messages after the Path group, inject the answer there;
+    // otherwise just append at the end
+    const insertIndex = hasMessagesAfter ? groupStart : finalMessages.length
 
-    const [tipOpen, setTipOpen] = useState(false);
+    return { messages: finalMessages, insertIndex }
+}
+
+export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setCooldownTicks, canvasRef, paths, setPaths }: Props) {
 
     const [sugOpen, setSugOpen] = useState(false);
 
@@ -131,15 +80,19 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         const p = paths.find((path) => [...path.links, ...path.nodes].some((e: any) => e.id === selectedPathId))
 
         if (!p) return
-
-        handelSetSelectedPath(p)
+        handleSetSelectedPath(p)
     }, [selectedPathId])
 
     // Scroll to the bottom of the chat on new message
     useEffect(() => {
-        setTimeout(() => {
+        if (messages.length === 0) return
+        const timeout = setTimeout(() => {
             containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight);
         }, 300)
+
+        return () => {
+            clearTimeout(timeout)
+        }
     }, [messages]);
 
     useEffect(() => {
@@ -153,59 +106,128 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         setPaths([])
     }, [isPathResponse])
 
-    const handelSetSelectedPath = (p: PathData) => {
-        setSelectedPath(prev => {
-            if (prev) {
-                if (isPathResponse && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...prev.nodes, ...prev.links].some((e: any) => e.id === e.id)))) {
-                    graph.getElements().forEach(link => {
-                        const { id } = link
+    const handleSetSelectedPath = (p: PathData) => {
+        const canvas = canvasRef.current
 
-                        if (prev.links.some(e => e.id === id) && !p.links.some(e => e.id === id)) {
-                            link.isPathSelected = false
-                        }
-                    })
-                } else {
-                    const elements = graph.getElements().filter(e => [...prev.links, ...prev.nodes].some(el => el.id === e.id && ![...p.nodes, ...p.links].some(ele => ele.id === el.id)))
-                    if (isPathResponse || isPathResponse === undefined) {
-                        elements.forEach(e => {
-                            e.isPath = false
-                            e.isPathSelected = false
-                        })
+        if (!canvas) return
+
+        // Sets for the new path
+        const pNodeIds = new Set<number>(p.nodes.map((n: Node) => n.id))
+        const pLinkIds = new Set<number>(p.links.map((l: any) => l.id))
+        const pIds = new Set<number>([...pNodeIds, ...pLinkIds])
+        const firstNodeId = p.nodes[0].id
+        const lastNodeId = p.nodes[p.nodes.length - 1].id
+
+        // Sets for the previous path (selectedPath is the current value from props)
+        const prevNodeIds = new Set<number>((selectedPath?.nodes ?? []).map((n: any) => n.id))
+        const prevLinkIds = new Set<number>((selectedPath?.links ?? []).map((e: any) => e.id))
+        const prevIds = new Set<number>([...prevNodeIds, ...prevLinkIds])
+
+        // --- Unset previous path on graph elements ---
+        if (selectedPath) {
+            const pathAlreadyInPrev = isPathResponse && paths.some(path =>
+                [...path.nodes, ...path.links].every((e: any) => prevIds.has(e.id))
+            )
+
+            if (pathAlreadyInPrev) {
+                graph.getElements().forEach((element: any) => {
+                    if (prevLinkIds.has(element.id) && !pLinkIds.has(element.id)) {
+                        element.isPathSelected = false
                     }
-                }
+                })
+            } else {
+                const staleElements = graph.getElements().filter((e: any) => prevIds.has(e.id) && !pIds.has(e.id))
+                staleElements.forEach((e: any) => {
+                    e.isPath = false
+                    e.isPathSelected = false
+                    if ("source" in e) {
+                        e.color = "#999999"
+                    }
+                })
             }
-            return p
-        })
-        if (isPathResponse && paths.length > 0 && paths.some((path) => [...path.nodes, ...path.links].every((e: any) => [...p.nodes, ...p.links].some((el: any) => el.id === e.id)))) {
-            graph.Elements.links.forEach(e => {
-                if (p.links.some(el => el.id === e.id)) {
+        }
+
+        setSelectedPath(p)
+
+        // --- Set new path on graph elements ---
+        if (isPathResponse && paths.length > 0 && paths.some(path =>
+            [...path.nodes, ...path.links].every((e: any) => pIds.has(e.id))
+        )) {
+            graph.Elements.links.forEach((e: any) => {
+                if (pLinkIds.has(e.id)) {
                     e.isPathSelected = true
                 }
             })
         } else {
-            const elements: PathData = { nodes: [], links: [] };
-            p.nodes.forEach(node => {
-                let element = graph.Elements.nodes.find(n => n.id === node.id)
-                if (!element) {
-                    elements.nodes.push(node)
-                }
-            })
-            p.links.forEach(link => {
-                let element = graph.Elements.links.find(l => l.id === link.id)
-                if (!element) {
-                    elements.links.push(link)
-                }
-            })
+            const existingNodeIds = new Set<number>(graph.Elements.nodes.map((n: any) => n.id))
+            const existingLinkIds = new Set<number>(graph.Elements.links.map((l: any) => l.id))
+            const elements: PathData = {
+                nodes: p.nodes.filter(node => !existingNodeIds.has(node.id)),
+                links: p.links.filter(link => !existingLinkIds.has(link.id)),
+            }
             graph.extend(elements, true, { start: p.nodes[0], end: p.nodes[p.nodes.length - 1] })
-            graph.getElements().filter(e => "source" in e ? p.links.some(l => l.id === e.id) : p.nodes.some(n => n.id === e.id)).forEach(e => {
-                if ((e.id === p.nodes[0].id || e.id === p.nodes[p.nodes.length - 1].id) || "source" in e) {
-                    e.isPathSelected = true
-                } else {
-                    e.isPath = true
-                }
-            });
+            graph.getElements()
+                .filter((e: any) => "source" in e ? pLinkIds.has(e.id) : pNodeIds.has(e.id))
+                .forEach((e: any) => {
+                    if (e.id === firstNodeId || e.id === lastNodeId || "source" in e) {
+                        e.isPathSelected = true
+                    } else {
+                        e.isPath = true
+                    }
+                })
         }
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData();
+
+        // --- Unset canvas data for previous path elements no longer in the new path ---
+        if (selectedPath) {
+            currentData.nodes.forEach((n: any) => {
+                if (prevNodeIds.has(n.id) && !pNodeIds.has(n.id)) {
+                    if (isPathResponse) {
+                        // keep isPath + PATH_COLOR border, just deselect
+                        n.data.isPathSelected = false
+                    } else {
+                        n.data.isPath = false
+                        n.data.isPathSelected = false
+                    }
+                }
+            })
+            currentData.links.forEach((l: any) => {
+                if (prevLinkIds.has(l.id) && !pLinkIds.has(l.id)) {
+                    if (isPathResponse) {
+                        // keep color + dashed path line, just deselect
+                        l.data.isPathSelected = false
+                    } else {
+                        l.data.isPathSelected = false
+                        l.color = "#999999"
+                    }
+                }
+            })
+        }
+
+        // --- Set canvas data for new path elements ---
+        currentData.nodes.forEach((n: any) => {
+            if (pNodeIds.has(n.id)) {
+                if (n.id === firstNodeId || n.id === lastNodeId) {
+                    n.data.isPathSelected = true;
+                } else {
+                    n.data.isPath = true;
+                }
+            }
+        });
+        currentData.links.forEach((l: any) => {
+            if (pLinkIds.has(l.id)) {
+                l.data.isPathSelected = true;
+                l.color = PATH_COLOR;
+            }
+        });
+
+        canvas.setGraphData(currentData)
+
+        setTimeout(() => {
+            canvas.zoomToFit(2, (n: GraphNode) => pNodeIds.has(n.id));
+        }, 0)
+        setChatOpen && setChatOpen(false)
     }
 
     // A function that handles the change event of the url input box
@@ -262,15 +284,39 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }
 
     const handleSubmit = async () => {
+        const canvas = canvasRef.current
+
+        if (!canvas) return
+
         setSelectedPath(undefined)
 
         if (!path?.start?.id || !path.end?.id) return
+
+        const pathMessage = [{
+            type: MessageTypes.Response,
+            text: "Please select a starting point and the end point. Select or press relevant item on the graph"
+        }, { type: MessageTypes.Path }]
+
+        setPath(undefined)
+        let insertIndex = 0
+        setMessages((prev) => {
+            const { messages, insertIndex: idx } = RemoveLastPath(prev)
+            insertIndex = idx
+            const pending: Message = { type: MessageTypes.Pending }
+            return [...messages.slice(0, insertIndex), pending, ...messages.slice(insertIndex)]
+        })
 
         const result = await fetch(`/api/repo/${prepareArg(repo)}/${prepareArg(String(path.start.id))}/?targetId=${prepareArg(String(path.end.id))}`, {
             method: 'POST'
         })
 
         if (!result.ok) {
+            setMessages((prev) => [
+                ...prev.slice(0, insertIndex),
+                ...pathMessage,
+                ...prev.slice(insertIndex + 1),
+            ])
+            setPath({})
             toast({
                 variant: "destructive",
                 title: "Uh oh! Something went wrong.",
@@ -282,6 +328,12 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
         const json = await result.json()
 
         if (json.result.paths.length === 0) {
+            setMessages((prev) => [
+                ...prev.slice(0, insertIndex),
+                ...pathMessage,
+                ...prev.slice(insertIndex + 1),
+            ])
+            setPath({})
             toast({
                 title: `No path found`,
                 description: `no path found between node ${path.start.name} - ${path.end.name}`,
@@ -289,27 +341,113 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
             return
         }
 
-        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
-        formattedPaths.forEach((p: any) => graph.extend(p, false, path))
-
+        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((_n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
+        const elements = formattedPaths.reduce<GraphData>(
+            (acc, p) => {
+                const el = graph.extend(p, false, path)
+                acc.nodes.push(...el.nodes)
+                acc.links.push(...el.links)
+                return acc
+            },
+            { nodes: [], links: [] }
+        )
         setPaths(formattedPaths)
-        setMessages((prev) => [...RemoveLastPath(prev), { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }]);
-        setPath(undefined)
+        setMessages((prev) => [
+            ...prev.slice(0, insertIndex),
+            { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id },
+            ...prev.slice(insertIndex + 1),
+        ]);
         setIsPathResponse(true)
-        setData({ ...graph.Elements })
+
+        const currentData = canvas.getGraphData();
+
+        const nodesMap = new Map<number, GraphNode>(currentData.nodes.map(n => [n.id, n]))
+        const linksMap = new Map<number, GraphLink>(currentData.links.map(l => [l.id, l]))
+
+        formattedPaths.flatMap(p => p.nodes).forEach(n => {
+            const node = nodesMap.get(n.id);
+            if (node) {
+                node.data.isPath = true;
+            }
+        });
+        formattedPaths.flatMap(p => p.links).forEach(l => {
+            const link = linksMap.get(l.id);
+
+            if (link) {
+                link.data.isPath = true;
+                link.color = PATH_COLOR;
+            }
+        });
+
+        // Filter for only new elements
+        const newDataElements = {
+            nodes: elements.nodes.filter(n => !nodesMap.has(n.id))
+                .map(({ category, color, data, id, isPath, isPathSelected, visible }) => ({
+                    color,
+                    id,
+                    labels: [category],
+                    data: {
+                        ...data,
+                        isPath,
+                        isPathSelected
+                    },
+                    visible,
+                })),
+            links: elements.links.filter(l => !linksMap.has(l.id))
+                .map(({ color, id, source, target, data, isPath, isPathSelected, visible, label }) => ({
+                    color: isPath ? PATH_COLOR : color,
+                    id,
+                    source,
+                    target,
+                    data: {
+                        ...data,
+                        isPath,
+                        isPathSelected
+                    },
+                    visible,
+                    relationship: label,
+                }))
+        }
+
+        // Convert only new data to GraphData format
+        const newGraphData = dataToGraphData(
+            newDataElements,
+            undefined,
+            new Map(currentData.nodes.map(n => [n.id, n]))
+        )
+
+        // Merge with existing data
+        canvasRef.current?.setGraphData({
+            nodes: [...currentData.nodes, ...newGraphData.nodes],
+            links: [...currentData.links, ...newGraphData.links]
+        })
+
+        if (elements.nodes.length !== 0 || elements.links.length !== 0) {
+            setCooldownTicks(-1)
+        }
+
+        setTimeout(() => {
+            const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
+            canvas.zoomToFit(2, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));
+        }, 0)
     }
 
-    const getTip = (disabled = false) =>
+    const getTip = (className?: string) =>
         <>
             <button
-                disabled={disabled}
-                className="Tip"
+                disabled={isSendMessage}
+                className={cn("Tip", className)}
                 onClick={() => {
-                    setTipOpen(false)
-                    setMessages(prev => [
-                        ...RemoveLastPath(prev),
-                        { type: MessageTypes.Query, text: "Create a path" },
-                    ])
+                    const canvas = canvasRef.current
+
+                    if (!canvas) return
+
+                    setSugOpen(false)
+                    setMessages(prev => {
+                        const { messages, insertIndex } = RemoveLastPath(prev)
+                        const queryMsg: Message = { type: MessageTypes.Query, text: "Create a path" }
+                        return [...messages.slice(0, insertIndex), queryMsg, ...messages.slice(insertIndex)]
+                    })
 
                     if (isPathResponse) {
                         setIsPathResponse(false)
@@ -317,24 +455,46 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                             e.isPath = false
                             e.isPathSelected = false
                         })
+
+                        const currentData = canvas.getGraphData();
+
+                        [...currentData.nodes, ...currentData.links].forEach(element => {
+                            element.data.isPath = false
+                            element.data.isPathSelected = false
+
+                            if ("source" in element) {
+                                element.color = "#999999"
+                            }
+                        })
+
+                        canvas.setGraphData(currentData)
                     }
 
-                    setTimeout(() => setMessages(prev => [...prev, {
+                    setMessages(prev => [...prev, {
                         type: MessageTypes.Response,
                         text: "Please select a starting point and the end point. Select or press relevant item on the graph"
-                    }]), 300)
-                    setTimeout(() => {
-                        setMessages(prev => [...prev, { type: MessageTypes.Path }])
-                        setPath({})
-                    }, 4000)
+                    }, { type: MessageTypes.Path }])
+                    setPath({})
                 }}
             >
-                <Lightbulb />
-                <div>
-                    <h1 className="label">Show the path</h1>
-                    <p className="text">Fetch, update, batch, and navigate data efficiently</p>
-                </div>
+                <p className="text-center w-full">Show the path</p>
             </button>
+            {
+                SUGGESTIONS.map((s, i) => (
+                    <button
+                        disabled={isSendMessage}
+                        type="submit"
+                        key={i}
+                        className={cn("Tip", className)}
+                        onClick={() => {
+                            sendQuery(undefined, s)
+                            setSugOpen(false)
+                        }}
+                    >
+                        <p className="text-center w-full">{s}</p>
+                    </button>
+                ))
+            }
         </>
 
     const getMessage = (message: Message, index?: number) => {
@@ -373,7 +533,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                             parentClassName="w-full"
                             graph={graph}
                             onValueChange={({ name, id }) => setPath(prev => ({ start: { name, id }, end: prev?.end }))}
-                            value={path?.start?.name}
+                            value={path?.start?.name || ""}
                             placeholder="Start typing starting point"
                             type="text"
                             icon={<ChevronDown color="gray" />}
@@ -383,7 +543,7 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                         <Input
                             parentClassName="w-full"
                             graph={graph}
-                            value={path?.end?.name}
+                            value={path?.end?.name || ""}
                             onValueChange={({ name, id }) => setPath(prev => ({ end: { name, id }, start: prev?.start }))}
                             placeholder="Start typing end point"
                             type="text"
@@ -420,12 +580,12 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                                     }
 
                                     if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
-                                    
+
                                     if (!isPathResponse) {
                                         setIsPathResponse(undefined)
-                                    
+
                                     }
-                                    handelSetSelectedPath(p)
+                                    handleSetSelectedPath(p)
                                 }}
                             >
                                 <p className="font-bold">#{i + 1}</p>
@@ -450,18 +610,15 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
     }
 
     return (
-        <div className="relative h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
+        <div className="relative h-1 grow md:h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
             <main data-name="main-chat" ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
                 {
                     messages.length === 0 &&
                     <>
-                        <h1 className="font-oswald text-[20px] font-semibold leading-[32px] text-left text-[#13343B]">WELCOME TO OUR ASSISTANCE SERVICE</h1>
-                        <span className="text-base font-normal leading-5 text-left text-[#7D7D7D]">
-                            We can help you access and update only the needed
-                            data via paths, optimizing network requests with
-                            batching and catching for better performance.
-                        </span>
-                        {getTip()}
+                        <h1 className="text-center text-2xl">What would you like to analyze?</h1>
+                        <div className="flex flex-row flex-wrap gap-2 justify-center">
+                            {getTip()}
+                        </div>
                     </>
                 }
                 {
@@ -469,54 +626,25 @@ export function Chat({ repo, path, setPath, graph, selectedPathId, isPathRespons
                         return getMessage(message, index)
                     })
                 }
-                {
-                    tipOpen &&
-                    <div ref={ref => ref?.focus()} className="bg-white absolute bottom-24 border rounded-md flex flex-col gap-3 p-2 overflow-y-auto" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onBlur={() => setTipOpen(false)}>
-                        {getTip(isSendMessage)}
-                    </div>
-                }
             </main>
-            <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
-                <footer>
-                    {
-                        repo &&
-                        <div className="flex gap-4 px-4">
-                            <button data-name="lightbulb" onClick={() => setTipOpen(true)} className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
-                                <Lightbulb />
-                            </button>
-                            <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
-                                <DropdownMenuTrigger asChild>
-                                    <button data-name="questionOptionsMenu" className="bg-gray-200 p-2 rounded-md hover:bg-gray-300">
-                                        <ArrowDown color="white" />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <input className="grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                                <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
-                                    <ArrowRight color="white" />
-                                </button>
-                            </form>
-                        </div>
-                    }
-                </footer>
-                <DropdownMenuContent className="flex flex-col mb-4 w-[20dvw]" side="top">
-                    {
-                        SUGGESTIONS.map((s, i) => (
-                            <button
-                                disabled={isSendMessage}
-                                type="submit"
-                                key={i}
-                                className="p-2 text-left hover:bg-gray-200"
-                                onClick={() => {
-                                    sendQuery(undefined, s)
-                                    setSugOpen(false)
-                                }}
-                            >
-                                {s}
-                            </button>
-                        ))
-                    }
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <footer className="flex gap-4 px-4 overflow-hidden min-h-fit">
+                <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
+                    <DropdownMenuTrigger asChild>
+                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                            <Lightbulb />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="flex flex-col gap-2 mb-4 w-[81.51dvw] md:w-[20dvw] overflow-y-auto" side="top">
+                        {getTip("!w-full")}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
+                    <input className="w-1 grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                    <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
+                        <ArrowRight color="white" />
+                    </button>
+                </form>
+            </footer>
         </div>
     );
 }
