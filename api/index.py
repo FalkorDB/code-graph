@@ -38,7 +38,24 @@ def token_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-app = Flask(__name__)
+app = Flask(__name__,
+            static_folder=os.path.join(os.path.dirname(__file__), '..', 'app', 'dist'),
+            static_url_path='')
+
+
+@app.route('/')
+def serve_react_app():
+    """Serve the React app's index.html for the root route."""
+    return app.send_static_file('index.html')
+
+
+@app.errorhandler(404)
+def not_found(e):
+    """Serve index.html for any unknown route (SPA catch-all)."""
+    try:
+        return app.send_static_file('index.html')
+    except Exception:
+        return jsonify({"error": "Not found"}), 404
 
 def public_access(f):
     """ Decorator to protect routes with public access """
