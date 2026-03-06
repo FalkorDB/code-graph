@@ -166,7 +166,7 @@ export default function App() {
       }
 
       const json = await result.json()
-      const g = Graph.create(json.result.entities, graphName)
+      const g = Graph.create(json.entities, graphName)
       setGraph(g)
 
       if (cooldownTicks === 0) setCooldownTicks(-1)
@@ -207,7 +207,7 @@ export default function App() {
 
     const json = await result.json()
 
-    return graph.extend(json.result.neighbors, true)
+    return graph.extend(json.neighbors, true)
   }
 
   const handleSearchSubmit = async (node: any, canvasRef: GraphRef) => {

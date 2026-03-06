@@ -143,9 +143,9 @@ export function CodeGraph({
 
         const json = await result.json()
 
-        setNodesCount(json.result.info.node_count)
-        setEdgesCount(json.result.info.edge_count)
-        setURL(json.result.info.repo_url)
+        setNodesCount(json.info.node_count)
+        setEdgesCount(json.info.edge_count)
+        setURL(json.info.repo_url)
     }
 
     useEffect(() => {
@@ -168,7 +168,7 @@ export function CodeGraph({
             }
 
             const json = await result.json()
-            const commitsArr = json.result.commits
+            const commitsArr = json.commits
             setCommits(commitsArr)
 
             if (commitsArr.length > 0) {

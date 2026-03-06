@@ -67,7 +67,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
             if (!isLastRequest) return
 
             const json = await result.json()
-            const { completions } = json.result
+            const { completions } = json
 
             setOptions(completions || [])
 

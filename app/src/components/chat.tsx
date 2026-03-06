@@ -285,7 +285,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         setMessages((prev) => {
             prev = prev.slice(0, -1);
-            return [...prev, { text: json.result.response, type: MessageTypes.Response }];
+            return [...prev, { text: json.response, type: MessageTypes.Response }];
         });
 
     }
@@ -339,7 +339,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         const json = await result.json()
 
-        if (json.result.paths.length === 0) {
+        if (json.paths.length === 0) {
             setMessages((prev) => [
                 ...prev.slice(0, insertIndex),
                 ...pathMessage,
@@ -353,7 +353,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             return
         }
 
-        const formattedPaths: PathData[] = json.result.paths.map((p: any) => ({ nodes: p.filter((_n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
+        const formattedPaths: PathData[] = json.paths.map((p: any) => ({ nodes: p.filter((_n: any, i: number) => i % 2 === 0), links: p.filter((l: any, i: number) => i % 2 !== 0) }))
         const elements = formattedPaths.reduce<GraphData>(
             (acc, p) => {
                 const el = graph.extend(p, false, path)
