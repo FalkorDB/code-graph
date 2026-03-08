@@ -98,9 +98,6 @@ def get_repo_info(repo_name: str) -> Optional[Dict[str, str]]:
         Optional[Dict[str, str]]: A dictionary of repository information, or None if not found.
     """
 
-    return {'commit': 'eeb5b3a55907a2d23dd6ab8f2985a43b08167810',
-            'repo_url': 'https://github.com/redis/redis'}
-
     try:
         r = get_redis_connection()
         key = _repo_info_key(repo_name)

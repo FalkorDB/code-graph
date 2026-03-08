@@ -2,7 +2,7 @@ import os
 import redis
 import pytest
 from pathlib import Path
-from index import create_app
+from tests.index import create_app
 from api import Project
 from falkordb import FalkorDB, Path, Node, QueryResult
 

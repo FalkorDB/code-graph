@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from api.project import Project
 from api.auto_complete import prefix_search
+from api.git_utils import git_utils
 from flask import Flask, request, jsonify
 
 # Load environment variables from .env file
@@ -20,6 +21,8 @@ logger = logging.getLogger(__name__)
 # Function to verify the token
 SECRET_TOKEN = os.getenv('SECRET_TOKEN')
 def verify_token(token):
+    if token is not None and token.startswith("Bearer "):
+        token = token[len("Bearer "):]
     return token == SECRET_TOKEN or (token is None and SECRET_TOKEN is None)
 
 # Decorator to protect routes with token authentication
@@ -433,7 +436,7 @@ def create_app():
             return jsonify({'status': f'Missing mandatory parameter "commit"'}), 400
 
         # Attempt to switch the repository to the specified commit
-        change_set = switch_commit(repo, commit)
+        change_set = git_utils.switch_commit(repo, commit)
 
         # Create a success response
         response = {

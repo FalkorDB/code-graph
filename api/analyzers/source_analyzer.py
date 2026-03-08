@@ -149,7 +149,7 @@ class SourceAnalyzer():
                 file = self.files[file_path]
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
                 for _, entity in file.entities.items():
-                    entity.resolved_symbol(lambda key, symbol: analyzers[file_path.suffix].resolve_symbol(self.files, lsps[file_path.suffix], file_path, path, key, symbol))
+                    entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, key, symbol))
                     for key, symbols in entity.symbols.items():
                         for symbol in symbols:
                             if len(symbol.resolved_symbol) == 0:
@@ -198,9 +198,6 @@ class SourceAnalyzer():
         logging.info("Done analyzing path")
 
     def analyze_local_repository(self, path: str, ignore: Optional[list[str]] = None) -> Graph:
-        if ignore is None:
-            ignore = []
-        # ... (rest of the function implementation)
         """
         Analyze a local Git repository.
 
@@ -208,14 +205,19 @@ class SourceAnalyzer():
             path (str): Path to a local git repository
             ignore (List(str)): List of paths to skip
         """
+        if ignore is None:
+            ignore = []
+
         from pygit2.repository import Repository
 
-        self.analyze_local_folder(path, ignore)
+        proj_name = Path(path).name
+        graph = Graph(proj_name)
+        self.analyze_local_folder(path, graph, ignore)
 
         # Save processed commit hash to the DB
         repo = Repository(path)
-        head = repo.commit("HEAD")
-        self.graph.set_graph_commit(head.short_id)
+        current_commit = repo.walk(repo.head.target).__next__()
+        graph.set_graph_commit(current_commit.short_id)
 
-        return self.graph
-    
+        return graph
+

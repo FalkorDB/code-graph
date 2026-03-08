@@ -21,5 +21,5 @@ def encode_graph_entity(e) -> dict:
     elif isinstance(e, Path):
         return encode_path(e)
     else:
-        raise Exception("Unable to encode graph entity, unknown graph entity type: {type(e)}")
+        raise TypeError(f"Unable to encode graph entity, unknown type: {type(e)}")
 

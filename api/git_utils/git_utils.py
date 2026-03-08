@@ -97,7 +97,7 @@ def build_commit_graph(path: str, analyzer: SourceAnalyzer, repo_name: str, igno
 
     # Initialize with the current commit
     # Save current git for later restoration
-    repo = Repository('.')
+    repo = Repository(path)
     current_commit = repo.walk(repo.head.target).__next__()
     current_commit_hexsha = current_commit.short_id
 

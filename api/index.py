@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 SECRET_TOKEN = os.getenv('SECRET_TOKEN')
 def verify_token(token):
     """ Verify the token provided in the request """
+    if token is not None and token.startswith("Bearer "):
+        token = token[len("Bearer "):]
     return token == SECRET_TOKEN or (token is None and SECRET_TOKEN is None)
 
 def token_required(f):

@@ -5,7 +5,6 @@ import validators
 import subprocess
 from pygit2.repository import Repository
 from .info import *
-from shlex import quote
 from pathlib import Path
 from .graph import Graph
 from typing import Optional, List
@@ -30,10 +29,10 @@ def _clone_source(url: str, name: str) -> Path:
 
     # Clone repository
     # Prepare the Git clone command
-    cmd = ["git", "clone", quote(url), path]
+    cmd = ["git", "clone", url, str(path)]
 
     # Run the git clone command and wait for it to finish
-    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
     
     return path
 
