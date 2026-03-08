@@ -246,7 +246,7 @@ export default function GraphView({
 
     const linkLineDash = useCallback((link: GraphLink) => {
         if (link.data.isPath && !link.data.isPathSelected) return [5, 5]
-        return null
+        return []
     }, [])
 
     const mobileBreakpointRaw = Number(import.meta.env.VITE_MOBILE_BREAKPOINT)
