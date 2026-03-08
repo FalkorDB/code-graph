@@ -1,4 +1,4 @@
-.PHONY: help install test lint clean build-dev build-prod run-dev run-prod
+.PHONY: help install test e2e lint lint-py lint-fe clean build-dev build-prod run-dev run-prod docker-falkordb docker-stop
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -19,13 +19,22 @@ build-prod: ## Build frontend for production
 test: ## Run backend tests
 	uv run python -m pytest tests/ --verbose
 
-lint: ## Run linting (frontend)
+e2e: ## Run end-to-end Playwright tests
+	npx playwright test
+
+lint: lint-py lint-fe ## Run all linters
+
+lint-py: ## Run Python linting (ruff)
+	uv run ruff check .
+
+lint-fe: ## Run frontend linting (TypeScript)
 	npm --prefix ./app run lint
 
 clean: ## Clean up build and test artifacts
 	rm -rf app/dist/
 	rm -rf test-results/
 	rm -rf playwright-report/
+	rm -rf .pytest_cache/
 	rm -rf __pycache__/
 	find . -name "*.pyc" -delete
 	find . -name "*.pyo" -delete
