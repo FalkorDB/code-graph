@@ -65,19 +65,16 @@ class PythonAnalyzer(AbstractAnalyzer):
         if entity.node.type == 'class_definition':
             superclasses = entity.node.child_by_field_name("superclasses")
             if superclasses:
-                base_classes_query = self.language.query("(argument_list (_) @base_class)")
-                base_classes_captures = base_classes_query.captures(superclasses)
+                base_classes_captures = self._captures("(argument_list (_) @base_class)", superclasses)
                 if 'base_class' in base_classes_captures:
                     for base_class in base_classes_captures['base_class']:
                         entity.add_symbol("base_class", base_class)
         elif entity.node.type == 'function_definition':
-            query = self.language.query("(call) @reference.call")
-            captures = query.captures(entity.node)
+            captures = self._captures("(call) @reference.call", entity.node)
             if 'reference.call' in captures:
                 for caller in captures['reference.call']:
                     entity.add_symbol("call", caller)
-            query = self.language.query("(typed_parameter type: (_) @parameter)")
-            captures = query.captures(entity.node)
+            captures = self._captures("(typed_parameter type: (_) @parameter)", entity.node)
             if 'parameter' in captures:
                 for parameter in captures['parameter']:
                     entity.add_symbol("parameters", parameter)

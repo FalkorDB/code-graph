@@ -67,31 +67,26 @@ class JavaAnalyzer(AbstractAnalyzer):
     
     def add_symbols(self, entity: Entity) -> None:
         if entity.node.type == 'class_declaration':
-            interfaces_query = self.language.query("(super_interfaces (type_list (type_identifier) @interface))")
-            interfaces_captures = interfaces_query.captures(entity.node)
+            interfaces_captures = self._captures("(super_interfaces (type_list (type_identifier) @interface))", entity.node)
             if 'interface' in interfaces_captures:
                 for interface in interfaces_captures['interface']:
                     entity.add_symbol("implement_interface", interface)
-            base_class_query = self.language.query("(superclass (type_identifier) @base_class)")
-            base_class_captures = base_class_query.captures(entity.node)
+            base_class_captures = self._captures("(superclass (type_identifier) @base_class)", entity.node)
             if 'base_class' in base_class_captures:
                 base_class = base_class_captures['base_class'][0]
                 entity.add_symbol("base_class", base_class)
         elif entity.node.type == 'interface_declaration':
-            query = self.language.query("(extends_interfaces (type_list (type_identifier) @type))?")
-            extends_captures = query.captures(entity.node)
+            extends_captures = self._captures("(extends_interfaces (type_list (type_identifier) @type))?", entity.node)
             if 'type' in extends_captures:
                 for interface in extends_captures['type']:
                     entity.add_symbol("extend_interface", interface)
         elif entity.node.type in ['method_declaration', 'constructor_declaration']:
-            query = self.language.query("(method_invocation) @reference.call")
-            captures = query.captures(entity.node)
+            captures = self._captures("(method_invocation) @reference.call", entity.node)
             if 'reference.call' in captures:
                 for caller in captures['reference.call']:
                     entity.add_symbol("call", caller)
             if entity.node.type == 'method_declaration':
-                query = self.language.query("(formal_parameters (formal_parameter type: (_) @parameter))")
-                captures = query.captures(entity.node)
+                captures = self._captures("(formal_parameters (formal_parameter type: (_) @parameter))", entity.node)
                 if 'parameter' in captures:
                     for parameter in captures['parameter']:
                         entity.add_symbol("parameters", parameter)

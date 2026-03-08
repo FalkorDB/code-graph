@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from tree_sitter import Language, Node, Parser, Point
+from tree_sitter import Language, Node, Parser, Point, QueryCursor
 from api.entities.entity import Entity
 from api.entities.file import File
 from abc import ABC, abstractmethod
@@ -11,6 +11,12 @@ class AbstractAnalyzer(ABC):
     def __init__(self, language: Language) -> None:
         self.language = language
         self.parser = Parser(language)
+
+    def _captures(self, pattern: str, node: Node) -> dict:
+        """Run a tree-sitter query and return captures dict."""
+        query = self.language.query(pattern)
+        cursor = QueryCursor(query)
+        return cursor.captures(node)
 
     def find_parent(self, node: Node, parent_types: list) -> Node:
         while node and node.type not in parent_types:

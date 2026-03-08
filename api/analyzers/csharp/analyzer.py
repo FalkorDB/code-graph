@@ -8,7 +8,7 @@ from typing import Optional
 from ..analyzer import AbstractAnalyzer
 
 import tree_sitter_c_sharp as tscsharp
-from tree_sitter import Language, Node, QueryCursor
+from tree_sitter import Language, Node
 
 import logging
 logger = logging.getLogger('code_graph')
@@ -16,12 +16,6 @@ logger = logging.getLogger('code_graph')
 class CSharpAnalyzer(AbstractAnalyzer):
     def __init__(self) -> None:
         super().__init__(Language(tscsharp.language()))
-
-    def _captures(self, pattern: str, node: Node) -> dict:
-        """Run a tree-sitter query and return captures dict."""
-        query = self.language.query(pattern)
-        cursor = QueryCursor(query)
-        return cursor.captures(node)
 
     def add_dependencies(self, path: Path, files: list[Path]):
         if Path(f"{path}/temp_deps_cs").is_dir():
