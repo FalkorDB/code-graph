@@ -729,5 +729,7 @@ export default class CodeGraph extends BasePage {
             }
             await this.page.waitForTimeout(500);
         }
+        const finalStatus = await this.canvasElement.getAttribute("data-engine-status");
+        throw new Error(`Canvas animation did not stop within ${timeout}ms; final status: "${finalStatus}"`);
     }
 }
