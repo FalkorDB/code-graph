@@ -7,7 +7,7 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 install: ## Install all dependencies (backend + frontend)
-	pip install -e ".[test]"
+	uv sync --all-extras
 	npm install --prefix ./app
 
 build-dev: ## Build frontend for development
@@ -17,7 +17,7 @@ build-prod: ## Build frontend for production
 	npm --prefix ./app run build
 
 test: ## Run backend tests
-	python -m pytest tests/ --verbose
+	uv run python -m pytest tests/ --verbose
 
 lint: ## Run linting (frontend)
 	npm --prefix ./app run lint
@@ -31,10 +31,10 @@ clean: ## Clean up build and test artifacts
 	find . -name "*.pyo" -delete
 
 run-dev: build-dev ## Run development server (Python backend serving built frontend)
-	flask --app api/index.py run --host $${HOST:-127.0.0.1} --port $${PORT:-5000} --debug
+	uv run flask --app api/index.py run --host $${HOST:-127.0.0.1} --port $${PORT:-5000} --debug
 
 run-prod: build-prod ## Run production server
-	flask --app api/index.py run --host $${HOST:-0.0.0.0} --port $${PORT:-5000}
+	uv run flask --app api/index.py run --host $${HOST:-0.0.0.0} --port $${PORT:-5000}
 
 docker-falkordb: ## Start FalkorDB in Docker for testing
 	docker run -d --name falkordb-test -p 6379:6379 falkordb/falkordb:latest
