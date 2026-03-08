@@ -34,7 +34,6 @@ jobs:
         NEXT_PUBLIC_MODE: UNLIMITED
         BACKEND_URL: ${{ secrets.BACKEND_URL }}
       run: |
-        npm install
         npm run build
         NEXTAUTH_SECRET=SECRET npm start & npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
     - name: Ensure required directories exist
