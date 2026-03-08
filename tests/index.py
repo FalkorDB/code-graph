@@ -47,7 +47,7 @@ def create_app():
                 return jsonify(message="Unauthorized"), 401
             return f(*args, **kwargs)
         return decorated_function
-    @app.route('/graph_entities', methods=['GET'])
+    @app.route('/api/graph_entities', methods=['GET'])
     @token_required  # Apply token authentication decorator
     def graph_entities():
         """
@@ -91,7 +91,7 @@ def create_app():
             return jsonify({"status": "Internal server error"}), 500
 
 
-    @app.route('/get_neighbors', methods=['POST'])
+    @app.route('/api/get_neighbors', methods=['POST'])
     @token_required  # Apply token authentication decorator
     def get_neighbors():
         """
@@ -140,7 +140,7 @@ def create_app():
 
         return jsonify(response), 200
 
-    @app.route('/auto_complete', methods=['POST'])
+    @app.route('/api/auto_complete', methods=['POST'])
     @token_required  # Apply token authentication decorator
     def auto_complete():
         """
@@ -178,7 +178,7 @@ def create_app():
 
         return jsonify(response), 200
 
-    @app.route('/list_repos', methods=['GET'])
+    @app.route('/api/list_repos', methods=['GET'])
     @token_required  # Apply token authentication decorator
     def list_repos():
         """
@@ -199,7 +199,7 @@ def create_app():
 
         return jsonify(response), 200
 
-    @app.route('/repo_info', methods=['POST'])
+    @app.route('/api/repo_info', methods=['POST'])
     @token_required  # Apply token authentication decorator
     def repo_info():
         """
@@ -244,7 +244,7 @@ def create_app():
 
         return jsonify(response), 200
 
-    @app.route('/find_paths', methods=['POST'])
+    @app.route('/api/find_paths', methods=['POST'])
     @token_required  # Apply token authentication decorator
     def find_paths():
         """
@@ -299,7 +299,7 @@ def create_app():
 
         return jsonify(response), 200
 
-    @app.route('/chat', methods=['POST'])
+    @app.route('/api/chat', methods=['POST'])
     @token_required  # Apply token authentication decorator
     def chat():
         # Get JSON data from the request
@@ -322,7 +322,7 @@ def create_app():
 
         return jsonify(response), 200
 
-    @app.route('/analyze_folder', methods=['POST'])
+    @app.route('/api/analyze_folder', methods=['POST'])
     @token_required  # Apply token authentication decorator
     def analyze_folder():
         """
@@ -375,7 +375,7 @@ def create_app():
             }
         return jsonify(response), 200
 
-    @app.route('/analyze_repo', methods=['POST'])
+    @app.route('/api/analyze_repo', methods=['POST'])
     @public_access  # Apply public access decorator
     @token_required  # Apply token authentication decorator
     def analyze_repo():
@@ -411,7 +411,7 @@ def create_app():
 
         return jsonify(response), 200
 
-    @app.route('/switch_commit', methods=['POST'])
+    @app.route('/api/switch_commit', methods=['POST'])
     @public_access  # Apply public access decorator
     @token_required  # Apply token authentication decorator
     def switch_commit():
