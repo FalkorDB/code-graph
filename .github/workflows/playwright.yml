@@ -41,6 +41,9 @@ jobs:
         VITE_SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
       run: npm run build
 
+    - name: Seed test data into FalkorDB
+      run: python e2e/seed_test_data.py
+
     - name: Install Playwright
       run: |
         npm ci
