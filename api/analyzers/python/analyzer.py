@@ -27,7 +27,8 @@ class PythonAnalyzer(AbstractAnalyzer):
             subprocess.run(["poetry", "install"], cwd=str(path), env={"VIRTUAL_ENV": f"{path}/venv", "PATH": f"{path}/venv/bin:{os.environ['PATH']}"})
             with open(f"{path}/pyproject.toml", 'r') as file:
                 pyproject_data = toml.load(file)
-                for requirement in pyproject_data.get("tool").get("poetry").get("dependencies"):
+                dependencies = (pyproject_data.get("tool") or {}).get("poetry", {}).get("dependencies", {})
+                for requirement in dependencies:
                     files.extend(Path(f"{path}/venv/lib").rglob(f"**/site-packages/{requirement}/*.py"))
         elif Path(f"{path}/requirements.txt").is_file():
             subprocess.run(["pip", "install", "-r", "requirements.txt"], cwd=str(path), env={"VIRTUAL_ENV": f"{path}/venv", "PATH": f"{path}/venv/bin:{os.environ['PATH']}"})
