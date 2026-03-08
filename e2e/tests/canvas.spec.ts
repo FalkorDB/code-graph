@@ -25,6 +25,7 @@ test.describe("Canvas tests", () => {
     const initialGraph = await codeGraph.getCanvasScaling();
     await codeGraph.clickZoomIn();
     await codeGraph.clickZoomIn();
+    await codeGraph.waitForCanvasAnimationToEnd();
     const updatedGraph = await codeGraph.getCanvasScaling();
     expect(updatedGraph.scaleX).toBeGreaterThan(initialGraph.scaleX)
     expect(updatedGraph.scaleY).toBeGreaterThan(initialGraph.scaleY)
@@ -36,6 +37,7 @@ test.describe("Canvas tests", () => {
     const initialGraph = await codeGraph.getCanvasScaling();
     await codeGraph.clickZoomOut();
     await codeGraph.clickZoomOut();
+    await codeGraph.waitForCanvasAnimationToEnd();
     const updatedGraph = await codeGraph.getCanvasScaling();
     expect(updatedGraph.scaleX).toBeLessThan(initialGraph.scaleX)
     expect(updatedGraph.scaleY).toBeLessThan(initialGraph.scaleY)
