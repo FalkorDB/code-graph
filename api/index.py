@@ -31,9 +31,12 @@ def verify_token(token):
     return token == SECRET_TOKEN or (token is None and SECRET_TOKEN is None)
 
 def token_required(f):
-    """ Decorator to protect routes with token authentication """
+    """ Decorator to protect routes with token authentication.
+        Bypassed when CODE_GRAPH_PUBLIC=1 (public mode). """
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        if os.environ.get("CODE_GRAPH_PUBLIC", "0") == "1":
+            return f(*args, **kwargs)
         token = request.headers.get('Authorization')  # Get token from header
         if not verify_token(token):
             return jsonify(message="Unauthorized"), 401
