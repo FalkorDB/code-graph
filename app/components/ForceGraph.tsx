@@ -21,7 +21,7 @@ interface Props {
     onBackgroundRightClick: (event: MouseEvent) => void
     nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void
     nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void
-    linkLineDash: (link: any) => number[] | null
+    linkLineDash: (link: any) => number[]
     onZoom: () => void
     onEngineStop: () => void
     cooldownTicks: number | undefined
