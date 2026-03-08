@@ -37,6 +37,8 @@ jobs:
 
     - name: Build frontend
       working-directory: ./app
+      env:
+        VITE_SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
       run: npm run build
 
     - name: Install Playwright
