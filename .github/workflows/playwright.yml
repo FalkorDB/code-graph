@@ -45,23 +45,26 @@ jobs:
         npx playwright install --with-deps
 
     - name: Parse FalkorDB connection URL
-      if: ${{ secrets.FALKORDB_URL != '' }}
       env:
         FALKORDB_URL: ${{ secrets.FALKORDB_URL }}
       run: |
-        # Parse redis://[user:pass@]host:port from FALKORDB_URL
-        url="${FALKORDB_URL#redis://}"
-        url="${url#rediss://}"
-        if [[ "$url" == *"@"* ]]; then
-          userinfo="${url%%@*}"
-          hostport="${url#*@}"
-          echo "FALKORDB_USERNAME=${userinfo%%:*}" >> $GITHUB_ENV
-          echo "FALKORDB_PASSWORD=${userinfo#*:}" >> $GITHUB_ENV
+        if [ -n "$FALKORDB_URL" ]; then
+          # Parse redis://[user:pass@]host:port from FALKORDB_URL
+          url="${FALKORDB_URL#redis://}"
+          url="${url#rediss://}"
+          if [[ "$url" == *"@"* ]]; then
+            userinfo="${url%%@*}"
+            hostport="${url#*@}"
+            echo "FALKORDB_USERNAME=${userinfo%%:*}" >> $GITHUB_ENV
+            echo "FALKORDB_PASSWORD=${userinfo#*:}" >> $GITHUB_ENV
+          else
+            hostport="$url"
+          fi
+          echo "FALKORDB_HOST=${hostport%%:*}" >> $GITHUB_ENV
+          echo "FALKORDB_PORT=${hostport#*:}" >> $GITHUB_ENV
         else
-          hostport="$url"
+          echo "FALKORDB_URL not set, using local FalkorDB service"
         fi
-        echo "FALKORDB_HOST=${hostport%%:*}" >> $GITHUB_ENV
-        echo "FALKORDB_PORT=${hostport#*:}" >> $GITHUB_ENV
 
     - name: Run Playwright tests
       env:
