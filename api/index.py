@@ -31,12 +31,9 @@ def verify_token(token):
     return token == SECRET_TOKEN or (token is None and SECRET_TOKEN is None)
 
 def token_required(f):
-    """ Decorator to protect routes with token authentication.
-        Bypassed when CODE_GRAPH_PUBLIC=1 (public mode). """
+    """ Decorator to protect routes with token authentication """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if os.environ.get("CODE_GRAPH_PUBLIC", "0") == "1":
-            return f(*args, **kwargs)
         token = request.headers.get('Authorization')  # Get token from header
         if not verify_token(token):
             return jsonify(message="Unauthorized"), 401
@@ -63,17 +60,20 @@ def not_found(e):
         return jsonify({"error": "Not found"}), 404
 
 def public_access(f):
-    """ Decorator to protect routes with public access """
+    """ Decorator that bypasses token_required when CODE_GRAPH_PUBLIC=1.
+        Place above @token_required on routes accessible to the frontend. """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        public = os.environ.get("CODE_GRAPH_PUBLIC", "0")  # Get public access setting
-        if public != "1":
-            return jsonify(message="Unauthorized"), 401
+        public = os.environ.get("CODE_GRAPH_PUBLIC", "0")
+        if public == "1":
+            # Skip token_required by calling the original function directly
+            return f.__wrapped__(*args, **kwargs)
         return f(*args, **kwargs)
     return decorated_function
 
 @app.route('/api/graph_entities', methods=['GET'])
-@token_required  # Apply token authentication decorator
+@public_access
+@token_required
 def graph_entities():
     """
     Endpoint to fetch sub-graph entities from a given repository.
@@ -117,7 +117,8 @@ def graph_entities():
 
 
 @app.route('/api/get_neighbors', methods=['POST'])
-@token_required  # Apply token authentication decorator
+@public_access
+@token_required
 def get_neighbors():
     """
     Endpoint to get neighbors of a nodes list in the graph.
@@ -166,7 +167,8 @@ def get_neighbors():
     return jsonify(response), 200
 
 @app.route('/api/auto_complete', methods=['POST'])
-@token_required  # Apply token authentication decorator
+@public_access
+@token_required
 def auto_complete():
     """
     Endpoint to process auto-completion requests for a repository based on a prefix.
@@ -204,7 +206,8 @@ def auto_complete():
     return jsonify(response), 200
 
 @app.route('/api/list_repos', methods=['GET'])
-@token_required  # Apply token authentication decorator
+@public_access
+@token_required
 def list_repos():
     """
     Endpoint to list all available repositories.
@@ -225,7 +228,8 @@ def list_repos():
     return jsonify(response), 200
 
 @app.route('/api/repo_info', methods=['POST'])
-@token_required  # Apply token authentication decorator
+@public_access
+@token_required
 def repo_info():
     """
     Endpoint to retrieve information about a specific repository.
@@ -270,7 +274,8 @@ def repo_info():
     return jsonify(response), 200
 
 @app.route('/api/find_paths', methods=['POST'])
-@token_required  # Apply token authentication decorator
+@public_access
+@token_required
 def find_paths():
     """
     Finds all paths between a source node (src) and a destination node (dest) in the graph.
@@ -325,7 +330,8 @@ def find_paths():
     return jsonify(response), 200
 
 @app.route('/api/chat', methods=['POST'])
-@token_required  # Apply token authentication decorator
+@public_access
+@token_required
 def chat():
     """ Endpoint to chat with the CodeGraph language model. """
 
