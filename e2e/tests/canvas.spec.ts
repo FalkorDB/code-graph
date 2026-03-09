@@ -167,8 +167,8 @@ test.describe("Canvas tests", () => {
     const { nodes, edges } = await codeGraph.getMetricsPanelInfo();
     const api = new ApiCalls();
     const response = await api.projectInfo(GRAPHRAG_SDK);
-    expect(response.result.info.node_count).toEqual(parseInt(nodes));
-    expect(response.result.info.edge_count).toEqual(parseInt(edges));
+    expect(response.info.node_count).toEqual(parseInt(nodes));
+    expect(response.info.edge_count).toEqual(parseInt(edges));
   });
   
 
@@ -182,7 +182,7 @@ test.describe("Canvas tests", () => {
     const isMatching = nodes.slice(0, 2).every(
       (node: any, index: number) => {
         const nodeName = node.name || node.data?.name;
-        return nodeName === response.result.entities.nodes[index].properties.name;
+        return nodeName === response.entities.nodes[index].properties.name;
       }
     );
     expect(isMatching).toBe(true)
@@ -224,7 +224,7 @@ test.describe("Canvas tests", () => {
 
       const api = new ApiCalls();
       const response = await api.showPath(GRAPHRAG_SDK ,firstNodeRes!.id, secondNodeRes!.id);
-      const callsRelationObject = response.result.paths[0].find(item => item.relation === "CALLS")
+      const callsRelationObject = response.paths[0].find(item => item.relation === "CALLS")
       expect(callsRelationObject?.src_node).toBe(firstNodeRes!.id);
       expect(callsRelationObject?.dest_node).toBe(secondNodeRes!.id);
     });

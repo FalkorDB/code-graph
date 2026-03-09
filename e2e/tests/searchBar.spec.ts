@@ -69,7 +69,7 @@ test.describe("search bar tests", () => {
       const count = await codeGraph.getSearchAutoCompleteCount();
       const api = new ApiCalls();
       const response = await api.searchAutoComplete(GRAPHRAG_SDK, searchInput);
-      expect(count).toBe(response.result.completions.length);
+      expect(count).toBe(response.completions.length);
     });
   })
 

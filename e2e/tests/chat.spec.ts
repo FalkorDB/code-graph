@@ -84,7 +84,7 @@ test.describe("Chat tests", () => {
     const uiResponse = await chat.getTextInLastChatElement();
     const number = uiResponse.match(/\d+/g)?.[0]!;
     
-    expect(number).toEqual(apiResponse.result.response.match(/\d+/g)?.[0]);
+    expect(number).toEqual(apiResponse.response.match(/\d+/g)?.[0]);
   });
 
   nodesPath.forEach((path) => {
