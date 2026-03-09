@@ -19,7 +19,6 @@ dependencies = [
     "multilspy @ git+https://github.com/AviAvni/multilspy.git@python-init-params",
     "javatools>=1.6.0,<2.0.0",
     "pygit2>=1.17.0,<2.0.0",
-    "toml>=0.10.2,<0.11.0",
 ]
 
 [project.optional-dependencies]

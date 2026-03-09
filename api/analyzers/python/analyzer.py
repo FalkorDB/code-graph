@@ -3,7 +3,7 @@ import subprocess
 from multilspy import SyncLanguageServer
 from pathlib import Path
 
-import toml
+import tomllib
 from ...entities import *
 from typing import Optional
 from ..analyzer import AbstractAnalyzer
@@ -25,11 +25,14 @@ class PythonAnalyzer(AbstractAnalyzer):
         if Path(f"{path}/pyproject.toml").is_file():
             subprocess.run(["pip", "install", "poetry"], cwd=str(path), env={"VIRTUAL_ENV": f"{path}/venv", "PATH": f"{path}/venv/bin:{os.environ['PATH']}"})
             subprocess.run(["poetry", "install"], cwd=str(path), env={"VIRTUAL_ENV": f"{path}/venv", "PATH": f"{path}/venv/bin:{os.environ['PATH']}"})
-            with open(f"{path}/pyproject.toml", 'r') as file:
-                pyproject_data = toml.load(file)
-                dependencies = (pyproject_data.get("tool") or {}).get("poetry", {}).get("dependencies", {})
-                for requirement in dependencies:
-                    files.extend(Path(f"{path}/venv/lib").rglob(f"**/site-packages/{requirement}/*.py"))
+            try:
+                with open(f"{path}/pyproject.toml", 'rb') as file:
+                    pyproject_data = tomllib.load(file)
+                    dependencies = (pyproject_data.get("tool") or {}).get("poetry", {}).get("dependencies", {})
+                    for requirement in dependencies:
+                        files.extend(Path(f"{path}/venv/lib").rglob(f"**/site-packages/{requirement}/*.py"))
+            except Exception as e:
+                logger.warning("Failed to parse %s/pyproject.toml: %s", path, e)
         elif Path(f"{path}/requirements.txt").is_file():
             subprocess.run(["pip", "install", "-r", "requirements.txt"], cwd=str(path), env={"VIRTUAL_ENV": f"{path}/venv", "PATH": f"{path}/venv/bin:{os.environ['PATH']}"})
             with open(f"{path}/requirements.txt", 'r') as file:
