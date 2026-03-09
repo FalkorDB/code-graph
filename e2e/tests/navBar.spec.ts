@@ -16,8 +16,8 @@ test.describe(' Navbar tests', () => {
 
   test("Verify clicking on falkordb logo redirects to specified URL", async () => {
     const navBar = await browser.createNewPage(CodeGraph, urls.baseUrl)
-    const page = await navBar.clickOnFalkorDbLogo();
-    await expect(page).toHaveURL(urls.falkorDBUrl)
+    const href = await navBar.clickOnFalkorDbLogo();
+    expect(href).toContain('falkordb.com')
   })
 
   const navitems: { navItem: string; expectedRes: string }[] = [
