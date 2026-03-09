@@ -377,9 +377,14 @@ export default class CodeGraph extends BasePage {
     }
 
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
+        // Wait for PathResponse buttons to render in the chat
+        await this.page.waitForSelector(
+            `main[data-name='main-chat'] button span`,
+            { state: 'visible', timeout: 10000 }
+        ).catch(() => {});
         await this.page.mouse.click(10, 10);
         const nodeLocator = this.locateNodeInLastChatPath(node);
-        return await waitForElementToBeVisible(nodeLocator);
+        return await waitForElementToBeVisible(nodeLocator, 1000, 10);
     }
 
     async isNotificationError(): Promise<boolean> {

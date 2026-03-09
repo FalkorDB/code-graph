@@ -319,7 +319,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 'Content-Type': 'application/json',
                 ...AUTH_HEADERS,
             },
-            body: JSON.stringify({ repo: repo, src: String(path.start.id), dest: String(path.end.id) }),
+            body: JSON.stringify({ repo: repo, src: Number(path.start.id), dest: Number(path.end.id) }),
         })
 
         if (!result.ok) {
