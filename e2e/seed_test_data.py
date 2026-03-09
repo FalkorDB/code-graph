@@ -22,7 +22,7 @@ REPOS = [
 # CALLS edges required by E2E path tests (caller → callee)
 REQUIRED_CALLS_EDGES = [
     ("merge_with", "combine"),
-    ("ask", "runner"),
+    ("import_data", "add_node"),
 ]
 
 

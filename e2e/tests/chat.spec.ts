@@ -92,8 +92,7 @@ test.describe("Chat tests", () => {
       const chat = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await chat.selectGraph(GRAPHRAG_SDK);
       await chat.clickOnShowPathBtn("Show the path");
-      await chat.insertInputForShowPath("1", path.firstNode);
-      await chat.insertInputForShowPath("2", path.secondNode);
+      await chat.fillPathInputsAndWait(path.firstNode, path.secondNode);
       expect(await chat.isNodeVisibleInLastChatPath(path.firstNode)).toBe(true);
       expect(await chat.isNodeVisibleInLastChatPath(path.secondNode)).toBe(true);
     });

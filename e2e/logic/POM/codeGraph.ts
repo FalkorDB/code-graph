@@ -149,7 +149,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get locateNodeInLastChatPath(): (node: string) => Locator {
-        return (node: string) => this.page.locator(`(//main[@data-name='main-chat']//button//span[contains(text(), ${node})])[last()]`);
+        return (node: string) => this.page.locator(`(//main[@data-name='main-chat']//button//span[contains(text(), '${node}')])[last()]`);
     }
 
     private get selectFirstPathOption(): (inputNum: string) => Locator {
@@ -323,7 +323,8 @@ export default class CodeGraph extends BasePage {
 
     async getTextInLastChatElement(): Promise<string> {
         await this.waitingForResponseIndicator.waitFor({ state: 'hidden' });
-        return await waitForStableText(this.lastElementInChat);
+        await this.page.waitForTimeout(2000);
+        return await waitForStableText(this.lastElementInChat, 10000);
     }
 
     async getLastChatElementButtonCount(): Promise<number | null> {
@@ -362,6 +363,17 @@ export default class CodeGraph extends BasePage {
     async insertInputForShowPath(inputNum: string, node: string): Promise<void> {
         await interactWhenVisible(this.selectInputForShowPath(inputNum), (el) => el.fill(node), `Path input ${inputNum}`);
         await interactWhenVisible(this.selectFirstPathOption(inputNum), (el) => el.click(), `Path option ${inputNum}`);
+    }
+
+    async fillPathInputsAndWait(firstNode: string, secondNode: string): Promise<void> {
+        await this.insertInputForShowPath("1", firstNode);
+        const pathResponsePromise = this.page.waitForResponse(
+            resp => resp.url().includes('/api/find_paths'),
+            { timeout: 15000 }
+        );
+        await this.insertInputForShowPath("2", secondNode);
+        await pathResponsePromise;
+        await this.page.waitForTimeout(2000);
     }
 
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {

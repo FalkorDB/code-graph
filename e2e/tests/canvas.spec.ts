@@ -108,8 +108,7 @@ test.describe("Canvas tests", () => {
       await browser.setPageToFullScreen();
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.clickOnShowPathBtn("Show the path");
-      await codeGraph.insertInputForShowPath("1", path.firstNode);
-      await codeGraph.insertInputForShowPath("2", path.secondNode);
+      await codeGraph.fillPathInputsAndWait(path.firstNode, path.secondNode);
       const initialGraph = await codeGraph.getGraphNodes();
       const firstNode = findNodeByName(initialGraph, path.firstNode);
       const secondNode = findNodeByName(initialGraph, path.secondNode);
@@ -193,8 +192,7 @@ test.describe("Canvas tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.clickOnShowPathBtn("Show the path");
-      await codeGraph.insertInputForShowPath("1", firstNode);
-      await codeGraph.insertInputForShowPath("2", secondNode);
+      await codeGraph.fillPathInputsAndWait(firstNode, secondNode);
       const result = await codeGraph.getGraphNodes();
       const firstNodeRes = findNodeByName(result, firstNode);
       
@@ -212,8 +210,7 @@ test.describe("Canvas tests", () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
       await codeGraph.clickOnShowPathBtn("Show the path");
-      await codeGraph.insertInputForShowPath("1", path.firstNode);
-      await codeGraph.insertInputForShowPath("2", path.secondNode);
+      await codeGraph.fillPathInputsAndWait(path.firstNode, path.secondNode);
       const result = await codeGraph.getGraphDetails();
       const nodes = result.elements?.nodes || result.nodes;
       const firstNodeRes = findNodeByName(nodes, path.firstNode);

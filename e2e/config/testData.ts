@@ -17,7 +17,7 @@ export const specialCharacters: { character: string; expectedRes: boolean }[] = 
 
 export const nodesPath: { firstNode: string; secondNode: string }[] = [
   { firstNode: "merge_with", secondNode: "combine" },
-  { firstNode: "ask", secondNode: "runner" }
+  { firstNode: "import_data", secondNode: "add_node" }
 ];
 
 export const nodes: { nodeName: string; }[] = [
