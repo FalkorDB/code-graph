@@ -348,7 +348,10 @@ def chat():
     if msg is None:
         return jsonify({'status': 'Missing mandatory parameter "msg"'}), 400
 
-    answer = ask(repo, msg)
+    try:
+        answer = ask(repo, msg)
+    except Exception as e:
+        return jsonify({'status': 'error', 'response': str(e)}), 500
 
     # Create and return a successful response
     response = { 'status': 'success', 'response': answer }

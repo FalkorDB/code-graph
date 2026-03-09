@@ -16,13 +16,13 @@ export const specialCharacters: { character: string; expectedRes: boolean }[] = 
 ];
 
 export const nodesPath: { firstNode: string; secondNode: string }[] = [
-  { firstNode: "import_data", secondNode: "add_edge" },
-  { firstNode: "import_data", secondNode: "add_node" }
+  { firstNode: "merge_with", secondNode: "combine" },
+  { firstNode: "ask", secondNode: "runner" }
 ];
 
 export const nodes: { nodeName: string; }[] = [
   { nodeName: "add_edge" },
-  { nodeName: "delete"},
+  { nodeName: "combine"},
   { nodeName: "ask"}
 ];
 
