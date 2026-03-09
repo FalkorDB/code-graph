@@ -53,6 +53,7 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
+        CODE_GRAPH_PUBLIC: "1"
       run: |
         flask --app api/index.py run --host 0.0.0.0 --port 5000 &
         # Wait for Flask to be ready

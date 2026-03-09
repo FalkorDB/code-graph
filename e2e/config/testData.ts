@@ -1,7 +1,7 @@
 export const searchData: { searchInput: string; completedSearchInput?: string; }[] = [
     { searchInput: "test"},
     { searchInput: "set"},
-    { searchInput: "low", completedSearchInput: "lower_items" },
+    { searchInput: "lo", completedSearchInput: "load" },
     { searchInput: "as", completedSearchInput:  "ask"},
 ];
 
@@ -17,13 +17,13 @@ export const specialCharacters: { character: string; expectedRes: boolean }[] = 
 
 export const nodesPath: { firstNode: string; secondNode: string }[] = [
   { firstNode: "import_data", secondNode: "add_edge" },
-  { firstNode: "delete", secondNode: "list_graphs" }
+  { firstNode: "import_data", secondNode: "add_node" }
 ];
 
 export const nodes: { nodeName: string; }[] = [
   { nodeName: "add_edge" },
   { nodeName: "delete"},
-  { nodeName: "list_graphs"}
+  { nodeName: "ask"}
 ];
 
 export const categories: string[] = ['File', 'Class', 'Function'];
