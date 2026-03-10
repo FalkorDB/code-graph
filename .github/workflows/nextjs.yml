@@ -41,4 +41,4 @@ jobs:
           version: "latest"
 
       - name: Install backend dependencies
-        run: uv sync
+        run: uv sync --extra test
