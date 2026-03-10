@@ -1,6 +1,9 @@
 # Multi-stage build: Start with Python 3.12 base
 FROM python:3.12-bookworm AS python-base
 
+# Use the official Node image so npm is always available during frontend builds
+FROM node:22-bookworm AS node-base
+
 # Main stage: Use FalkorDB base and copy Python 3.12
 FROM falkordb/falkordb:latest
 
@@ -13,17 +16,21 @@ USER root
 # Copy Python 3.12 from the python base image
 COPY --from=python-base /usr/local /usr/local
 
+# Copy Node.js tooling from the official Node image
+COPY --from=node-base /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-base /usr/local/lib/node_modules /usr/local/lib/node_modules
+
 # Install netcat for wait loop in start.sh and system build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     git \
     build-essential \
-    curl \
     ca-certificates \
-    gnupg \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/local/bin/python3.12 /usr/bin/python3 \
-    && ln -sf /usr/local/bin/python3.12 /usr/bin/python
+    && ln -sf /usr/local/bin/python3.12 /usr/bin/python \
+    && ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 WORKDIR /app
 
@@ -31,12 +38,8 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --break-system-packages .
 
-# Install Node.js for building the frontend
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get update \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/* \
-    && node --version && npm --version
+# Verify Node.js tooling for building the frontend
+RUN node --version && npm --version
 
 # Copy frontend package files and install dependencies
 COPY app/package*.json ./app/
@@ -61,4 +64,3 @@ EXPOSE 5000 6379
 
 # Use start.sh as entrypoint
 ENTRYPOINT ["/start.sh"]
-
