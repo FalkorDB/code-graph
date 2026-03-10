@@ -23,7 +23,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: ./app
@@ -42,8 +46,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
       - name: Install backend dependencies
-        run: pip install -e ".[test]"
+        run: uv sync --extra test
 
   docker-build:
     runs-on: ubuntu-latest

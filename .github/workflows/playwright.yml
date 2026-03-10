@@ -13,6 +13,8 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,13 +30,22 @@ jobs:
     - uses: actions/setup-node@v6
       with:
         node-version: 24
+        cache: 'npm'
+        cache-dependency-path: |
+          package-lock.json
+          app/package-lock.json
 
     - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "latest"
+
     - name: Install backend dependencies
-      run: pip install -e .
+      run: uv sync
 
     - name: Install frontend dependencies
       working-directory: ./app
@@ -47,7 +58,7 @@ jobs:
       run: npm run build
 
     - name: Seed test data into FalkorDB
-      run: python e2e/seed_test_data.py
+      run: uv run python e2e/seed_test_data.py
 
     - name: Install Playwright npm dependencies
       run: |
@@ -77,7 +88,7 @@ jobs:
         CODE_GRAPH_PUBLIC: "1"
         MODEL_NAME: "openai/gpt-4.1-mini"
       run: |
-        flask --app api/index.py run --host 0.0.0.0 --port 5000 &
+        uv run flask --app api/index.py run --host 0.0.0.0 --port 5000 &
         # Wait for Flask to be ready
         timeout 30 bash -c 'until curl -s http://localhost:5000/ > /dev/null 2>&1; do sleep 0.5; done'
         npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
