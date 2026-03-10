@@ -10,7 +10,7 @@ API_FILES_WITH_REQUIRED_TRAILING_NEWLINE = [
 ]
 
 
-def test_reported_api_files_end_with_trailing_newline():
+def test_reported_api_files_end_with_trailing_newlines():
     repo_root = Path(__file__).resolve().parent.parent
 
     for relative_path in API_FILES_WITH_REQUIRED_TRAILING_NEWLINE:
