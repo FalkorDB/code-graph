@@ -43,12 +43,21 @@ def fresh_clone_repository(url: str, path: Path) -> Path:
         shutil.rmtree(path)
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["git", "clone", "--depth", "1", url, str(path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", url, str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        logger.error(
+            "git clone failed for %s (return code %s). Stderr:\n%s",
+            url,
+            e.returncode,
+            e.stderr or "<no stderr captured>",
+        )
+        raise
 
     return path
 
