@@ -262,13 +262,10 @@ export default class CodeGraph extends BasePage {
     }
 
     /* NavBar functionality */
-    async clickOnFalkorDbLogo(): Promise<Page> {
+    async clickOnFalkorDbLogo(): Promise<string | null> {
         await this.page.waitForLoadState('networkidle');
-        const [newPage] = await Promise.all([
-            this.page.waitForEvent('popup'),
-            interactWhenVisible(this.falkorDBLogo, (el) => el.click(), 'FalkorDB Logo'),
-        ]);
-        return newPage
+        await interactWhenVisible(this.falkorDBLogo, async () => {}, 'FalkorDB Logo');
+        return this.falkorDBLogo.getAttribute('href');
     }
 
     async getNavBarItem(navItem: string): Promise<Page> {
