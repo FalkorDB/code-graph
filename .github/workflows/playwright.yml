@@ -25,11 +25,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: 24
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -49,10 +49,26 @@ jobs:
     - name: Seed test data into FalkorDB
       run: python e2e/seed_test_data.py
 
-    - name: Install Playwright
+    - name: Install Playwright npm dependencies
       run: |
         npm ci
-        npx playwright install --with-deps
+
+    - name: Cache Playwright browsers
+      id: playwright-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+
+    - name: Install Playwright browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: npx playwright install --with-deps chromium firefox
+
+    - name: Install Playwright system deps
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: |
+        npx playwright install chromium firefox
+        npx playwright install-deps chromium firefox
 
     - name: Run Playwright tests
       env:
@@ -72,7 +88,7 @@ jobs:
         mkdir -p playwright-report
         mkdir -p playwright-report/artifacts
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: playwright-report-shard-${{ matrix.shard }}
@@ -81,7 +97,7 @@ jobs:
 
     - name: Upload failed test screenshots
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: failed-test-screenshots-shard-${{ matrix.shard }}
         path: playwright-report/artifacts/
