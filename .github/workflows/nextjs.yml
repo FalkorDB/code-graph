@@ -41,3 +41,16 @@ jobs:
 
       - name: Install backend dependencies
         run: pip install -e ".[test]"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
