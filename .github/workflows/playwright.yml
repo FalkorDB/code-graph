@@ -44,7 +44,7 @@ jobs:
     - name: Seed test data into FalkorDB
       run: python e2e/seed_test_data.py
 
-    - name: Install Playwright
+    - name: Install Playwright npm dependencies
       run: |
         npm ci
 
