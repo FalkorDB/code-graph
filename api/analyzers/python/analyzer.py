@@ -122,3 +122,95 @@ class PythonAnalyzer(AbstractAnalyzer):
             return self.resolve_method(files, lsp, file_path, path, symbol)
         else:
             raise ValueError(f"Unknown key {key}")
+
+    def add_file_imports(self, file: File) -> None:
+        """
+        Extract and add import statements from the file.
+        
+        Supports:
+        - import module
+        - import module as alias
+        - from module import name
+        - from module import name1, name2
+        - from module import name as alias
+        """
+        try:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                # Query for both import types
+                import_query = self.language.query("""
+                    (import_statement) @import
+                    (import_from_statement) @import_from
+                """)
+            
+            captures = import_query.captures(file.tree.root_node)
+            
+            # Add all import statement nodes to the file
+            if 'import' in captures:
+                for import_node in captures['import']:
+                    file.add_import(import_node)
+            
+            if 'import_from' in captures:
+                for import_node in captures['import_from']:
+                    file.add_import(import_node)
+        except Exception as e:
+            logger.debug(f"Failed to extract imports from {file.path}: {e}")
+
+    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
+        """
+        Resolve an import statement to the entities it imports.
+        """
+        res = []
+        
+        try:
+            if import_node.type == 'import_statement':
+                # Handle "import module" or "import module as alias"
+                # Find all dotted_name and aliased_import nodes
+                for child in import_node.children:
+                    if child.type == 'dotted_name':
+                        # Try to resolve the module/name
+                        identifier = child.children[0] if child.child_count > 0 else child
+                        resolved = self.resolve_type(files, lsp, file_path, path, identifier)
+                        res.extend(resolved)
+                    elif child.type == 'aliased_import':
+                        # Get the actual name from aliased import (before 'as')
+                        if child.child_count > 0:
+                            actual_name = child.children[0]
+                            if actual_name.type == 'dotted_name' and actual_name.child_count > 0:
+                                identifier = actual_name.children[0]
+                            else:
+                                identifier = actual_name
+                            resolved = self.resolve_type(files, lsp, file_path, path, identifier)
+                            res.extend(resolved)
+            
+            elif import_node.type == 'import_from_statement':
+                # Handle "from module import name1, name2"
+                # Find the 'import' keyword to know where imported names start
+                import_keyword_found = False
+                for child in import_node.children:
+                    if child.type == 'import':
+                        import_keyword_found = True
+                        continue
+                    
+                    # After 'import' keyword, dotted_name nodes are the imported names
+                    if import_keyword_found and child.type == 'dotted_name':
+                        # Try to resolve the imported name
+                        identifier = child.children[0] if child.child_count > 0 else child
+                        resolved = self.resolve_type(files, lsp, file_path, path, identifier)
+                        res.extend(resolved)
+                    elif import_keyword_found and child.type == 'aliased_import':
+                        # Handle "from module import name as alias"
+                        if child.child_count > 0:
+                            actual_name = child.children[0]
+                            if actual_name.type == 'dotted_name' and actual_name.child_count > 0:
+                                identifier = actual_name.children[0]
+                            else:
+                                identifier = actual_name
+                            resolved = self.resolve_type(files, lsp, file_path, path, identifier)
+                            res.extend(resolved)
+        
+        except Exception as e:
+            logger.debug(f"Failed to resolve import: {e}")
+        
+        return res

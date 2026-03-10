@@ -1,0 +1,73 @@
+class Employee:
+    def __init__(self, name, employee_id, base_salary):
+        self.name = name
+        self.employee_id = employee_id
+        self.base_salary = base_salary
+    
+    def get_salary(self):
+        return self.base_salary
+    
+    def display_info(self):
+        return f"Employee: {self.name} (ID: {self.employee_id})"
+    
+    def apply_raise(self, percentage):
+        self.base_salary += (self.base_salary * percentage / 100)
+        return f"New salary after {percentage}% raise: ${self.base_salary:,.2f}"
+
+class Developer(Employee):
+    def __init__(self, name, employee_id, base_salary, programming_languages):
+        # Call parent class's __init__ method
+        super().__init__(name, employee_id, base_salary)
+        self.programming_languages = programming_languages
+    
+    def add_language(self, language):
+        self.programming_languages.append(language)
+        return f"Added {language} to skill set"
+    
+    # Override display_info method
+    def display_info(self):
+        basic_info = super().display_info()
+        return f"{basic_info}\nRole: Developer\nSkills: {', '.join(self.programming_languages)}"
+
+class Manager(Employee):
+    def __init__(self, name, employee_id, base_salary, team_members=None):
+        super().__init__(name, employee_id, base_salary)
+        self.team_members = team_members if team_members else []
+    
+    def add_team_member(self, employee):
+        if isinstance(employee, Employee):
+            self.team_members.append(employee)
+            return f"Added {employee.name} to team"
+        return "Invalid team member"
+    
+    def get_salary(self):
+        # Managers get 10% bonus on top of base salary
+        return self.base_salary * 1.1
+    
+    def display_info(self):
+        basic_info = super().display_info()
+        team_names = [member.name for member in self.team_members]
+        return f"{basic_info}\nRole: Manager\nTeam Members: {', '.join(team_names)}"
+
+# Example usage
+if __name__ == "__main__":
+    # Create a developer
+    dev = Developer("Alice Smith", "DEV001", 75000, ["Python", "JavaScript"])
+    print(dev.display_info())
+    print(dev.add_language("Java"))
+    print(dev.apply_raise(10))
+    
+    # Create another developer
+    dev2 = Developer("Bob Johnson", "DEV002", 70000, ["Python", "C++"]) 
+    
+    # Create a manager
+    manager = Manager("Carol Williams", "MGR001", 100000)
+    print("\n" + manager.display_info())
+    
+    # Add team members to manager
+    print(manager.add_team_member(dev))
+    print(manager.add_team_member(dev2))
+    
+    # Display updated manager info
+    print("\n" + manager.display_info())
+    print(f"Manager's salary with bonus: ${manager.get_salary():,.2f}")

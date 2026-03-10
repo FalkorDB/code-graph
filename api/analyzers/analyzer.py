@@ -149,3 +149,32 @@ class AbstractAnalyzer(ABC):
 
         pass
 
+    @abstractmethod
+    def add_file_imports(self, file: File) -> None:
+        """
+        Add import statements to the file.
+
+        Args:
+            file (File): The file to add imports to.
+        """
+
+        pass
+
+    @abstractmethod
+    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
+        """
+        Resolve an import statement to entities.
+
+        Args:
+            files (dict[Path, File]): All files in the project.
+            lsp (SyncLanguageServer): The language server.
+            file_path (Path): The path to the file containing the import.
+            path (Path): The path to the project root.
+            import_node (Node): The import statement node.
+
+        Returns:
+            list[Entity]: List of resolved entities.
+        """
+
+        pass
+

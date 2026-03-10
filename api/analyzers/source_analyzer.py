@@ -119,6 +119,10 @@ class SourceAnalyzer():
             # Walk thought the AST
             graph.add_file(file)
             self.create_hierarchy(file, analyzer, graph)
+            
+            # Extract import statements
+            if not analyzer.is_dependency(str(file_path)):
+                analyzer.add_file_imports(file)
 
     def second_pass(self, graph: Graph, files: list[Path], path: Path) -> None:
         """
@@ -162,6 +166,8 @@ class SourceAnalyzer():
                     continue
                 file = self.files[file_path]
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
+                
+                # Resolve entity symbols
                 for _, entity in file.entities.items():
                     entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, key, symbol))
                     for key, resolved_set in entity.resolved_symbols.items():
@@ -178,6 +184,13 @@ class SourceAnalyzer():
                                 graph.connect_entities("RETURNS", entity.id, resolved.id)
                             elif key == "parameters":
                                 graph.connect_entities("PARAMETERS", entity.id, resolved.id)
+                
+                # Resolve file imports
+                for import_node in file.imports:
+                    resolved_entities = analyzers[file_path.suffix].resolve_import(self.files, lsps[file_path.suffix], file_path, path, import_node)
+                    for resolved_entity in resolved_entities:
+                        file.add_resolved_import(resolved_entity)
+                        graph.connect_entities("IMPORTS", file.id, resolved_entity.id)
 
     def analyze_files(self, files: list[Path], path: Path, graph: Graph) -> None:
         self.first_pass(path, files, [], graph)
