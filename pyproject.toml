@@ -1,0 +1,31 @@
+[project]
+name = "code-graph-backend"
+version = "0.4.2"
+description = "code_graph is designed to help developers visualize and analyze the structure of their source code. It takes source code as input and generates a graph representation, making it easier to understand relationships and dependencies within the codebase."
+authors = [{name = "Roi Lipman", email = "roilipman@gmail.com"}]
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "graphrag-sdk>=0.8.1,<0.9.0",
+    "tree-sitter>=0.25.2,<0.26.0",
+    "validators>=0.35.0,<0.36.0",
+    "falkordb>=1.1.3,<2.0.0",
+    "tree-sitter-c>=0.24.1,<0.25.0",
+    "tree-sitter-python>=0.25.0,<0.26.0",
+    "tree-sitter-java>=0.23.5,<0.24.0",
+    "tree-sitter-c-sharp>=0.23.1,<0.24.0",
+    "flask>=3.1.0,<4.0.0",
+    "python-dotenv>=1.0.1,<2.0.0",
+    "multilspy @ git+https://github.com/AviAvni/multilspy.git@python-init-params",
+    "javatools>=1.6.0,<2.0.0",
+    "pygit2>=1.17.0,<2.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=9.0.2,<10.0.0",
+    "ruff>=0.11.0,<1.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

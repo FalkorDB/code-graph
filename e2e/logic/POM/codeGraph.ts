@@ -149,7 +149,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get locateNodeInLastChatPath(): (node: string) => Locator {
-        return (node: string) => this.page.locator(`(//main[@data-name='main-chat']//button//span[contains(text(), ${node})])[last()]`);
+        return (node: string) => this.page.locator(`(//main[@data-name='main-chat']//button//span[contains(text(), '${node}')])[last()]`);
     }
 
     private get selectFirstPathOption(): (inputNum: string) => Locator {
@@ -320,7 +320,8 @@ export default class CodeGraph extends BasePage {
 
     async getTextInLastChatElement(): Promise<string> {
         await this.waitingForResponseIndicator.waitFor({ state: 'hidden' });
-        return await waitForStableText(this.lastElementInChat);
+        await this.page.waitForTimeout(2000);
+        return await waitForStableText(this.lastElementInChat, 10000);
     }
 
     async getLastChatElementButtonCount(): Promise<number | null> {
@@ -361,10 +362,26 @@ export default class CodeGraph extends BasePage {
         await interactWhenVisible(this.selectFirstPathOption(inputNum), (el) => el.click(), `Path option ${inputNum}`);
     }
 
+    async fillPathInputsAndWait(firstNode: string, secondNode: string): Promise<void> {
+        await this.insertInputForShowPath("1", firstNode);
+        const pathResponsePromise = this.page.waitForResponse(
+            resp => resp.url().includes('/api/find_paths'),
+            { timeout: 15000 }
+        );
+        await this.insertInputForShowPath("2", secondNode);
+        await pathResponsePromise;
+        await this.page.waitForTimeout(2000);
+    }
+
     async isNodeVisibleInLastChatPath(node: string): Promise<boolean> {
+        // Wait for PathResponse buttons to render in the chat
+        await this.page.waitForSelector(
+            `main[data-name='main-chat'] button span`,
+            { state: 'visible', timeout: 10000 }
+        ).catch(() => {});
         await this.page.mouse.click(10, 10);
         const nodeLocator = this.locateNodeInLastChatPath(node);
-        return await waitForElementToBeVisible(nodeLocator);
+        return await waitForElementToBeVisible(nodeLocator, 1000, 10);
     }
 
     async isNotificationError(): Promise<boolean> {

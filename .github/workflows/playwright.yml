@@ -19,34 +19,61 @@ jobs:
           - 6379:6379
     steps:
     - uses: actions/checkout@v4
+
     - uses: actions/setup-node@v4
       with:
         node-version: 24
-    - name: Install dependencies
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install backend dependencies
+      run: pip install -e .
+
+    - name: Install frontend dependencies
+      working-directory: ./app
       run: npm ci
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
-    - name: Set up environment variables and run tests
+
+    - name: Build frontend
+      working-directory: ./app
       env:
-        FALKORDB_URL: ${{ secrets.FALKORDB_URL }}
+        VITE_SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
+      run: npm run build
+
+    - name: Seed test data into FalkorDB
+      run: python e2e/seed_test_data.py
+
+    - name: Install Playwright
+      run: |
+        npm ci
+        npx playwright install --with-deps
+
+    - name: Run Playwright tests
+      env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
-        NEXT_PUBLIC_MODE: UNLIMITED
-        BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        CODE_GRAPH_PUBLIC: "1"
+        MODEL_NAME: "openai/gpt-4.1-mini"
       run: |
-        npm run build
-        NEXTAUTH_SECRET=SECRET npm start & npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
+        flask --app api/index.py run --host 0.0.0.0 --port 5000 &
+        # Wait for Flask to be ready
+        timeout 30 bash -c 'until curl -s http://localhost:5000/ > /dev/null 2>&1; do sleep 0.5; done'
+        npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
+
     - name: Ensure required directories exist
       if: always()
       run: |
         mkdir -p playwright-report
         mkdir -p playwright-report/artifacts
+
     - uses: actions/upload-artifact@v4
       if: always()
       with:
         name: playwright-report-shard-${{ matrix.shard }}
         path: playwright-report/
         retention-days: 30
+
     - name: Upload failed test screenshots
       if: always()
       uses: actions/upload-artifact@v4
