@@ -35,5 +35,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
       - name: Install backend dependencies
-        run: pip install -e ".[test]"
+        run: uv sync
