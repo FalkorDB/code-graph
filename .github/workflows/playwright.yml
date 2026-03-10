@@ -44,6 +44,20 @@ jobs:
       with:
         version: "latest"
 
+    - name: Resolve seed repository SHAs
+      id: seed-repo-shas
+      run: |
+        echo "graphrag_sdk=$(git ls-remote https://github.com/FalkorDB/GraphRAG-SDK HEAD | cut -f1)" >> "$GITHUB_OUTPUT"
+        echo "flask=$(git ls-remote https://github.com/pallets/flask HEAD | cut -f1)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache seeded repository clones
+      uses: actions/cache@v4
+      with:
+        path: repositories
+        key: ${{ runner.os }}-seed-repos-${{ hashFiles('e2e/seed_test_data.py') }}-${{ steps.seed-repo-shas.outputs.graphrag_sdk }}-${{ steps.seed-repo-shas.outputs.flask }}
+        restore-keys: |
+          ${{ runner.os }}-seed-repos-${{ hashFiles('e2e/seed_test_data.py') }}-
+
     - name: Install backend dependencies
       run: uv sync
 

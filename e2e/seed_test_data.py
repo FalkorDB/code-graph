@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Seed FalkorDB with test data for Playwright e2e tests."""
 
-import os
-import sys
 import logging
+import os
+import shutil
+import subprocess
+from pathlib import Path
+from urllib.parse import urlparse
+
+from api.project import Project
+from falkordb import FalkorDB
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-from falkordb import FalkorDB
-from api.project import Project
 
 REPOS = [
     "https://github.com/FalkorDB/GraphRAG-SDK",
@@ -24,6 +27,39 @@ REQUIRED_CALLS_EDGES = [
     ("merge_with", "combine"),
     ("import_data", "add_node"),
 ]
+
+REPOSITORIES_DIR = Path.cwd() / "repositories"
+
+
+def repo_name_from_url(url: str) -> str:
+    return urlparse(url).path.rstrip("/").split("/")[-1].removesuffix(".git")
+
+
+def clone_repository(url: str, path: Path) -> Path:
+    if path.exists():
+        shutil.rmtree(path)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "clone", "--depth", "1", url, str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return path
+
+
+def load_project(url: str) -> Project:
+    repo_path = REPOSITORIES_DIR / repo_name_from_url(url)
+
+    if (repo_path / ".git").exists():
+        logger.info("Using cached repository clone at %s", repo_path)
+    else:
+        logger.info("Cloning repository into cache at %s", repo_path)
+        clone_repository(url, repo_path)
+
+    return Project.from_local_repository(repo_path)
 
 
 def ensure_calls_edges(graph_name: str) -> None:
@@ -63,7 +99,7 @@ def ensure_calls_edges(graph_name: str) -> None:
 def main():
     for url in REPOS:
         logger.info("Seeding %s ...", url)
-        proj = Project.from_git_repository(url)
+        proj = load_project(url)
         proj.analyze_sources()
         logger.info("Done seeding %s", url)
 
