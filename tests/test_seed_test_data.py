@@ -3,7 +3,7 @@ from pathlib import Path
 import e2e.seed_test_data as seed_test_data
 
 
-def test_load_project_uses_cached_clone(monkeypatch, tmp_path):
+def test_load_project_uses_existing_cached_clone(monkeypatch, tmp_path):
     repo_path = tmp_path / "GraphRAG-SDK"
     (repo_path / ".git").mkdir(parents=True)
 
@@ -42,7 +42,7 @@ def test_load_project_clones_into_cache(monkeypatch, tmp_path):
 
     monkeypatch.setattr(seed_test_data, "REPOSITORIES_DIR", tmp_path)
     monkeypatch.setattr(seed_test_data, "Project", FakeProject)
-    monkeypatch.setattr(seed_test_data, "clone_repository", fake_clone)
+    monkeypatch.setattr(seed_test_data, "fresh_clone_repository", fake_clone)
 
     project = seed_test_data.load_project("https://github.com/pallets/flask")
 

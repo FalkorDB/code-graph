@@ -53,7 +53,7 @@ jobs:
     - name: Cache seeded repository clones
       uses: actions/cache@v4
       with:
-        path: repositories
+        path: ${{ github.workspace }}/repositories
         key: ${{ runner.os }}-seed-repos-${{ hashFiles('e2e/seed_test_data.py') }}-${{ steps.seed-repo-shas.outputs.graphrag_sdk }}-${{ steps.seed-repo-shas.outputs.flask }}
         restore-keys: |
           ${{ runner.os }}-seed-repos-${{ hashFiles('e2e/seed_test_data.py') }}-

@@ -32,11 +32,14 @@ REPOSITORIES_DIR = Path.cwd() / "repositories"
 
 
 def repo_name_from_url(url: str) -> str:
-    return urlparse(url).path.rstrip("/").split("/")[-1].removesuffix(".git")
+    parsed_path = urlparse(url).path.rstrip("/")
+    repo_name = parsed_path.split("/")[-1]
+    return repo_name.removesuffix(".git")
 
 
-def clone_repository(url: str, path: Path) -> Path:
+def fresh_clone_repository(url: str, path: Path) -> Path:
     if path.exists():
+        # Replace any existing directory before creating a fresh shallow clone.
         shutil.rmtree(path)
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -57,7 +60,7 @@ def load_project(url: str) -> Project:
         logger.info("Using cached repository clone at %s", repo_path)
     else:
         logger.info("Cloning repository into cache at %s", repo_path)
-        clone_repository(url, repo_path)
+        fresh_clone_repository(url, repo_path)
 
     return Project.from_local_repository(repo_path)
 
