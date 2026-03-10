@@ -52,7 +52,7 @@ jobs:
           version: "latest"
 
       - name: Install backend dependencies
-        run: uv sync --extra test
+        run: uv sync --all-extras
 
   docker-build:
     runs-on: ubuntu-latest
