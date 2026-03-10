@@ -72,7 +72,7 @@ jobs:
         mkdir -p playwright-report
         mkdir -p playwright-report/artifacts
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: playwright-report-shard-${{ matrix.shard }}
@@ -81,7 +81,7 @@ jobs:
 
     - name: Upload failed test screenshots
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: failed-test-screenshots-shard-${{ matrix.shard }}
         path: playwright-report/artifacts/
