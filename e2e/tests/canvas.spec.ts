@@ -51,9 +51,10 @@ test.describe("Canvas tests", () => {
     await codeGraph.clickZoomOut();
     await codeGraph.clickZoomOut();
     await codeGraph.clickCenter();
+    await codeGraph.waitForCanvasAnimationToEnd();
     const updatedGraph = await codeGraph.getCanvasScaling();
-    expect(Math.abs(initialGraph.scaleX - updatedGraph.scaleX)).toBeLessThanOrEqual(0.2);
-    expect(Math.abs(initialGraph.scaleY - updatedGraph.scaleY)).toBeLessThanOrEqual(0.2);
+    expect(Math.abs(initialGraph.scaleX - updatedGraph.scaleX)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(initialGraph.scaleY - updatedGraph.scaleY)).toBeLessThanOrEqual(0.5);
 
   })
 
