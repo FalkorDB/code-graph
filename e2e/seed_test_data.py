@@ -28,7 +28,7 @@ REQUIRED_CALLS_EDGES = [
     ("import_data", "add_node"),
 ]
 
-REPOSITORIES_DIR = Path.cwd() / "repositories"
+REPOSITORIES_DIR = Path(__file__).resolve().parent.parent / "repositories"
 
 
 def repo_name_from_url(url: str) -> str:
