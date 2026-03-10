@@ -133,7 +133,7 @@ class AbstractAnalyzer(ABC):
         pass
 
     @abstractmethod
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> Entity:
         """
         Resolve a symbol to an entity.
 
@@ -144,7 +144,7 @@ class AbstractAnalyzer(ABC):
             symbol (Node): The symbol node.
 
         Returns:
-            list[Entity]: The resolved entities.
+            Entity: The entity.
         """
 
         pass
