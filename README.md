@@ -1,6 +1,8 @@
+<div align="center">
+
 # CodeGraph - Knowledge Graph Visualization Tool
 
-### Visualize your repository with our graph for code analysis
+**Visualize codebases as knowledge graphs to analyze dependencies, detect bottlenecks, and optimize projects.**
 
 [![Try Free](https://img.shields.io/badge/Try%20Free-FalkorDB%20Cloud-FF8101?labelColor=FDE900&link=https://app.falkordb.cloud)](https://app.falkordb.cloud)
 [![Dockerhub](https://img.shields.io/docker/pulls/falkordb/falkordb?label=Docker)](https://hub.docker.com/r/falkordb/falkordb/)
@@ -9,6 +11,8 @@
 ![Alt Text](https://res.cloudinary.com/dhd0k02an/image/upload/v1739719361/FalkorDB_-_Github_-_readme_jr6scy.gif)
 
 **[Live Demo](https://code-graph.falkordb.com/)**
+
+</div>
 
 ## Project Structure
 
@@ -71,6 +75,13 @@ Copy the template and configure:
 ```bash
 cp .env.template .env
 ```
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `OPENAI_API_KEY` | Your OpenAI API key for code analysis | Yes | - |
+| `SECRET_TOKEN` | User-defined token for request authorization | Yes | - |
+| `FALKORDB_HOST` | FalkorDB server hostname | No | localhost |
+| `FALKORDB_PORT` | FalkorDB server port | No | 6379 |
 
 Edit `.env` with your values:
 
@@ -204,13 +215,23 @@ Support for additional languages is planned.
 | POST | `/list_commits` | List commits of a repository |
 | POST | `/switch_commit` | Switch to a specific commit |
 
-## Community
+## Contributing
 
-Have questions or feedback? Reach out via:
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-* [GitHub Issues](https://github.com/FalkorDB/code-graph/issues)
-* Join our [Discord](https://discord.com/invite/6M4QwDXn2w)
+## License
 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- [GitHub Issues](https://github.com/FalkorDB/code-graph/issues)
+- [Discord](https://discord.com/invite/6M4QwDXn2w)
+- [Documentation](https://docs.falkordb.com)
+- Email: support@falkordb.com
+
+---
+
+<div align="center">
 If you find this repository helpful, please consider giving it a star!
-
-Knowledge Graph, Code Analysis, Code Visualization, Dead Code Analysis, Graph Database
+</div>
