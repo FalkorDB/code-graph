@@ -235,7 +235,7 @@ def _define_ontology() -> Ontology:
 ontology = _define_ontology()
 
 def _create_kg_agent(repo_name: str):
-    model_name = os.getenv('MODEL_NAME', 'gemini/gemini-2.0-flash')
+    model_name = os.getenv('MODEL_NAME', 'gemini/gemini-flash-lite-latest')
 
     model = LiteModel(model_name)
 
