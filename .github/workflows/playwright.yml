@@ -49,10 +49,26 @@ jobs:
     - name: Seed test data into FalkorDB
       run: python e2e/seed_test_data.py
 
-    - name: Install Playwright
+    - name: Install Playwright npm dependencies
       run: |
         npm ci
-        npx playwright install --with-deps
+
+    - name: Cache Playwright browsers
+      id: playwright-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+
+    - name: Install Playwright browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: npx playwright install --with-deps chromium firefox
+
+    - name: Install Playwright system deps
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: |
+        npx playwright install chromium firefox
+        npx playwright install-deps chromium firefox
 
     - name: Run Playwright tests
       env:
