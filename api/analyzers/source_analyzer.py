@@ -9,6 +9,7 @@ from ..graph import Graph
 from .analyzer import AbstractAnalyzer
 # from .c.analyzer import CAnalyzer
 from .java.analyzer import JavaAnalyzer
+from .kotlin.analyzer import KotlinAnalyzer
 from .python.analyzer import PythonAnalyzer
 from .csharp.analyzer import CSharpAnalyzer
 from .javascript.analyzer import JavaScriptAnalyzer
@@ -28,7 +29,9 @@ analyzers: dict[str, AbstractAnalyzer] = {
     '.py': PythonAnalyzer(),
     '.java': JavaAnalyzer(),
     '.cs': CSharpAnalyzer(),
-    '.js': JavaScriptAnalyzer()}
+    '.js': JavaScriptAnalyzer(),
+    '.kt': KotlinAnalyzer(),
+    '.kts': KotlinAnalyzer()}
 
 class NullLanguageServer:
     def start_server(self):
@@ -140,13 +143,20 @@ class SourceAnalyzer():
             lsps[".py"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".py"] = NullLanguageServer()
+        if any(path.rglob('*.kt')) or any(path.rglob('*.kts')):
+            # For now, use NullLanguageServer for Kotlin as we need to set up kotlin-language-server
+            lsps[".kt"] = NullLanguageServer()
+            lsps[".kts"] = NullLanguageServer()
+        else:
+            lsps[".kt"] = NullLanguageServer()
+            lsps[".kts"] = NullLanguageServer()
         if any(path.rglob('*.cs')):
             config = MultilspyConfig.from_dict({"code_language": "csharp"})
             lsps[".cs"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".cs"] = NullLanguageServer()
         lsps[".js"] = NullLanguageServer()
-        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server():
+        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server(), lsps[".kt"].start_server(), lsps[".kts"].start_server():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
                 if file_path not in self.files:
@@ -160,21 +170,18 @@ class SourceAnalyzer():
                     entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, key, symbol))
                     for key, symbols in entity.symbols.items():
                         for symbol in symbols:
-                            if len(symbol.resolved_symbol) == 0:
-                                continue
-                            resolved_symbol = next(iter(symbol.resolved_symbol))
                             if key == "base_class":
-                                graph.connect_entities("EXTENDS", entity.id, resolved_symbol.id)
+                                graph.connect_entities("EXTENDS", entity.id, symbol.id)
                             elif key == "implement_interface":
-                                graph.connect_entities("IMPLEMENTS", entity.id, resolved_symbol.id)
+                                graph.connect_entities("IMPLEMENTS", entity.id, symbol.id)
                             elif key == "extend_interface":
-                                graph.connect_entities("EXTENDS", entity.id, resolved_symbol.id)
+                                graph.connect_entities("EXTENDS", entity.id, symbol.id)
                             elif key == "call":
-                                graph.connect_entities("CALLS", entity.id, resolved_symbol.id, {"line": symbol.symbol.start_point.row, "text": symbol.symbol.text.decode("utf-8")})
+                                graph.connect_entities("CALLS", entity.id, symbol.id)
                             elif key == "return_type":
-                                graph.connect_entities("RETURNS", entity.id, resolved_symbol.id)
+                                graph.connect_entities("RETURNS", entity.id, symbol.id)
                             elif key == "parameters":
-                                graph.connect_entities("PARAMETERS", entity.id, resolved_symbol.id)
+                                graph.connect_entities("PARAMETERS", entity.id, symbol.id)
 
     def analyze_files(self, files: list[Path], path: Path, graph: Graph) -> None:
         self.first_pass(path, files, [], graph)
@@ -182,7 +189,7 @@ class SourceAnalyzer():
 
     def analyze_sources(self, path: Path, ignore: list[str], graph: Graph) -> None:
         path = path.resolve()
-        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + [f for f in path.rglob("*.js") if "node_modules" not in f.parts]
+        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + [f for f in path.rglob("*.js") if "node_modules" not in f.parts] + list(path.rglob("*.kt")) + list(path.rglob("*.kts"))
         # First pass analysis of the source code
         self.first_pass(path, files, ignore, graph)
 
