@@ -114,11 +114,15 @@ test.describe("Canvas tests", () => {
       const secondNode = findNodeByName(initialGraph, path.secondNode);
       expect(firstNode).toBeDefined();
       expect(secondNode).toBeDefined();
-      const pathNodeCount = initialGraph.length;
       await codeGraph.clickOnClearGraphBtn();
       const updateGraph = await codeGraph.getGraphNodes();
       expect(updateGraph.length).toBeGreaterThan(0);
-      expect(updateGraph.length).not.toEqual(pathNodeCount);
+      const firstNodeAfter = findNodeByName(updateGraph, path.firstNode);
+      const secondNodeAfter = findNodeByName(updateGraph, path.secondNode);
+      expect(firstNodeAfter).toBeDefined();
+      expect(firstNodeAfter.isPath).toBeFalsy();
+      expect(secondNodeAfter).toBeDefined();
+      expect(secondNodeAfter.isPath).toBeFalsy();
     });
   })
 

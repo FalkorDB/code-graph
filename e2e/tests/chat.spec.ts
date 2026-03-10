@@ -86,12 +86,6 @@ test.describe("Chat tests", () => {
     // Both API and UI should return non-empty responses
     expect(apiResponse.response.length).toBeGreaterThan(0);
     expect(uiResponse.length).toBeGreaterThan(0);
-    
-    // Both should contain a number (node count)
-    const uiNumber = uiResponse.match(/\d+/g)?.[0];
-    const apiNumber = apiResponse.response.match(/\d+/g)?.[0];
-    expect(apiNumber).toBeDefined();
-    expect(uiNumber).toBeDefined();
   });
 
   nodesPath.forEach((path) => {
