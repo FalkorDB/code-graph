@@ -1,6 +1,6 @@
 {
     "baseUrl": "http://localhost:5000/",
     "graphRAGuRL": "https://github.com/FalkorDB/GraphRAG-SDK",
-    "falkorDBUrl": "https://www.falkordb.com/",
+    "falkorDBUrl": "https://www.falkordb.com",
     "falkorDbGithubUrl": "https://github.com/FalkorDB/code-graph"
 }

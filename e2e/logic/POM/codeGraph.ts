@@ -1,4 +1,4 @@
-import { Download, Locator, Page } from "@playwright/test";
+import { Download, Locator } from "@playwright/test";
 import BasePage from "../../infra/ui/basePage";
 import { interactWhenVisible, waitForElementToBeVisible, waitForStableText, waitToBeEnabled } from "../utils";
 
@@ -268,13 +268,10 @@ export default class CodeGraph extends BasePage {
         return this.falkorDBLogo.getAttribute('href');
     }
 
-    async getNavBarItem(navItem: string): Promise<Page> {
+    async getNavBarItem(navItem: string): Promise<string | null> {
         await this.page.waitForLoadState('networkidle');
-        const [newPage] = await Promise.all([
-            this.page.waitForEvent('popup'),
-            interactWhenVisible(this.navBaritem(navItem), (el) => el.click(), `NavBar item: ${navItem}`),
-        ]);
-        return newPage
+        await interactWhenVisible(this.navBaritem(navItem), async () => {}, `NavBar item: ${navItem}`);
+        return this.navBaritem(navItem).getAttribute('href');
     }
 
     async clickCreateNewProjectBtn(): Promise<void> {
