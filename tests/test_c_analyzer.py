@@ -22,7 +22,7 @@ class Test_C_Analyzer(unittest.TestCase):
         path = str(path)
 
         g = Graph("c")
-        analyzer.analyze_local_folder(path, g)
+        analyzer.analyze(path, g)
 
         f = g.get_file('', 'src.c', '.c')
         self.assertIsNotNone(f)
@@ -68,3 +68,11 @@ class Test_C_Analyzer(unittest.TestCase):
         self.assertIn('add', callers)
         self.assertIn('main', callers)
 
+        # Test for include_directive edge creation
+        included_file = g.get_file('', 'myheader.h', '.h')
+        self.assertIsNotNone(included_file)
+
+        includes = g.get_neighbors([f.id], rel='INCLUDES')
+        self.assertEqual(len(includes), 3)
+        included_files = [node['properties']['name'] for node in includes['nodes']]
+        self.assertIn('myheader.h', included_files)
