@@ -5,8 +5,10 @@ set -e
 FALKORDB_HOST="${FALKORDB_HOST:-localhost}"
 FALKORDB_PORT="${FALKORDB_PORT:-6379}"
 
-# Start FalkorDB Redis server in background
-redis-server --loadmodule /var/lib/falkordb/bin/falkordb.so | cat &
+# Start FalkorDB Redis server in background only if using localhost (not an external instance)
+if [ "${FALKORDB_HOST}" = "localhost" ]; then
+    redis-server --loadmodule /var/lib/falkordb/bin/falkordb.so | cat &
+fi
 
 # Wait until FalkorDB is ready
 echo "Waiting for FalkorDB to start on $FALKORDB_HOST:$FALKORDB_PORT..."
