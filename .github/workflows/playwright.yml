@@ -61,7 +61,9 @@ jobs:
 
     - name: Install Playwright system deps
       if: steps.playwright-cache.outputs.cache-hit == 'true'
-      run: npx playwright install-deps chromium firefox
+      run: |
+        npx playwright install chromium firefox
+        npx playwright install-deps chromium firefox
 
     - name: Run Playwright tests
       env:
