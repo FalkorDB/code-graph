@@ -412,7 +412,6 @@ def analyze_folder():
     return jsonify(response), 200
 
 @app.route('/api/analyze_repo', methods=['POST'])
-@public_access  # Apply public access decorator
 @token_required  # Apply token authentication decorator
 def analyze_repo():
     """
@@ -448,7 +447,6 @@ def analyze_repo():
     return jsonify(response), 200
 
 @app.route('/api/switch_commit', methods=['POST'])
-@public_access  # Apply public access decorator
 @token_required  # Apply token authentication decorator
 def switch_commit():
     """
