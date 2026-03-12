@@ -175,7 +175,7 @@ def create_app():
         return {"status": "success", "project": proj_name}
 
     @app.post('/api/analyze_repo')
-    def analyze_repo(data: AnalyzeRepoRequest, _=Depends(public_access)):
+    def analyze_repo(data: AnalyzeRepoRequest, _=Depends(token_required)):
         logger.debug('Received repo_url: %s', data.repo_url)
         proj = Project.from_git_repository(data.repo_url)
         proj.analyze_sources(data.ignore)
@@ -183,7 +183,7 @@ def create_app():
         return {"status": "success"}
 
     @app.post('/api/switch_commit')
-    def switch_commit(data: SwitchCommitRequest, _=Depends(public_access)):
+    def switch_commit(data: SwitchCommitRequest, _=Depends(token_required)):
         git_utils.switch_commit(data.repo, data.commit)
         return {"status": "success"}
 
