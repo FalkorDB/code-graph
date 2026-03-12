@@ -155,7 +155,9 @@ def create_app():
         try:
             answer = ask(data.repo, data.msg)
         except Exception as e:
-            return JSONResponse({"status": "error", "response": str(e)}, status_code=500)
+            logging.error("Chat error for repo '%s': %s", data.repo, e)
+            return JSONResponse({"status": "error", "response": "Internal server error"},
+                                status_code=500)
         return {"status": "success", "response": answer}
 
     @app.post('/api/analyze_folder')

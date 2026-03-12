@@ -191,7 +191,9 @@ def chat(data: ChatRequest, _=Depends(public_or_auth)):
     try:
         answer = ask(data.repo, data.msg)
     except Exception as e:
-        return JSONResponse({"status": "error", "response": str(e)}, status_code=500)
+        logging.error("Chat error for repo '%s': %s", data.repo, e)
+        return JSONResponse({"status": "error", "response": "Internal server error"},
+                            status_code=500)
 
     return {"status": "success", "response": answer}
 
@@ -252,7 +254,10 @@ INDEX_HTML = STATIC_DIR / "index.html"
 @app.get("/{full_path:path}")
 def serve_spa(full_path: str):
     """Serve React SPA — static assets or index.html catch-all."""
-    file = STATIC_DIR / full_path
+    file = (STATIC_DIR / full_path).resolve()
+    # Prevent path traversal outside the static directory
+    if not str(file).startswith(str(STATIC_DIR)):
+        return JSONResponse({"error": "Not found"}, status_code=404)
     if full_path and file.is_file():
         return FileResponse(file)
     if INDEX_HTML.is_file():
