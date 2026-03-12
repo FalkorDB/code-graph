@@ -3,13 +3,11 @@ import pytest
 from pathlib import Path
 from tests.index import create_app
 from api import Project
+from starlette.testclient import TestClient
 
 @pytest.fixture()
 def app():
     app = create_app()
-    app.config.update({
-        "TESTING": True,
-    })
 
     # other setup can go here
 
@@ -21,17 +19,13 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
-
-@pytest.fixture()
-def runner(app):
-    return app.test_cli_runner()
+    return TestClient(app)
 
 def test_list_commits(client):
     # Start with an empty DB
-    response = client.post("/list_commits", json={ "repo": "git_repo" })
-    status   = response.json["status"] 
-    commits  = response.json["commits"]
+    response = client.post("/api/list_commits", json={ "repo": "git_repo" })
+    status   = response.json()["status"] 
+    commits  = response.json()["commits"]
 
     # Expecting an empty response
     assert status == "success"
@@ -47,9 +41,9 @@ def test_list_commits(client):
     proj.process_git_history()
 
     # Reissue list_commits request
-    response = client.post("/list_commits", json={ "repo": "git_repo" })
-    status   = response.json["status"] 
-    commits  = response.json["commits"]
+    response = client.post("/api/list_commits", json={ "repo": "git_repo" })
+    status   = response.json()["status"] 
+    commits  = response.json()["commits"]
 
     expected = [
         {'author': 'Roi Lipman', 'date': 1729068452, 'hash': 'fac1698da4ee14c215316859e68841ae0b0275b0', 'message': 'Initial commit\n'},

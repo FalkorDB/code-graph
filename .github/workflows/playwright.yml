@@ -81,7 +81,7 @@ jobs:
         npx playwright install chromium firefox
         npx playwright install-deps chromium firefox
 
-    - name: Start Flask server
+    - name: Start server
       id: start-server
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -89,9 +89,9 @@ jobs:
         CODE_GRAPH_PUBLIC: "1"
         MODEL_NAME: "openai/gpt-4.1-mini"
       run: |
-        uv run flask --app api/index.py run --host 0.0.0.0 --port 5000 &
+        uv run uvicorn api.index:app --host 0.0.0.0 --port 5000 &
         echo "pid=$!" >> "$GITHUB_OUTPUT"
-        # Wait for Flask to be ready
+        # Wait for server to be ready
         timeout 30 bash -c 'until curl -s http://localhost:5000/ > /dev/null 2>&1; do sleep 0.5; done'
 
     - name: Run Playwright tests
@@ -102,7 +102,7 @@ jobs:
         MODEL_NAME: "openai/gpt-4.1-mini"
       run: npx playwright test --shard=${{ matrix.shard }}/2 --reporter=dot,list
 
-    - name: Stop Flask server
+    - name: Stop server
       if: always()
       run: kill ${{ steps.start-server.outputs.pid }} 2>/dev/null || true
 

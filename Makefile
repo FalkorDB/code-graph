@@ -40,10 +40,10 @@ clean: ## Clean up build and test artifacts
 	find . -name "*.pyo" -delete
 
 run-dev: build-dev ## Run development server (Python backend serving built frontend)
-	uv run flask --app api/index.py run --host $${HOST:-127.0.0.1} --port $${PORT:-5000} --debug
+	uv run uvicorn api.index:app --host $${HOST:-127.0.0.1} --port $${PORT:-5000} --reload
 
 run-prod: build-prod ## Run production server
-	uv run flask --app api/index.py run --host $${HOST:-0.0.0.0} --port $${PORT:-5000}
+	uv run uvicorn api.index:app --host $${HOST:-0.0.0.0} --port $${PORT:-5000}
 
 docker-falkordb: ## Start FalkorDB in Docker for testing
 	docker run -d --name falkordb-test -p 6379:6379 falkordb/falkordb:latest

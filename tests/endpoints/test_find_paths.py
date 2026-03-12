@@ -1,17 +1,14 @@
 import os
 import redis
 import pytest
-from pathlib import Path
 from tests.index import create_app
 from api import Project
-from falkordb import FalkorDB, Path, Node, QueryResult
+from falkordb import FalkorDB
+from starlette.testclient import TestClient
 
 @pytest.fixture()
 def app():
     app = create_app()
-    app.config.update({
-        "TESTING": True,
-    })
 
     # other setup can go here
     redis.Redis().flushall()
@@ -22,15 +19,11 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
-
-@pytest.fixture()
-def runner(app):
-    return app.test_cli_runner()
+    return TestClient(app)
 
 def test_find_paths(client):
     # Start with an empty DB
-    response = client.post("/find_paths", json={"repo": "GraphRAG-SDK", "src": 0, "dest": 0}).json
+    response = client.post("/api/find_paths", json={"repo": "GraphRAG-SDK", "src": 0, "dest": 0}).json()
     status   = response["status"] 
 
     # Expecting an error
@@ -40,15 +33,13 @@ def test_find_paths(client):
     proj = Project.from_git_repository("https://github.com/FalkorDB/GraphRAG-SDK")
     proj.analyze_sources()
 
-    # Re-issue with invalid src node id
-    response = client.post("/find_paths", json={"repo": "GraphRAG-SDK", "src": 'invalid', "dest": 0}).json
-    status   = response["status"]
-    assert status == "src node id must be int"
+    # Re-issue with invalid src node id — Pydantic rejects non-int
+    response = client.post("/api/find_paths", json={"repo": "GraphRAG-SDK", "src": "invalid", "dest": 0})
+    assert response.status_code == 422
 
-    # Re-issue with invalid dest node id
-    response = client.post("/find_paths", json={"repo": "GraphRAG-SDK", "src": 0, "dest": 'invalid'}).json
-    status   = response["status"]
-    assert status == "dest node id must be int"
+    # Re-issue with invalid dest node id — Pydantic rejects non-int
+    response = client.post("/api/find_paths", json={"repo": "GraphRAG-SDK", "src": 0, "dest": "invalid"})
+    assert response.status_code == 422
 
     # Find src and dest nodes that are at least 3 hops apart
     db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
@@ -65,10 +56,10 @@ def test_find_paths(client):
     dest_id    = result_set[0][1]
 
     # Re-issue with none existing node id
-    response = client.post("/find_paths", json={
+    response = client.post("/api/find_paths", json={
         "repo": "GraphRAG-SDK",
         "src": src_id,
-        "dest": dest_id}).json
+        "dest": dest_id}).json()
 
     status = response["status"]
     paths  = response["paths"]

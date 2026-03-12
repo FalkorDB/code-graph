@@ -1,15 +1,12 @@
 import redis
 import pytest
-from pathlib import Path
 from tests.index import create_app
 from api import Project
+from starlette.testclient import TestClient
 
 @pytest.fixture()
 def app():
     app = create_app()
-    app.config.update({
-        "TESTING": True,
-    })
 
     # other setup can go here
 
@@ -21,16 +18,12 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
-
-@pytest.fixture()
-def runner(app):
-    return app.test_cli_runner()
+    return TestClient(app)
 
 def test_repo_info(client):
     # Start with an empty DB
-    response = client.post("/repo_info", json={ "repo": "GraphRAG-SDK" })
-    status   = response.json["status"] 
+    response = client.post("/api/repo_info", json={ "repo": "GraphRAG-SDK" })
+    status   = response.json()["status"] 
 
     # Expecting an empty response
     assert status == "Missing repository \"GraphRAG-SDK\""
@@ -41,9 +34,9 @@ def test_repo_info(client):
     proj.process_git_history()
 
     # Reissue list_commits request
-    response = client.post("/repo_info", json={ "repo": "GraphRAG-SDK" })
-    status   = response.json["status"] 
-    info     = response.json["info"]
+    response = client.post("/api/repo_info", json={ "repo": "GraphRAG-SDK" })
+    status   = response.json()["status"] 
+    info     = response.json()["info"]
 
     # Expecting an empty response
     assert status == "success"
