@@ -3,5 +3,9 @@
   "private": true,
   "devDependencies": {
     "@playwright/test": "^1.58.2"
+  },
+  "dependencies": {
+    "typescript": "^5.5.4",
+    "typescript-language-server": "^4.3.3"
   }
 }

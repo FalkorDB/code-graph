@@ -11,6 +11,7 @@ from .analyzer import AbstractAnalyzer
 from .java.analyzer import JavaAnalyzer
 from .python.analyzer import PythonAnalyzer
 from .csharp.analyzer import CSharpAnalyzer
+from .typescript.analyzer import TypeScriptAnalyzer
 
 from multilspy import SyncLanguageServer
 from multilspy.multilspy_config import MultilspyConfig
@@ -21,12 +22,16 @@ import logging
 logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
 # List of available analyzers
+_ts_analyzer = TypeScriptAnalyzer()
+
 analyzers: dict[str, AbstractAnalyzer] = {
     # '.c': CAnalyzer(),
     # '.h': CAnalyzer(),
     '.py': PythonAnalyzer(),
     '.java': JavaAnalyzer(),
-    '.cs': CSharpAnalyzer()}
+    '.cs': CSharpAnalyzer(),
+    '.ts': _ts_analyzer,
+    '.tsx': _ts_analyzer}
 
 class NullLanguageServer:
     def start_server(self):
@@ -143,7 +148,19 @@ class SourceAnalyzer():
             lsps[".cs"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".cs"] = NullLanguageServer()
-        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server():
+        if any(path.rglob('*.ts')) or any(path.rglob('*.tsx')):
+            try:
+                config = MultilspyConfig.from_dict({"code_language": "typescript"})
+                ts_lsp = SyncLanguageServer.create(config, logger, str(path))
+            except Exception:
+                logging.warning("TypeScript language server not available, symbol resolution will be skipped for TS/TSX files")
+                ts_lsp = NullLanguageServer()
+            lsps[".ts"] = ts_lsp
+            lsps[".tsx"] = ts_lsp
+        else:
+            lsps[".ts"] = NullLanguageServer()
+            lsps[".tsx"] = NullLanguageServer()
+        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".ts"].start_server():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
                 file = self.files[file_path]
@@ -174,7 +191,7 @@ class SourceAnalyzer():
 
     def analyze_sources(self, path: Path, ignore: list[str], graph: Graph) -> None:
         path = path.resolve()
-        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs"))
+        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + list(path.rglob("*.ts")) + list(path.rglob("*.tsx"))
         # First pass analysis of the source code
         self.first_pass(path, files, ignore, graph)
 
