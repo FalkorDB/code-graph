@@ -142,11 +142,14 @@ def create_app():
     async def repo_info(data: RepoRequest, _=Depends(token_required)):
         g = AsyncGraphQuery(data.repo)
         try:
+            if not await g.graph_exists():
+                return JSONResponse({"status": f'Missing repository "{data.repo}"'}, status_code=400)
+
             stats = await g.stats()
         finally:
             await g.close()
         info = await async_get_repo_info(data.repo)
-        if stats is None or info is None:
+        if info is None:
             return JSONResponse({"status": f'Missing repository "{data.repo}"'}, status_code=400)
         stats |= info
         return {"status": "success", "info": stats}

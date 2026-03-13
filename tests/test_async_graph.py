@@ -82,6 +82,7 @@ async def test_async_get_repos_empty():
         repos = await async_get_repos()
 
     assert repos == []
+    mock_db.aclose.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
