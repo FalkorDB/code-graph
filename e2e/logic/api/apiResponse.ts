@@ -3,80 +3,71 @@ export interface createProjectResponse {
 }
 
 export interface getProjectResponse {
-    result: {
-        entities: {
-            edges: {
-                alias: string;
-                dest_node: number;
-                id: number;
-                properties: Record<string, unknown>;
-                relation: string;
-                src_node: number;
-            }[];
-            nodes: {
-                alias: string;
-                id: number;
-                labels: string[];
-                properties: {
-                    ext?: string;
-                    name: string;
-                    path: string;
-                    src: string;
-                    doc?: string;
-                    src_end?: number;
-                    src_start?: number;
-                };
-            }[];
-        };
-        status: string;
+    entities: {
+        edges: {
+            alias: string;
+            dest_node: number;
+            id: number;
+            properties: Record<string, unknown>;
+            relation: string;
+            src_node: number;
+        }[];
+        nodes: {
+            alias: string;
+            id: number;
+            labels: string[];
+            properties: {
+                ext?: string;
+                name: string;
+                path: string;
+                src: string;
+                doc?: string;
+                src_end?: number;
+                src_start?: number;
+            };
+        }[];
     };
+    status: string;
 }
 
 export interface fetchLatestRepoInfo {
-    result: {
-        info: {
-            commit: string;
-            edge_count: number;
-            node_count: number;
-            repo_url: string;
-        };
-        status: string;
+    info: {
+        commit: string;
+        edge_count: number;
+        node_count: number;
+        repo_url: string;
     };
+    status: string;
 }
 
 
 export interface showPathResponse {
-    result: {
-        paths: Array<Array<{
-            alias: string;
-            id: number;
-            labels?: string[];
-            properties: {
-                args?: [string, string][];
-                name: string;
-                path: string;
-                src?: string;
-                src_end?: number;
-                src_start?: number;
-            };
-            dest_node?: number;
-            relation?: string;
-            src_node?: number;
-        }>>;
-        status: string;
-    };
+    paths: Array<Array<{
+        alias: string;
+        id: number;
+        labels?: string[];
+        properties: {
+            args?: [string, string][];
+            name: string;
+            path: string;
+            src?: string;
+            src_end?: number;
+            src_start?: number;
+        };
+        dest_node?: number;
+        relation?: string;
+        src_node?: number;
+    }>>;
+    status: string;
 }
 
-export interface askQuestionResponse{
-    result: {
-        response: string;
-        status: string;
-    }
+export interface askQuestionResponse {
+    response: string;
+    status: string;
 }
 
 export interface searchAutoCompleteResponse {
-    result: {
-      completions: {
+    completions: {
         alias: string;
         id: number;
         labels: string[];
@@ -87,14 +78,12 @@ export interface searchAutoCompleteResponse {
           src_end: number;
           src_start: number;
         };
-      }[];
-      status: string;
-    };
-  }
+    }[];
+    status: string;
+}
 
-  export interface getNodeNeighborsResponse {
-    result: {
-      neighbors: {
+export interface getNodeNeighborsResponse {
+    neighbors: {
         edges: {
           alias: string;
           dest_node: number;
@@ -118,10 +107,8 @@ export interface searchAutoCompleteResponse {
             src_start: number;
           };
         }[];
-      };
-      status: string;
     };
-  }
-  
-  
+    status: string;
+}
+
 

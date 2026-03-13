@@ -14,4 +14,24 @@ updates:
       npm-minor-patch:
         update-types:
           - "patch"
-      
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "staging"
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - "patch"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "staging"
+    groups:
+      pip-minor-patch:
+        update-types:
+          - "patch"
+
