@@ -581,7 +581,7 @@ class Graph():
             nodes = p.nodes()
             edges = p.edges()
 
-            for n, e in zip(nodes, edges):
+            for n, e in zip(nodes, edges, strict=True):
                 path.append(encode_node(n))
                 path.append(encode_edge(e))
 
