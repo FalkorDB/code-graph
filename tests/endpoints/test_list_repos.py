@@ -3,7 +3,6 @@ import pytest
 import api.index
 from pathlib import Path
 from tests.index import create_app
-from api.index import app as production_app
 from api import Project
 from starlette.testclient import TestClient
 
@@ -55,7 +54,7 @@ def test_list_repos_with_auth(monkeypatch):
     """Authenticated request succeeds when SECRET_TOKEN is set."""
     monkeypatch.setattr(api.index, "SECRET_TOKEN", "test-secret")
     monkeypatch.delenv("CODE_GRAPH_PUBLIC", raising=False)
-    client = TestClient(production_app, raise_server_exceptions=False)
+    client = TestClient(api.index.app, raise_server_exceptions=False)
     response = client.get("/api/list_repos",
                           headers={"Authorization": "Bearer test-secret"})
     # Auth passed (not 401); endpoint may error without a database backend
@@ -66,6 +65,6 @@ def test_list_repos_unauthorized(monkeypatch):
     """Request without auth gets 401 when SECRET_TOKEN is set."""
     monkeypatch.setattr(api.index, "SECRET_TOKEN", "test-secret")
     monkeypatch.delenv("CODE_GRAPH_PUBLIC", raising=False)
-    client = TestClient(production_app)
+    client = TestClient(api.index.app)
     response = client.get("/api/list_repos")
     assert response.status_code == 401
