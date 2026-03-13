@@ -3,6 +3,7 @@ import time
 from .entities import *
 from typing import Optional
 from falkordb import FalkorDB, Path, Node, QueryResult
+from falkordb.asyncio import FalkorDB as AsyncFalkorDB
 
 # Configure the logger
 import logging
@@ -626,4 +627,139 @@ class Graph():
             unreachables.append(encode_node(node))
 
         return unreachables
+
+
+# ---------------------------------------------------------------------------
+# Async helpers and read-only async graph wrapper
+# ---------------------------------------------------------------------------
+
+def _async_db() -> AsyncFalkorDB:
+    """Create an async FalkorDB connection using environment config."""
+    return AsyncFalkorDB(
+        host=os.getenv('FALKORDB_HOST', 'localhost'),
+        port=int(os.getenv('FALKORDB_PORT', 6379)),
+        username=os.getenv('FALKORDB_USERNAME', None),
+        password=os.getenv('FALKORDB_PASSWORD', None),
+    )
+
+
+async def async_graph_exists(name: str) -> bool:
+    db = _async_db()
+    try:
+        graphs = await db.list_graphs()
+        return name in graphs
+    finally:
+        await db.aclose()
+
+
+async def async_get_repos() -> list[str]:
+    """List processed repositories (async version)."""
+    db = _async_db()
+    try:
+        graphs = await db.list_graphs()
+        return [g for g in graphs if not (g.endswith('_git') or g.endswith('_schema'))]
+    finally:
+        await db.aclose()
+
+
+class AsyncGraphQuery:
+    """Read-only async wrapper for endpoint use.
+
+    Uses falkordb.asyncio under the hood.  No index creation or backlog —
+    indexes already exist from the sync Graph used during analysis.
+    """
+
+    def __init__(self, name: str) -> None:
+        self.db = _async_db()
+        self.g = self.db.select_graph(name)
+
+    async def _query(self, q: str, params: Optional[dict] = None):
+        return await self.g.query(q, params)
+
+    async def get_sub_graph(self, l: int) -> dict:
+        q = """MATCH (src)
+               OPTIONAL MATCH (src)-[e]->(dest)
+               RETURN src, e, dest
+               LIMIT $limit"""
+
+        sub_graph = {'nodes': [], 'edges': []}
+        result_set = (await self._query(q, {'limit': l})).result_set
+        for row in result_set:
+            src  = row[0]
+            e    = row[1]
+            dest = row[2]
+            sub_graph['nodes'].append(encode_node(src))
+            if e is not None:
+                sub_graph['edges'].append(encode_edge(e))
+                sub_graph['nodes'].append(encode_node(dest))
+        return sub_graph
+
+    async def get_neighbors(self, node_ids: list[int], rel: Optional[str] = None, lbl: Optional[str] = None) -> dict:
+        if not all(isinstance(node_id, int) for node_id in node_ids):
+            raise ValueError("node_ids must be an integer list")
+
+        rel_query = f":{rel}" if rel else ""
+        lbl_query = f":{lbl}" if lbl else ""
+
+        query = f"""
+            MATCH (n)-[e{rel_query}]->(dest{lbl_query})
+            WHERE ID(n) IN $node_ids
+            RETURN e, dest
+        """
+
+        neighbors = {'nodes': [], 'edges': []}
+        try:
+            result_set = (await self._query(query, {'node_ids': node_ids})).result_set
+            for edge, destination_node in result_set:
+                neighbors['nodes'].append(encode_node(destination_node))
+                neighbors['edges'].append(encode_edge(edge))
+            return neighbors
+        except Exception as e:
+            logging.error(f"Error fetching neighbors for node {node_ids}: {e}")
+            return {'nodes': [], 'edges': []}
+
+    async def prefix_search(self, prefix: str) -> list:
+        search_prefix = f"{prefix}*"
+        query = """
+            CALL db.idx.fulltext.queryNodes('Searchable', $prefix)
+            YIELD node
+            WITH node
+            RETURN node
+            LIMIT 10
+        """
+        result_set = (await self._query(query, {'prefix': search_prefix})).result_set
+        return [encode_node(row[0]) for row in result_set]
+
+    async def find_paths(self, src: int, dest: int) -> list:
+        q = """MATCH (src), (dest)
+               WHERE ID(src) = $src_id AND ID(dest) = $dest_id
+               WITH src, dest
+               MATCH p = (src)-[:CALLS*]->(dest)
+               RETURN p
+           """
+        result_set = (await self._query(q, {'src_id': src, 'dest_id': dest})).result_set
+        paths = []
+        for row in result_set:
+            path  = []
+            p     = row[0]
+            nodes = p.nodes()
+            edges = p.edges()
+            for n, e in zip(nodes, edges):
+                path.append(encode_node(n))
+                path.append(encode_edge(e))
+            path.append(encode_node(nodes[-1]))
+            paths.append(path)
+        return paths
+
+    async def stats(self) -> dict:
+        q = "MATCH (n) RETURN count(n)"
+        node_count = (await self._query(q)).result_set[0][0]
+
+        q = "MATCH ()-[e]->() RETURN count(e)"
+        edge_count = (await self._query(q)).result_set[0][0]
+
+        return {'node_count': node_count, 'edge_count': edge_count}
+
+    async def close(self) -> None:
+        await self.db.aclose()
 

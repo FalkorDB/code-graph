@@ -54,7 +54,11 @@ def test_list_repos_with_auth(monkeypatch):
     """Authenticated request succeeds when SECRET_TOKEN is set."""
     monkeypatch.setattr(api.index, "SECRET_TOKEN", "test-secret")
     monkeypatch.delenv("CODE_GRAPH_PUBLIC", raising=False)
-    monkeypatch.setattr(api.index, "get_repos", lambda: ["fake-repo"])
+
+    async def _fake_get_repos():
+        return ["fake-repo"]
+
+    monkeypatch.setattr(api.index, "async_get_repos", _fake_get_repos)
     client = TestClient(api.index.app)
     response = client.get("/api/list_repos",
                           headers={"Authorization": "Bearer test-secret"})

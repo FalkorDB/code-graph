@@ -1,16 +1,17 @@
 import os
+import asyncio
 import logging
 from pathlib import Path
 
-from api.graph import Graph, get_repos, graph_exists
-from api.info import get_repo_info
+from api.graph import Graph, get_repos, graph_exists, AsyncGraphQuery, async_get_repos, async_graph_exists
+from api.info import get_repo_info, async_get_repo_info
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from api.project import Project
-from api.auto_complete import prefix_search
+from api.auto_complete import prefix_search, async_prefix_search
 from api.git_utils import git_utils
 
 # Load environment variables from .env file
@@ -86,18 +87,21 @@ def create_app():
     app = FastAPI()
 
     @app.get('/api/graph_entities')
-    def graph_entities(repo: str = Query(None), _=Depends(token_required)):
+    async def graph_entities(repo: str = Query(None), _=Depends(token_required)):
         if not repo:
             logging.error("Missing 'repo' parameter in request.")
             return JSONResponse({"status": "Missing 'repo' parameter"}, status_code=400)
 
-        if not graph_exists(repo):
+        if not await async_graph_exists(repo):
             logging.error("Missing project %s", repo)
             return JSONResponse({"status": f"Missing project {repo}"}, status_code=400)
 
         try:
-            g = Graph(repo)
-            sub_graph = g.get_sub_graph(500)
+            g = AsyncGraphQuery(repo)
+            try:
+                sub_graph = await g.get_sub_graph(500)
+            finally:
+                await g.close()
             logging.info("Successfully retrieved sub-graph for repo: %s", repo)
             return {"status": "success", "entities": sub_graph}
         except Exception as e:
@@ -105,55 +109,64 @@ def create_app():
             return JSONResponse({"status": "Internal server error"}, status_code=500)
 
     @app.post('/api/get_neighbors')
-    def get_neighbors(data: NeighborsRequest, _=Depends(token_required)):
-        if not graph_exists(data.repo):
+    async def get_neighbors(data: NeighborsRequest, _=Depends(token_required)):
+        if not await async_graph_exists(data.repo):
             logging.error("Missing project %s", data.repo)
             return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
 
-        g = Graph(data.repo)
-        neighbors = g.get_neighbors(data.node_ids)
+        g = AsyncGraphQuery(data.repo)
+        try:
+            neighbors = await g.get_neighbors(data.node_ids)
+        finally:
+            await g.close()
         logging.info("Successfully retrieved neighbors for node IDs %s in repo '%s'.",
                      data.node_ids, data.repo)
         return {"status": "success", "neighbors": neighbors}
 
     @app.post('/api/auto_complete')
-    def auto_complete(data: AutoCompleteRequest, _=Depends(token_required)):
-        if not graph_exists(data.repo):
+    async def auto_complete(data: AutoCompleteRequest, _=Depends(token_required)):
+        if not await async_graph_exists(data.repo):
             return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
 
-        completions = prefix_search(data.repo, data.prefix)
+        completions = await async_prefix_search(data.repo, data.prefix)
         return {"status": "success", "completions": completions}
 
     @app.get('/api/list_repos')
-    def list_repos(_=Depends(token_required)):
-        repos = get_repos()
+    async def list_repos(_=Depends(token_required)):
+        repos = await async_get_repos()
         return {"status": "success", "repositories": repos}
 
     @app.post('/api/repo_info')
-    def repo_info(data: RepoRequest, _=Depends(token_required)):
-        g = Graph(data.repo)
-        stats = g.stats()
-        info = get_repo_info(data.repo)
+    async def repo_info(data: RepoRequest, _=Depends(token_required)):
+        g = AsyncGraphQuery(data.repo)
+        try:
+            stats = await g.stats()
+        finally:
+            await g.close()
+        info = await async_get_repo_info(data.repo)
         if stats is None or info is None:
             return JSONResponse({"status": f'Missing repository "{data.repo}"'}, status_code=400)
         stats |= info
         return {"status": "success", "info": stats}
 
     @app.post('/api/find_paths')
-    def find_paths(data: FindPathsRequest, _=Depends(token_required)):
-        if not graph_exists(data.repo):
+    async def find_paths(data: FindPathsRequest, _=Depends(token_required)):
+        if not await async_graph_exists(data.repo):
             logging.error("Missing project %s", data.repo)
             return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
 
-        g = Graph(data.repo)
-        paths = g.find_paths(data.src, data.dest)
+        g = AsyncGraphQuery(data.repo)
+        try:
+            paths = await g.find_paths(data.src, data.dest)
+        finally:
+            await g.close()
         return {"status": "success", "paths": paths}
 
     @app.post('/api/chat')
-    def chat(data: ChatRequest, _=Depends(token_required)):
+    async def chat(data: ChatRequest, _=Depends(token_required)):
         from api.llm import ask
         try:
-            answer = ask(data.repo, data.msg)
+            answer = await ask(data.repo, data.msg)
         except Exception as e:
             logging.exception("Chat error for repo '%s': %s", data.repo, e)
             return JSONResponse({"status": "error", "response": "Internal server error"},
@@ -161,7 +174,7 @@ def create_app():
         return {"status": "success", "response": answer}
 
     @app.post('/api/analyze_folder')
-    def analyze_folder(data: AnalyzeFolderRequest, _=Depends(token_required)):
+    async def analyze_folder(data: AnalyzeFolderRequest, _=Depends(token_required)):
         resolved_path = Path(data.path).resolve()
 
         if not resolved_path.is_relative_to(ALLOWED_ANALYSIS_DIR):
@@ -177,29 +190,43 @@ def create_app():
 
         from api.analyzers.source_analyzer import SourceAnalyzer
         proj_name = resolved_path.name
-        g = Graph(proj_name)
-        analyzer = SourceAnalyzer()
-        analyzer.analyze_local_folder(str(resolved_path), g, data.ignore)
+
+        def _analyze():
+            g = Graph(proj_name)
+            analyzer = SourceAnalyzer()
+            analyzer.analyze_local_folder(str(resolved_path), g, data.ignore)
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _analyze)
         return {"status": "success", "project": proj_name}
 
     @app.post('/api/analyze_repo')
-    def analyze_repo(data: AnalyzeRepoRequest, _=Depends(token_required)):
+    async def analyze_repo(data: AnalyzeRepoRequest, _=Depends(token_required)):
         logger.debug('Received repo_url: %s', data.repo_url)
-        proj = Project.from_git_repository(data.repo_url)
-        proj.analyze_sources(data.ignore)
-        proj.process_git_history(data.ignore)
+
+        def _analyze():
+            proj = Project.from_git_repository(data.repo_url)
+            proj.analyze_sources(data.ignore)
+            proj.process_git_history(data.ignore)
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _analyze)
         return {"status": "success"}
 
     @app.post('/api/switch_commit')
-    def switch_commit(data: SwitchCommitRequest, _=Depends(token_required)):
-        git_utils.switch_commit(data.repo, data.commit)
+    async def switch_commit(data: SwitchCommitRequest, _=Depends(token_required)):
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, git_utils.switch_commit, data.repo, data.commit)
         return {"status": "success"}
 
     @app.post('/api/list_commits')
-    def list_commits(data: RepoRequest, _=Depends(token_required)):
-        from api.git_utils.git_graph import GitGraph
-        git_graph = GitGraph(git_utils.GitRepoName(data.repo))
-        commits = git_graph.list_commits()
+    async def list_commits(data: RepoRequest, _=Depends(token_required)):
+        from api.git_utils.git_graph import AsyncGitGraph
+        git_graph = AsyncGitGraph(git_utils.GitRepoName(data.repo))
+        try:
+            commits = await git_graph.list_commits()
+        finally:
+            await git_graph.close()
         return {"status": "success", "commits": commits}
 
     return app
