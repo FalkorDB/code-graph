@@ -168,7 +168,7 @@ class GitGraph():
                WITH path
                LIMIT 1
                UNWIND relationships(path) AS e
-               With e
+               WITH e
                WHERE e.queries is not NULL
                RETURN collect(e.queries), collect(e.params)
         """

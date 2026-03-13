@@ -269,5 +269,5 @@ def _ask_sync(repo_name: str, question: str) -> str:
 
 
 async def ask(repo_name: str, question: str) -> str:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _ask_sync, repo_name, question)

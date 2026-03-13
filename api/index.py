@@ -3,7 +3,6 @@ import os
 import asyncio
 import logging
 from pathlib import Path
-from functools import partial
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -242,7 +241,7 @@ async def analyze_folder(data: AnalyzeFolderRequest, _=Depends(token_required)):
         analyzer = SourceAnalyzer()
         analyzer.analyze_local_folder(str(resolved_path), g, data.ignore)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _analyze)
 
     return {"status": "success", "project": proj_name}
@@ -259,7 +258,7 @@ async def analyze_repo(data: AnalyzeRepoRequest, _=Depends(token_required)):
         proj.analyze_sources(data.ignore)
         proj.process_git_history(data.ignore)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _analyze)
 
     return {"status": "success"}
@@ -269,7 +268,7 @@ async def analyze_repo(data: AnalyzeRepoRequest, _=Depends(token_required)):
 async def switch_commit(data: SwitchCommitRequest, _=Depends(token_required)):
     """Switch a repository to a specific commit. Always requires a valid token."""
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, git_utils.switch_commit, data.repo, data.commit)
     return {"status": "success"}
 

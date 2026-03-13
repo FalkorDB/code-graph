@@ -676,14 +676,14 @@ class AsyncGraphQuery:
     async def _query(self, q: str, params: Optional[dict] = None):
         return await self.g.query(q, params)
 
-    async def get_sub_graph(self, l: int) -> dict:
+    async def get_sub_graph(self, limit: int) -> dict:
         q = """MATCH (src)
                OPTIONAL MATCH (src)-[e]->(dest)
                RETURN src, e, dest
                LIMIT $limit"""
 
         sub_graph = {'nodes': [], 'edges': []}
-        result_set = (await self._query(q, {'limit': l})).result_set
+        result_set = (await self._query(q, {'limit': limit})).result_set
         for row in result_set:
             src  = row[0]
             e    = row[1]
@@ -744,7 +744,7 @@ class AsyncGraphQuery:
             p     = row[0]
             nodes = p.nodes()
             edges = p.edges()
-            for n, e in zip(nodes, edges):
+            for n, e in zip(nodes, edges, strict=True):
                 path.append(encode_node(n))
                 path.append(encode_edge(e))
             path.append(encode_node(nodes[-1]))

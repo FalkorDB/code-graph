@@ -196,7 +196,7 @@ def create_app():
             analyzer = SourceAnalyzer()
             analyzer.analyze_local_folder(str(resolved_path), g, data.ignore)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _analyze)
         return {"status": "success", "project": proj_name}
 
@@ -209,13 +209,13 @@ def create_app():
             proj.analyze_sources(data.ignore)
             proj.process_git_history(data.ignore)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _analyze)
         return {"status": "success"}
 
     @app.post('/api/switch_commit')
     async def switch_commit(data: SwitchCommitRequest, _=Depends(token_required)):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, git_utils.switch_commit, data.repo, data.commit)
         return {"status": "success"}
 
