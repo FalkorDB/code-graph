@@ -12,11 +12,11 @@ from pydantic import BaseModel
 from api.analyzers.source_analyzer import SourceAnalyzer
 from api.git_utils import git_utils
 from api.git_utils.git_graph import AsyncGitGraph
-from api.graph import Graph, AsyncGraphQuery, async_get_repos, async_graph_exists
+from api.graph import Graph, AsyncGraphQuery, async_get_repos
 from api.info import async_get_repo_info
 from api.llm import ask
 from api.project import Project
-from .auto_complete import async_prefix_search
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -112,16 +112,13 @@ async def graph_entities(repo: str = Query(None), _=Depends(public_or_auth)):
         logging.error("Missing 'repo' parameter in request.")
         return JSONResponse({"status": "Missing 'repo' parameter"}, status_code=400)
 
-    if not await async_graph_exists(repo):
-        logging.error("Missing project %s", repo)
-        return JSONResponse({"status": f"Missing project {repo}"}, status_code=400)
-
+    g = AsyncGraphQuery(repo)
     try:
-        g = AsyncGraphQuery(repo)
-        try:
-            sub_graph = await g.get_sub_graph(500)
-        finally:
-            await g.close()
+        if not await g.graph_exists():
+            logging.error("Missing project %s", repo)
+            return JSONResponse({"status": f"Missing project {repo}"}, status_code=400)
+
+        sub_graph = await g.get_sub_graph(500)
 
         logging.info("Successfully retrieved sub-graph for repo: %s", repo)
         return {"status": "success", "entities": sub_graph}
@@ -129,18 +126,20 @@ async def graph_entities(repo: str = Query(None), _=Depends(public_or_auth)):
     except Exception as e:
         logging.exception("Error retrieving sub-graph for repo '%s': %s", repo, e)
         return JSONResponse({"status": "Internal server error"}, status_code=500)
+    finally:
+        await g.close()
 
 
 @app.post('/api/get_neighbors')
 async def get_neighbors(data: NeighborsRequest, _=Depends(public_or_auth)):
     """Get neighbors of a nodes list in the graph."""
 
-    if not await async_graph_exists(data.repo):
-        logging.error("Missing project %s", data.repo)
-        return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
-
     g = AsyncGraphQuery(data.repo)
     try:
+        if not await g.graph_exists():
+            logging.error("Missing project %s", data.repo)
+            return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
+
         neighbors = await g.get_neighbors(data.node_ids)
     finally:
         await g.close()
@@ -154,10 +153,14 @@ async def get_neighbors(data: NeighborsRequest, _=Depends(public_or_auth)):
 async def auto_complete(data: AutoCompleteRequest, _=Depends(public_or_auth)):
     """Process auto-completion requests for a repository based on a prefix."""
 
-    if not await async_graph_exists(data.repo):
-        return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
+    g = AsyncGraphQuery(data.repo)
+    try:
+        if not await g.graph_exists():
+            return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
 
-    completions = await async_prefix_search(data.repo, data.prefix)
+        completions = await g.prefix_search(data.prefix)
+    finally:
+        await g.close()
     return {"status": "success", "completions": completions}
 
 
@@ -191,12 +194,12 @@ async def repo_info(data: RepoRequest, _=Depends(public_or_auth)):
 async def find_paths(data: FindPathsRequest, _=Depends(public_or_auth)):
     """Find all paths between a source and destination node in the graph."""
 
-    if not await async_graph_exists(data.repo):
-        logging.error("Missing project %s", data.repo)
-        return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
-
     g = AsyncGraphQuery(data.repo)
     try:
+        if not await g.graph_exists():
+            logging.error("Missing project %s", data.repo)
+            return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
+
         paths = await g.find_paths(data.src, data.dest)
     finally:
         await g.close()
@@ -291,7 +294,7 @@ async def list_commits(data: RepoRequest, _=Depends(public_or_auth)):
 INDEX_HTML = STATIC_DIR / "index.html"
 
 @app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
+def serve_spa(full_path: str):
     """Serve React SPA — static assets or index.html catch-all."""
     file = (STATIC_DIR / full_path).resolve()
     if not file.is_relative_to(STATIC_DIR):

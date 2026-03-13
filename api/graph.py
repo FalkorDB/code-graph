@@ -581,7 +581,7 @@ class Graph():
             nodes = p.nodes()
             edges = p.edges()
 
-            for n, e in zip(nodes, edges, strict=True):
+            for n, e in zip(nodes, edges):
                 path.append(encode_node(n))
                 path.append(encode_edge(e))
 
@@ -670,8 +670,14 @@ class AsyncGraphQuery:
     """
 
     def __init__(self, name: str) -> None:
+        self.name = name
         self.db = _async_db()
         self.g = self.db.select_graph(name)
+
+    async def graph_exists(self) -> bool:
+        """Check if this graph exists, reusing the current connection."""
+        graphs = await self.db.list_graphs()
+        return self.name in graphs
 
     async def _query(self, q: str, params: Optional[dict] = None):
         return await self.g.query(q, params)
@@ -744,7 +750,7 @@ class AsyncGraphQuery:
             p     = row[0]
             nodes = p.nodes()
             edges = p.edges()
-            for n, e in zip(nodes, edges, strict=True):
+            for n, e in zip(nodes, edges):
                 path.append(encode_node(n))
                 path.append(encode_edge(e))
             path.append(encode_node(nodes[-1]))

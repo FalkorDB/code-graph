@@ -3,7 +3,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from api.graph import Graph, AsyncGraphQuery, async_get_repos, async_graph_exists
+from api.graph import Graph, AsyncGraphQuery, async_get_repos
 from api.info import async_get_repo_info
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from api.project import Project
-from api.auto_complete import async_prefix_search
 from api.git_utils import git_utils
 
 # Load environment variables from .env file
@@ -92,30 +91,29 @@ def create_app():
             logging.error("Missing 'repo' parameter in request.")
             return JSONResponse({"status": "Missing 'repo' parameter"}, status_code=400)
 
-        if not await async_graph_exists(repo):
-            logging.error("Missing project %s", repo)
-            return JSONResponse({"status": f"Missing project {repo}"}, status_code=400)
-
+        g = AsyncGraphQuery(repo)
         try:
-            g = AsyncGraphQuery(repo)
-            try:
-                sub_graph = await g.get_sub_graph(500)
-            finally:
-                await g.close()
+            if not await g.graph_exists():
+                logging.error("Missing project %s", repo)
+                return JSONResponse({"status": f"Missing project {repo}"}, status_code=400)
+
+            sub_graph = await g.get_sub_graph(500)
             logging.info("Successfully retrieved sub-graph for repo: %s", repo)
             return {"status": "success", "entities": sub_graph}
         except Exception as e:
             logging.error("Error retrieving sub-graph for repo '%s': %s", repo, e)
             return JSONResponse({"status": "Internal server error"}, status_code=500)
+        finally:
+            await g.close()
 
     @app.post('/api/get_neighbors')
     async def get_neighbors(data: NeighborsRequest, _=Depends(token_required)):
-        if not await async_graph_exists(data.repo):
-            logging.error("Missing project %s", data.repo)
-            return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
-
         g = AsyncGraphQuery(data.repo)
         try:
+            if not await g.graph_exists():
+                logging.error("Missing project %s", data.repo)
+                return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
+
             neighbors = await g.get_neighbors(data.node_ids)
         finally:
             await g.close()
@@ -125,10 +123,14 @@ def create_app():
 
     @app.post('/api/auto_complete')
     async def auto_complete(data: AutoCompleteRequest, _=Depends(token_required)):
-        if not await async_graph_exists(data.repo):
-            return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
+        g = AsyncGraphQuery(data.repo)
+        try:
+            if not await g.graph_exists():
+                return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
 
-        completions = await async_prefix_search(data.repo, data.prefix)
+            completions = await g.prefix_search(data.prefix)
+        finally:
+            await g.close()
         return {"status": "success", "completions": completions}
 
     @app.get('/api/list_repos')
@@ -151,12 +153,12 @@ def create_app():
 
     @app.post('/api/find_paths')
     async def find_paths(data: FindPathsRequest, _=Depends(token_required)):
-        if not await async_graph_exists(data.repo):
-            logging.error("Missing project %s", data.repo)
-            return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
-
         g = AsyncGraphQuery(data.repo)
         try:
+            if not await g.graph_exists():
+                logging.error("Missing project %s", data.repo)
+                return JSONResponse({"status": f"Missing project {data.repo}"}, status_code=400)
+
             paths = await g.find_paths(data.src, data.dest)
         finally:
             await g.close()
