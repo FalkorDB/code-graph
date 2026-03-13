@@ -1,15 +1,14 @@
 import redis
 import pytest
+import api.index
 from pathlib import Path
 from tests.index import create_app
 from api import Project
+from starlette.testclient import TestClient
 
 @pytest.fixture()
 def app():
     app = create_app()
-    app.config.update({
-        "TESTING": True,
-    })
 
     # other setup can go here
     redis.Redis().flushall()
@@ -20,16 +19,12 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
-
-@pytest.fixture()
-def runner(app):
-    return app.test_cli_runner()
+    return TestClient(app)
 
 def test_list_repos(client):
     # Start with an empty DB
-    response     = client.get("/list_repos").json
-    status       = response["status"] 
+    response     = client.get("/api/list_repos").json()
+    status       = response["status"]
     repositories = response["repositories"]
 
     # Expecting an empty response
@@ -46,10 +41,33 @@ def test_list_repos(client):
     proj.process_git_history()
 
     # Reissue list_repos request
-    response     = client.get("/list_repos").json
+    response     = client.get("/api/list_repos").json()
     status       = response["status"] 
     repositories = response["repositories"]
 
     # Expecting an empty response
     assert status == "success"
     assert repositories == ['git_repo']
+
+
+def test_list_repos_with_auth(monkeypatch):
+    """Authenticated request succeeds when SECRET_TOKEN is set."""
+    monkeypatch.setattr(api.index, "SECRET_TOKEN", "test-secret")
+    monkeypatch.delenv("CODE_GRAPH_PUBLIC", raising=False)
+    monkeypatch.setattr(api.index, "get_repos", lambda: ["fake-repo"])
+    client = TestClient(api.index.app)
+    response = client.get("/api/list_repos",
+                          headers={"Authorization": "Bearer test-secret"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["repositories"] == ["fake-repo"]
+
+
+def test_list_repos_unauthorized(monkeypatch):
+    """Request without auth gets 401 when SECRET_TOKEN is set."""
+    monkeypatch.setattr(api.index, "SECRET_TOKEN", "test-secret")
+    monkeypatch.delenv("CODE_GRAPH_PUBLIC", raising=False)
+    client = TestClient(api.index.app)
+    response = client.get("/api/list_repos")
+    assert response.status_code == 401
