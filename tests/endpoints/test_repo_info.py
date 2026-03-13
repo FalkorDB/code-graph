@@ -1,23 +1,13 @@
 import redis
 import pytest
-from tests.index import create_app
+import api.index
+from api.index import app
 from api import Project
 from starlette.testclient import TestClient
 
 @pytest.fixture()
-def app():
-    app = create_app()
-
-    # other setup can go here
-
+def client():
     redis.Redis().flushall()
-
-    yield app
-
-    # clean up / reset resources here
-
-@pytest.fixture()
-def client(app):
     return TestClient(app)
 
 def test_repo_info(client):
@@ -35,12 +25,39 @@ def test_repo_info(client):
 
     # Reissue list_commits request
     response = client.post("/api/repo_info", json={ "repo": "GraphRAG-SDK" })
-    status   = response.json()["status"] 
-    info     = response.json()["info"]
+    data     = response.json()
+    status   = data["status"] 
+    info     = data["info"]
 
     # Expecting an empty response
     assert status == "success"
     assert 'edge_count' in info
     assert 'node_count' in info
     assert info['repo_url'] == 'https://github.com/FalkorDB/GraphRAG-SDK'
+
+
+def test_repo_info_public_access(monkeypatch):
+    """Public access is granted when CODE_GRAPH_PUBLIC=1."""
+    monkeypatch.setenv("CODE_GRAPH_PUBLIC", "1")
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/api/repo_info", json={"repo": "nonexistent"})
+    # Auth passed (not 401); endpoint may error without a database backend
+    assert response.status_code != 401
+
+
+def test_repo_info_token_required(monkeypatch):
+    """When SECRET_TOKEN is set and CODE_GRAPH_PUBLIC != 1, auth is enforced."""
+    monkeypatch.setattr(api.index, "SECRET_TOKEN", "test-secret")
+    monkeypatch.delenv("CODE_GRAPH_PUBLIC", raising=False)
+
+    # Without auth header → 401
+    client = TestClient(app)
+    response = client.post("/api/repo_info", json={"repo": "nonexistent"})
+    assert response.status_code == 401
+
+    # With valid auth header → not 401
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/api/repo_info", json={"repo": "nonexistent"},
+                           headers={"Authorization": "Bearer test-secret"})
+    assert response.status_code != 401
 

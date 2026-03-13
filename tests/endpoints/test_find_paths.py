@@ -36,10 +36,14 @@ def test_find_paths(client):
     # Re-issue with invalid src node id — Pydantic rejects non-int
     response = client.post("/api/find_paths", json={"repo": "GraphRAG-SDK", "src": "invalid", "dest": 0})
     assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert any(e for e in errors if e["loc"][-1] == "src")
 
     # Re-issue with invalid dest node id — Pydantic rejects non-int
     response = client.post("/api/find_paths", json={"repo": "GraphRAG-SDK", "src": 0, "dest": "invalid"})
     assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert any(e for e in errors if e["loc"][-1] == "dest")
 
     # Find src and dest nodes that are at least 3 hops apart
     db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),

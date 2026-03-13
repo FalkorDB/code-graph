@@ -24,8 +24,9 @@ def client(app):
 def test_list_commits(client):
     # Start with an empty DB
     response = client.post("/api/list_commits", json={ "repo": "git_repo" })
-    status   = response.json()["status"] 
-    commits  = response.json()["commits"]
+    data     = response.json()
+    status   = data["status"] 
+    commits  = data["commits"]
 
     # Expecting an empty response
     assert status == "success"
@@ -40,10 +41,10 @@ def test_list_commits(client):
     proj.analyze_sources()
     proj.process_git_history()
 
-    # Reissue list_commits request
     response = client.post("/api/list_commits", json={ "repo": "git_repo" })
-    status   = response.json()["status"] 
-    commits  = response.json()["commits"]
+    data     = response.json()
+    status   = data["status"] 
+    commits  = data["commits"]
 
     expected = [
         {'author': 'Roi Lipman', 'date': 1729068452, 'hash': 'fac1698da4ee14c215316859e68841ae0b0275b0', 'message': 'Initial commit\n'},

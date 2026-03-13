@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.DEBUG,
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Authentication helpers (mirrors production but test-specific public_access)
+# Authentication helpers
 # ---------------------------------------------------------------------------
 
 SECRET_TOKEN = os.getenv('SECRET_TOKEN')
@@ -36,11 +36,11 @@ def token_required(authorization: str | None = Header(None)):
     if not _verify_token(authorization):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-def public_access(authorization: str | None = Header(None)):
-    """Test-specific: requires CODE_GRAPH_PUBLIC=1 (no token fallback)."""
-    public = os.environ.get("CODE_GRAPH_PUBLIC", "0")
-    if public != "1":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+# Allowed base directory for local folder analysis (defaults to project root)
+ALLOWED_ANALYSIS_DIR = Path(
+    os.getenv("ALLOWED_ANALYSIS_DIR",
+              str(Path(__file__).resolve().parent.parent))
+).resolve()
 
 # ---------------------------------------------------------------------------
 # Pydantic request models
@@ -155,23 +155,31 @@ def create_app():
         try:
             answer = ask(data.repo, data.msg)
         except Exception as e:
-            logging.error("Chat error for repo '%s': %s", data.repo, e)
+            logging.exception("Chat error for repo '%s': %s", data.repo, e)
             return JSONResponse({"status": "error", "response": "Internal server error"},
                                 status_code=500)
         return {"status": "success", "response": answer}
 
     @app.post('/api/analyze_folder')
     def analyze_folder(data: AnalyzeFolderRequest, _=Depends(token_required)):
-        if not os.path.isdir(data.path):
+        resolved_path = Path(data.path).resolve()
+
+        if not resolved_path.is_relative_to(ALLOWED_ANALYSIS_DIR):
+            logging.error("Path '%s' is outside the allowed directory", data.path)
+            return JSONResponse(
+                {"status": "Invalid path: must be within the allowed analysis directory"},
+                status_code=400)
+
+        if not resolved_path.is_dir():
             logging.error("Path '%s' does not exist or is not a directory", data.path)
             return JSONResponse({"status": "Invalid path: must be an existing directory"},
                                 status_code=400)
 
         from api.analyzers.source_analyzer import SourceAnalyzer
-        proj_name = Path(data.path).name
+        proj_name = resolved_path.name
         g = Graph(proj_name)
         analyzer = SourceAnalyzer()
-        analyzer.analyze_local_folder(data.path, g, data.ignore)
+        analyzer.analyze_local_folder(str(resolved_path), g, data.ignore)
         return {"status": "success", "project": proj_name}
 
     @app.post('/api/analyze_repo')

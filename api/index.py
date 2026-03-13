@@ -89,7 +89,13 @@ class SwitchCommitRequest(BaseModel):
 # Application
 # ---------------------------------------------------------------------------
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "app" / "dist"
+STATIC_DIR = (Path(__file__).resolve().parent.parent / "app" / "dist").resolve()
+
+# Allowed base directory for local folder analysis (defaults to project root)
+ALLOWED_ANALYSIS_DIR = Path(
+    os.getenv("ALLOWED_ANALYSIS_DIR",
+              str(Path(__file__).resolve().parent.parent))
+).resolve()
 
 app = FastAPI()
 
@@ -117,7 +123,7 @@ def graph_entities(repo: str = Query(None), _=Depends(public_or_auth)):
         return {"status": "success", "entities": sub_graph}
 
     except Exception as e:
-        logging.error("Error retrieving sub-graph for repo '%s': %s", repo, e)
+        logging.exception("Error retrieving sub-graph for repo '%s': %s", repo, e)
         return JSONResponse({"status": "Internal server error"}, status_code=500)
 
 
@@ -191,7 +197,7 @@ def chat(data: ChatRequest, _=Depends(public_or_auth)):
     try:
         answer = ask(data.repo, data.msg)
     except Exception as e:
-        logging.error("Chat error for repo '%s': %s", data.repo, e)
+        logging.exception("Chat error for repo '%s': %s", data.repo, e)
         return JSONResponse({"status": "error", "response": "Internal server error"},
                             status_code=500)
 
@@ -202,16 +208,24 @@ def chat(data: ChatRequest, _=Depends(public_or_auth)):
 def analyze_folder(data: AnalyzeFolderRequest, _=Depends(token_required)):
     """Analyze local source code. Always requires a valid token."""
 
-    if not os.path.isdir(data.path):
+    resolved_path = Path(data.path).resolve()
+
+    if not resolved_path.is_relative_to(ALLOWED_ANALYSIS_DIR):
+        logging.error("Path '%s' is outside the allowed directory", data.path)
+        return JSONResponse(
+            {"status": "Invalid path: must be within the allowed analysis directory"},
+            status_code=400)
+
+    if not resolved_path.is_dir():
         logging.error("Path '%s' does not exist or is not a directory", data.path)
         return JSONResponse({"status": "Invalid path: must be an existing directory"},
                             status_code=400)
 
-    proj_name = Path(data.path).name
+    proj_name = resolved_path.name
     g = Graph(proj_name)
 
     analyzer = SourceAnalyzer()
-    analyzer.analyze_local_folder(data.path, g, data.ignore)
+    analyzer.analyze_local_folder(str(resolved_path), g, data.ignore)
 
     return {"status": "success", "project": proj_name}
 
@@ -255,8 +269,7 @@ INDEX_HTML = STATIC_DIR / "index.html"
 def serve_spa(full_path: str):
     """Serve React SPA — static assets or index.html catch-all."""
     file = (STATIC_DIR / full_path).resolve()
-    # Prevent path traversal outside the static directory
-    if not str(file).startswith(str(STATIC_DIR)):
+    if not file.is_relative_to(STATIC_DIR):
         return JSONResponse({"error": "Not found"}, status_code=404)
     if full_path and file.is_file():
         return FileResponse(file)
