@@ -24,7 +24,7 @@ def client(app):
 def test_list_repos(client):
     # Start with an empty DB
     response     = client.get("/api/list_repos").json()
-    status       = response["status"] 
+    status       = response["status"]
     repositories = response["repositories"]
 
     # Expecting an empty response
@@ -54,11 +54,14 @@ def test_list_repos_with_auth(monkeypatch):
     """Authenticated request succeeds when SECRET_TOKEN is set."""
     monkeypatch.setattr(api.index, "SECRET_TOKEN", "test-secret")
     monkeypatch.delenv("CODE_GRAPH_PUBLIC", raising=False)
-    client = TestClient(api.index.app, raise_server_exceptions=False)
+    monkeypatch.setattr(api.index, "get_repos", lambda: ["fake-repo"])
+    client = TestClient(api.index.app)
     response = client.get("/api/list_repos",
                           headers={"Authorization": "Bearer test-secret"})
-    # Auth passed (not 401); endpoint may error without a database backend
-    assert response.status_code != 401
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["repositories"] == ["fake-repo"]
 
 
 def test_list_repos_unauthorized(monkeypatch):

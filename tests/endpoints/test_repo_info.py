@@ -12,7 +12,7 @@ def client():
 def test_repo_info(client):
     # Start with an empty DB
     response = client.post("/api/repo_info", json={ "repo": "GraphRAG-SDK" })
-    status   = response.json()["status"] 
+    status   = response.json()["status"]
 
     # Expecting an empty response
     assert status == "Missing repository \"GraphRAG-SDK\""
@@ -25,7 +25,7 @@ def test_repo_info(client):
     # Reissue list_commits request
     response = client.post("/api/repo_info", json={ "repo": "GraphRAG-SDK" })
     data     = response.json()
-    status   = data["status"] 
+    status   = data["status"]
     info     = data["info"]
 
     # Expecting an empty response
