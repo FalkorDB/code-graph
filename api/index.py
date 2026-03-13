@@ -1,19 +1,28 @@
 """ Main API module for CodeGraph. """
+import hashlib
+import hmac
 import os
 import asyncio
+import contextlib
 import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from api.analyzers.source_analyzer import SourceAnalyzer
 from api.git_utils import git_utils
 from api.git_utils.git_graph import AsyncGitGraph
+from api.git_utils.incremental_update import (
+    fetch_remote,
+    get_remote_head,
+    incremental_update,
+    repo_local_path,
+)
 from api.graph import Graph, AsyncGraphQuery, async_get_repos
-from api.info import async_get_repo_info
+from api.info import async_get_repo_info, get_repo_commit
 from api.llm import ask
 from api.project import Project
 
@@ -98,7 +107,140 @@ ALLOWED_ANALYSIS_DIR = Path(
               str(Path(__file__).resolve().parent.parent))
 ).resolve()
 
-app = FastAPI()
+# ---------------------------------------------------------------------------
+# Webhook / poll-watcher configuration
+# ---------------------------------------------------------------------------
+
+# HMAC-SHA256 secret shared with GitHub/GitLab.  Leave unset to skip
+# signature validation (not recommended for production).
+WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "")
+
+# Branch whose pushes trigger incremental graph updates.
+TRACKED_BRANCH: str = os.getenv("TRACKED_BRANCH", "main")
+
+# Seconds between automatic poll checks (0 = disabled).
+POLL_INTERVAL: int = int(os.getenv("POLL_INTERVAL", "60"))
+
+# ---------------------------------------------------------------------------
+# Webhook helpers
+# ---------------------------------------------------------------------------
+
+def _urls_match(stored_url: str, incoming_url: str) -> bool:
+    """Return True when two repository URLs refer to the same repo.
+
+    Normalises both URLs by stripping a trailing ``.git`` suffix and
+    converting to lower-case so that, for example,
+    ``https://github.com/Org/Repo`` and
+    ``https://github.com/org/repo.git`` are treated as identical.
+    """
+    def _normalise(u: str) -> str:
+        return u.rstrip("/").removesuffix(".git").lower()
+
+    return _normalise(stored_url) == _normalise(incoming_url)
+
+
+async def _find_repo_by_url(url: str) -> str | None:
+    """Return the graph name for a repository that matches *url*, or ``None``."""
+    repos = await async_get_repos()
+    for repo_name in repos:
+        info = await async_get_repo_info(repo_name)
+        if info and _urls_match(info.get("repo_url", ""), url):
+            return repo_name
+    return None
+
+# ---------------------------------------------------------------------------
+# Background poll-watcher helpers (synchronous, run in thread-pool executor)
+# ---------------------------------------------------------------------------
+
+def _poll_repo(repo_name: str) -> None:
+    """Fetch remote and apply incremental updates for *repo_name* if behind.
+
+    This function is intentionally synchronous so it can be safely offloaded
+    to ``asyncio``'s default ``ThreadPoolExecutor``.
+    """
+    path = repo_local_path(repo_name)
+    if not path.exists():
+        logger.debug("Poll: local clone not found for '%s', skipping", repo_name)
+        return
+
+    try:
+        fetch_remote(path)
+    except Exception as exc:
+        logger.warning("Poll: git fetch failed for '%s': %s", repo_name, exc)
+        return
+
+    remote_head = get_remote_head(path, TRACKED_BRANCH)
+    if not remote_head:
+        return
+
+    current_sha = get_repo_commit(repo_name)
+    if not current_sha:
+        logger.debug("Poll: no stored commit for '%s', skipping", repo_name)
+        return
+
+    # Handle comparison between short (7-char) and full (40-char) SHAs: a short
+    # stored SHA is a valid prefix of a full remote SHA for the same commit.
+    # We only apply prefix matching when the stored SHA is shorter.
+    if len(current_sha) < len(remote_head):
+        up_to_date = remote_head.startswith(current_sha)
+    elif len(current_sha) > len(remote_head):
+        up_to_date = current_sha.startswith(remote_head)
+    else:
+        up_to_date = current_sha == remote_head
+    if up_to_date:
+        logger.debug("Poll: '%s' is up-to-date at %s", repo_name, current_sha)
+        return
+
+    logger.info(
+        "Poll: new commits detected for '%s' (%s -> %s), updating …",
+        repo_name, current_sha, remote_head,
+    )
+    try:
+        result = incremental_update(repo_name, current_sha, remote_head)
+        logger.info("Poll: '%s' updated — %s", repo_name, result)
+    except Exception as exc:
+        logger.exception(
+            "Poll: incremental update failed for '%s': %s", repo_name, exc
+        )
+
+
+async def _poll_all_repos() -> None:
+    """Check every indexed repository for new commits on the tracked branch."""
+    repos = await async_get_repos()
+    loop = asyncio.get_running_loop()
+    for repo_name in repos:
+        await loop.run_in_executor(None, _poll_repo, repo_name)
+
+
+async def _poll_loop() -> None:
+    """Continuously poll all repositories at the configured interval."""
+    logger.info(
+        "Poll-watcher started (interval=%ds, branch='%s')",
+        POLL_INTERVAL, TRACKED_BRANCH,
+    )
+    while True:
+        try:
+            await _poll_all_repos()
+        except Exception as exc:
+            logger.exception("Poll loop error: %s", exc)
+        await asyncio.sleep(POLL_INTERVAL)
+
+# ---------------------------------------------------------------------------
+# Application lifespan (starts/stops the background poll task)
+# ---------------------------------------------------------------------------
+
+@contextlib.asynccontextmanager
+async def _lifespan(application: FastAPI):
+    poll_task = None
+    if POLL_INTERVAL > 0:
+        poll_task = asyncio.create_task(_poll_loop())
+    yield
+    if poll_task is not None:
+        poll_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await poll_task
+
+app = FastAPI(lifespan=_lifespan)
 
 # ---------------------------------------------------------------------------
 # API routes
@@ -289,6 +431,85 @@ async def list_commits(data: RepoRequest, _=Depends(public_or_auth)):
     finally:
         await git_graph.close()
     return {"status": "success", "commits": commits}
+
+
+@app.post('/api/webhook')
+async def webhook(request: Request):
+    """Receive a GitHub/GitLab push event and trigger an incremental graph update.
+
+    When ``WEBHOOK_SECRET`` is set the endpoint validates the
+    ``X-Hub-Signature-256`` header using HMAC-SHA256; requests with a missing
+    or invalid signature are rejected with **401 Unauthorized**.
+
+    Only pushes to the branch configured via ``TRACKED_BRANCH`` (default
+    ``main``) trigger an update; pushes to other branches are acknowledged
+    with a ``200 ignored`` response so that GitHub does not retry them.
+
+    The repository is identified by matching the ``repository.clone_url``
+    field in the payload against the URLs stored for already-indexed
+    repositories.
+    """
+    body = await request.body()
+
+    # Validate HMAC-SHA256 signature when a secret is configured
+    if WEBHOOK_SECRET:
+        sig_header = request.headers.get("X-Hub-Signature-256", "")
+        mac = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256)
+        expected_sig = "sha256=" + mac.hexdigest()
+        if not hmac.compare_digest(sig_header, expected_sig):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    ref = payload.get("ref", "")
+    before = payload.get("before", "")
+    after = payload.get("after", "")
+    repo_url = payload.get("repository", {}).get("clone_url", "")
+
+    # Only process pushes to the configured tracked branch
+    expected_ref = f"refs/heads/{TRACKED_BRANCH}"
+    if ref != expected_ref:
+        logger.debug("Webhook: ignoring push to '%s' (tracking '%s')", ref, expected_ref)
+        return {"status": "ignored", "reason": f"Branch not tracked: {ref}"}
+
+    if not before or not after or not repo_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Payload missing required fields: ref, before, after, repository.clone_url",
+        )
+
+    # Resolve the repository name from the stored index
+    repo_name = await _find_repo_by_url(repo_url)
+    if repo_name is None:
+        logger.warning("Webhook: received push for unknown repo '%s'", repo_url)
+        return JSONResponse(
+            {"status": "error", "detail": "Repository not indexed"},
+            status_code=404,
+        )
+
+    logger.info(
+        "Webhook: updating '%s' from %s to %s", repo_name, before[:8], after[:8]
+    )
+
+    def _update() -> dict:
+        path = repo_local_path(repo_name)
+        if path.exists():
+            fetch_remote(path)
+        return incremental_update(repo_name, before, after)
+
+    loop = asyncio.get_running_loop()
+    try:
+        result = await loop.run_in_executor(None, _update)
+    except Exception as exc:
+        logger.exception(
+            "Webhook: incremental update failed for '%s': %s", repo_name, exc
+        )
+        return JSONResponse({"status": "error", "detail": str(exc)}, status_code=500)
+
+    return {"status": "success", **result}
 
 # ---------------------------------------------------------------------------
 # SPA static file serving (must come after API routes)
