@@ -1,0 +1,97 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                 CodeGraph FastAPI Backend - QUICK REFERENCE               ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+BACKEND SNAPSHOT
+─────────────────────────────────────────────────────────────────────────────
+Backend app:         api.index:app
+Framework:           FastAPI
+Server:              Uvicorn
+Frontend:            React + Vite in app/
+Built UI serving:    FastAPI serves app/dist when it exists
+Supported analyzers: Python, Java, C#
+C analyzer:          Present in source tree, but currently disabled
+
+KEY PATHS
+─────────────────────────────────────────────────────────────────────────────
+api/index.py                 FastAPI app, auth deps, API routes, SPA serving
+api/project.py               Repo clone/local analysis orchestration
+api/analyzers/source_analyzer.py
+                             Registered analyzers (.py, .java, .cs)
+api/llm.py                   GraphRAG + LiteLLM chat integration
+api/graph.py                 FalkorDB graph access
+api/git_utils/               Git history graph + commit switching
+app/vite.config.ts           Dev proxy from /api -> http://127.0.0.1:5000
+Makefile                     Common install/build/run/test/lint commands
+start.sh                     Container entrypoint (starts uvicorn)
+
+COMMON COMMANDS
+─────────────────────────────────────────────────────────────────────────────
+Install backend deps:   uv sync --all-extras
+Install frontend deps:  npm install --prefix ./app
+Install e2e deps:       npm install
+
+Backend dev server:     uv run uvicorn api.index:app --host 127.0.0.1 --port 5000 --reload
+Frontend dev server:    cd app && npm run dev
+Prod-style serve:       npm --prefix ./app run build && uv run uvicorn api.index:app --host 0.0.0.0 --port 5000
+
+Make targets:           make install | build-dev | build-prod | run-dev |
+                            run-prod | test | lint | e2e | clean
+
+AUTHENTICATION RULES
+─────────────────────────────────────────────────────────────────────────────
+Header format:          Authorization: Bearer <SECRET_TOKEN>
+                        (raw token string also works)
+Read endpoints:         public_or_auth dependency
+Mutating endpoints:     token_required dependency
+Public mode:            CODE_GRAPH_PUBLIC=1 skips auth on read endpoints
+Important detail:       If SECRET_TOKEN is unset, requests without an
+                        Authorization header are accepted by the current
+                        implementation
+
+IMPORTANT ENV VARS
+─────────────────────────────────────────────────────────────────────────────
+FALKORDB_HOST           FalkorDB hostname (default: localhost)
+FALKORDB_PORT           FalkorDB port (default: 6379)
+FALKORDB_USERNAME       Optional FalkorDB username
+FALKORDB_PASSWORD       Optional FalkorDB password
+SECRET_TOKEN            Token checked by protected endpoints
+CODE_GRAPH_PUBLIC       Set to 1 to make read endpoints public
+ALLOWED_ANALYSIS_DIR    Limits /api/analyze_folder to one directory tree
+MODEL_NAME              LiteLLM model for /api/chat
+                        default: gemini/gemini-flash-lite-latest
+GEMINI_API_KEY          Example provider credential for the default model
+HOST / PORT             Optional bind settings for start.sh / make run-*
+
+API ENDPOINTS
+─────────────────────────────────────────────────────────────────────────────
+GET    /api/list_repos
+GET    /api/graph_entities?repo=<name>
+POST   /api/get_neighbors
+POST   /api/auto_complete
+POST   /api/repo_info
+POST   /api/find_paths
+POST   /api/chat
+POST   /api/list_commits
+POST   /api/analyze_folder      (requires token dependency)
+POST   /api/analyze_repo        (requires token dependency)
+POST   /api/switch_commit       (requires token dependency)
+
+ANALYSIS NOTES
+─────────────────────────────────────────────────────────────────────────────
+/api/analyze_folder     The requested path must be inside ALLOWED_ANALYSIS_DIR
+/api/analyze_repo       Clones the repository, analyzes sources, then builds
+                        git history
+/api/chat               Uses GraphRAG-SDK + LiteLLM against the repo graph
+/api/list_commits       Reads from the separate {repo_name}_git graph
+
+DEVELOPMENT NOTES
+─────────────────────────────────────────────────────────────────────────────
+Vite dev URL:           http://localhost:3000
+Backend API URL:        http://127.0.0.1:5000/api/...
+Built app URL:          http://localhost:5000
+Root package.json:      Playwright only
+app/package.json:       Frontend build/lint/dev scripts
+Tests:                  make test runs pytest, but some legacy analyzer/
+                        git-history tests still need maintenance on a
+                        clean checkout
