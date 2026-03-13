@@ -3,15 +3,15 @@ import asyncio
 import logging
 from pathlib import Path
 
-from api.graph import Graph, get_repos, graph_exists, AsyncGraphQuery, async_get_repos, async_graph_exists
-from api.info import get_repo_info, async_get_repo_info
+from api.graph import Graph, AsyncGraphQuery, async_get_repos, async_graph_exists
+from api.info import async_get_repo_info
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from api.project import Project
-from api.auto_complete import prefix_search, async_prefix_search
+from api.auto_complete import async_prefix_search
 from api.git_utils import git_utils
 
 # Load environment variables from .env file

@@ -11,12 +11,12 @@ from pydantic import BaseModel
 
 from api.analyzers.source_analyzer import SourceAnalyzer
 from api.git_utils import git_utils
-from api.git_utils.git_graph import GitGraph, AsyncGitGraph
-from api.graph import Graph, get_repos, graph_exists, AsyncGraphQuery, async_get_repos, async_graph_exists
-from api.info import get_repo_info, async_get_repo_info
+from api.git_utils.git_graph import AsyncGitGraph
+from api.graph import Graph, AsyncGraphQuery, async_get_repos, async_graph_exists
+from api.info import async_get_repo_info
 from api.llm import ask
 from api.project import Project
-from .auto_complete import prefix_search, async_prefix_search
+from .auto_complete import async_prefix_search
 
 # Load environment variables from .env file
 load_dotenv()
