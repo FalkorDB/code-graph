@@ -1,6 +1,7 @@
 import os
 import logging
 from falkordb import FalkorDB, Node
+from falkordb.asyncio import FalkorDB as AsyncFalkorDB
 from typing import List, Optional
 
 from pygit2 import Commit
@@ -175,4 +176,33 @@ class GitGraph():
         res = self.g.query(q, {'child_hash': child, 'parent_hash': parent}).result_set
 
         return (res[0][0], res[0][1])
+
+
+class AsyncGitGraph:
+    """Async read-only git graph for endpoint use."""
+
+    def __init__(self, name: str):
+        self.db = AsyncFalkorDB(
+            host=os.getenv('FALKORDB_HOST', 'localhost'),
+            port=int(os.getenv('FALKORDB_PORT', 6379)),
+            username=os.getenv('FALKORDB_USERNAME', None),
+            password=os.getenv('FALKORDB_PASSWORD', None),
+        )
+        self.g = self.db.select_graph(name)
+
+    def _commit_from_node(self, node: Node) -> dict:
+        return {
+            'hash':    node.properties['hash'],
+            'date':    node.properties['date'],
+            'author':  node.properties['author'],
+            'message': node.properties['message'],
+        }
+
+    async def list_commits(self) -> List[dict]:
+        q = "MATCH (c:Commit) RETURN c ORDER BY c.date"
+        result_set = (await self.g.query(q)).result_set
+        return [self._commit_from_node(row[0]) for row in result_set]
+
+    async def close(self) -> None:
+        await self.db.aclose()
 
