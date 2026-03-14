@@ -7,6 +7,7 @@ import { Graph, GraphData, Node } from "./model";
 import { cn, GraphRef } from "@/lib/utils";
 import { TypeAnimation } from "react-type-animation";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 const AUTH_HEADERS: HeadersInit = import.meta.env.VITE_SECRET_TOKEN
   ? { 'Authorization': `Bearer ${import.meta.env.VITE_SECRET_TOKEN}` }
@@ -548,7 +549,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                             value={path?.start?.name || ""}
                             placeholder="Start typing starting point"
                             type="text"
-                            icon={<ChevronDown color="gray" />}
+                            icon={<ChevronDown className="text-muted-foreground" />}
                             node={path?.start}
                             scrollToBottom={() => containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight)}
                         />
@@ -559,7 +560,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                             onValueChange={({ name, id }) => setPath(prev => ({ end: { name, id }, start: prev?.start }))}
                             placeholder="Start typing end point"
                             type="text"
-                            icon={<ChevronDown color="gray" />}
+                            icon={<ChevronDown className="text-muted-foreground" />}
                             node={path?.end}
                             scrollToBottom={() => containerRef.current?.scrollTo(0, containerRef.current?.scrollHeight)}
                         />
@@ -578,7 +579,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                                     p.nodes.length === selectedPath?.nodes.length &&
                                     selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) &&
                                     "border-[#ffde21] bg-[#ffde2133]",
-                                    message.graphName !== graph.Id && "opacity-50 bg-gray-200"
+                                    message.graphName !== graph.Id && "opacity-50 bg-secondary"
                                 )}
                                 title={message.graphName !== graph.Id ? `Move to graph ${message.graphName} to use this path` : undefined}
                                 disabled={message.graphName !== graph.Id}
@@ -642,7 +643,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             <footer className="flex gap-4 px-4 overflow-hidden min-h-fit">
                 <DropdownMenu open={sugOpen} onOpenChange={setSugOpen}>
                     <DropdownMenuTrigger asChild>
-                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-[#FF66B3] hover:bg-[#FFF0F7]">
+                        <button data-name="lightbulb" className="p-4 border rounded-md hover:border-primary hover:bg-primary/5 transition-colors">
                             <Lightbulb />
                         </button>
                     </DropdownMenuTrigger>
@@ -650,11 +651,11 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                         {getTip("!w-full")}
                     </DropdownMenuContent>
                 </DropdownMenu>
-                <form className="grow flex items-center border rounded-md px-2" onSubmit={sendQuery}>
-                    <input className="w-1 grow p-4 rounded-md focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
-                    <button disabled={isSendMessage} className={`bg-gray-200 p-2 rounded-md ${!isSendMessage && 'hover:bg-gray-300'}`}>
-                        <ArrowRight color="white" />
-                    </button>
+                <form className="grow flex items-center border rounded-md px-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-colors" onSubmit={sendQuery}>
+                    <input className="w-1 grow p-4 rounded-md bg-transparent focus-visible:outline-none" placeholder="Ask your question" onChange={handleQueryInputChange} value={query} />
+                    <Button disabled={isSendMessage} variant="default" size="icon" className="shrink-0">
+                        <ArrowRight />
+                    </Button>
                 </form>
             </footer>
         </div>

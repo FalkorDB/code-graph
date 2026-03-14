@@ -43,10 +43,10 @@ export interface Link {
 }
 
 const COLORS_ORDER_NAME = [
-  "blue",
-  "pink",
-  "orange",
-  "turquoise",
+  "graph-purple",
+  "graph-pink",
+  "graph-orange",
+  "graph-turquoise",
 ]
 
 const COLORS_ORDER = [

@@ -42,18 +42,18 @@ export default function DataPanel({ obj, setObj, url }: Props) {
     return (
         <>
             <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-20" />
-            <div data-name="node-details-panel" className="z-30 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 md:-top-10 md:left-20 md:transform-none bg-[#343434] text-white shadow-lg rounded-lg flex flex-col max-h-[90vh] w-[90vw] md:max-h-[88vh] md:w-[56vw] overflow-hidden">
-                <header className="bg-[#191919] flex items-center gap-8 justify-between p-8">
+            <div data-name="node-details-panel" className="z-30 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 md:-top-10 md:left-20 md:transform-none bg-card text-card-foreground shadow-lg rounded-lg flex flex-col max-h-[90vh] w-[90vw] md:max-h-[88vh] md:w-[56vw] overflow-hidden">
+                <header className="bg-muted flex items-center gap-8 justify-between p-8">
                     <p title={label} className="truncate font-bold">{label.toUpperCase()}</p>
                     <button onClick={() => setObj(undefined)}>
-                        <X color="white" />
+                        <X />
                     </button>
                 </header>
-                <main className="bg-[#343434] flex flex-col grow overflow-y-auto p-4">
+                <main className="bg-card flex flex-col grow overflow-y-auto p-4">
                     {
                         object.map(([key, value]) => (
                             <div key={key} className="flex gap-2">
-                                <p className="text-[#FF804D]">{key}:</p>
+                                <p className="text-primary">{key}:</p>
                                 {
                                     key === "src" ?
                                         <SyntaxHighlighter
@@ -63,7 +63,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                                 hljs: {
                                                     ...dark.hljs,
                                                     maxHeight: `9rem`,
-                                                    background: '#343434',
+                                                    background: 'transparent',
                                                     padding: 2,
                                                 }
                                             }}
@@ -74,7 +74,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                             <JSONTree
                                                 data={Object.fromEntries(Object.entries(value).filter(([k]) => !excludedProperties.includes(k)))}
                                                 theme={{
-                                                    base00: '#343434', // background
+                                                    base00: 'transparent', // background
                                                     base01: '#000000',
                                                     base02: '#CE9178',
                                                     base03: '#CE9178', // open values
@@ -100,7 +100,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                                                 hljs: {
                                                                     ...dark.hljs,
                                                                     maxHeight: `9rem`,
-                                                                    background: '#343434',
+                                                                    background: 'transparent',
                                                                     padding: 2,
                                                                 }
                                                             }}
@@ -108,16 +108,16 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                                             {value as string}
                                                         </SyntaxHighlighter>
                                                     }
-                                                    return <span className="text-white">{value as string}</span>
+                                                    return <span className="text-card-foreground">{value as string}</span>
                                                 }}
                                             />
-                                            : <span className="text-white">{value}</span>
+                                            : <span className="text-card-foreground">{value}</span>
                                 }
                             </div>
                         ))
                     }
                 </main>
-                <footer className="bg-[#191919] flex items-center justify-between p-4">
+                <footer className="bg-muted flex items-center justify-between p-4">
                     {
                         "category" in obj &&
                         <>
@@ -126,7 +126,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                 title="Copy src to clipboard"
                                 onClick={() => navigator.clipboard.writeText(obj.data.src || "")}
                             >
-                                <Copy color="white" />
+                                <Copy />
                                 Copy
                             </button>
                             <a
@@ -136,7 +136,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                 target="_blank"
                                 title="Go to repo"
                             >
-                                <SquareArrowOutUpRight color="white" />
+                                <SquareArrowOutUpRight />
                                 Go to repo
                             </a>
                         </>

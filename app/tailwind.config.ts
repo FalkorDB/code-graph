@@ -21,11 +21,14 @@ const config: Config = {
       }
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+      },
       colors: {
-        blue: '#7466FF',
-        pink: '#FF66B3',
-        orange: '#FF804D',
-        turquoise: '#80E6E6',
+        'graph-purple': '#7466FF',
+        'graph-pink': '#FF66B3',
+        'graph-orange': '#FF804D',
+        'graph-turquoise': '#80E6E6',
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
