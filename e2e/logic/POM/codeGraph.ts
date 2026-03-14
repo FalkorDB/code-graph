@@ -30,7 +30,7 @@ export default class CodeGraph extends BasePage {
 
     /* NavBar Locators*/
     private get falkorDBLogo(): Locator {
-        return this.scopedLocator("//*[img[@alt='FalkorDB']]")
+        return this.scopedLocator("//a[@aria-label='FalkorDB']")
     }
 
     private get navBaritem(): (navItem: string) => Locator {
