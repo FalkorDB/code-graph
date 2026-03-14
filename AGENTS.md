@@ -19,7 +19,7 @@ Knowledge graph visualization tool for codebases. Python FastAPI backend + React
 
 ## Directory structure
 
-```
+```text
 api/                  # Python backend
   index.py            # FastAPI app, routes, auth, SPA serving
   graph.py            # FalkorDB graph operations (sync + async)
@@ -79,7 +79,7 @@ npx playwright test
 
 ### Python (backend)
 - snake_case for functions/variables, PascalCase for classes
-- Async-first: all route handlers and graph operations are async
+- Async-first: route handlers and most graph operations are async, though api/graph.py includes some synchronous helpers
 - Auth: `public_or_auth` for read endpoints, `token_required` for mutating endpoints
 - Graph labels: PascalCase (File, Class, Function). Relations: SCREAMING_SNAKE_CASE (DEFINES, CALLS)
 - Linter: Ruff
