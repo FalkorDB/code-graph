@@ -17,6 +17,11 @@ import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
 import type { GraphNode } from '@falkordb/canvas';
 import { Toaster } from '@/components/ui/toaster';
 import GTM from './GTM';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ThemeToggle } from './components/theme-toggle';
+import Logo from './components/logo';
+
 
 const Chat = lazy(() => import('./components/chat').then(mod => ({ default: mod.Chat })));
 const CodeGraph = lazy(() => import('./components/code-graph').then(mod => ({ default: mod.CodeGraph })));
@@ -378,108 +383,137 @@ export default function App() {
       <main className="h-[100dvh]">
         <div className='md:flex md:flex-col hidden h-screen' id='desktop'>
           <header className="flex flex-col text-xl">
-            <div className="flex items-center justify-between py-4 px-8">
+            <div className="flex items-center justify-between py-2 px-4 border-b border-border">
               <div className="flex gap-4 items-center">
-                <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
-                  <img src="/logo_02.svg" alt="FalkorDB" width={27.73} height={23.95} />
+                <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer" aria-label="FalkorDB">
+                  <Logo />
                 </a>
-                <h1 className='font-bold text-[22px]'>
+                <h1 className='font-semibold text-[22px]'>
                   CODE GRAPH
                 </h1>
               </div>
-              <ul className="flex gap-4 items-center font-medium">
-                <a title="Home" className="flex gap-2.5 items-center p-4" href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
-                  <HomeIcon />
-                  <p>Main Website</p>
-                </a>
-                <a title="Github" className="flex gap-2.5 items-center p-4" href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
-                  <Github />
-                  <p>Github</p>
-                </a>
-                <a title="Discord" className="flex gap-2.5 items-center p-4" href="https://discord.gg/falkordb" target='_blank' rel="noopener noreferrer">
-                  <BoomBox />
-                  <p>Discord</p>
-                </a>
-                <DropdownMenu open={tipOpen} onOpenChange={setTipOpen}>
-                  <DropdownMenuTrigger asChild>
-                    <button title="Tip" className="flex gap-2.5 items-center p-4">
-                      <BookOpen />
-                      <p>Tip</p>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className='flex-col flex p-4 gap-6 max-w-[30dvw]'>
-                    <div className='flex justify-between items-center'>
-                      <DropdownMenuLabel className='font-oswald text-[20px] font-semibold leading-[20px] text-left'>HOW TO USE THE PRODUCT</DropdownMenuLabel>
-                      <button
-                        title='Close'
-                        onClick={() => setTipOpen(false)}
-                      >
-                        <X />
-                      </button>
-                    </div>
-                    {
-                      DESKTOP_TIPS.map((tip, index) => (
-                        <div key={index} className='flex flex-col gap-4 text-[#7D7D7D]'>
-                          <div className='flex gap-3 items-center'>
-                            <h1 className='text-black font-bold'>{tip.title}</h1>
-                            <p className='bg-[#ECECEC] p-1 rounded italic'>{tip.keyboardCommand}</p>
-                          </div>
-                          <p>{tip.description}</p>
+              <TooltipProvider>
+                <ul className="flex gap-1 items-center">
+                  <li>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild>
+                          <a title="Home" href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
+                            <HomeIcon className="h-5 w-5" />
+                          </a>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Main Website</TooltipContent>
+                    </Tooltip>
+                  </li>
+                  <li>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild>
+                          <a title="GitHub" href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
+                            <Github className="h-5 w-5" />
+                          </a>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>GitHub</TooltipContent>
+                    </Tooltip>
+                  </li>
+                  <li>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild>
+                          <a title="Discord" href="https://discord.gg/falkordb" target='_blank' rel="noopener noreferrer">
+                            <BoomBox className="h-5 w-5" />
+                          </a>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Discord</TooltipContent>
+                    </Tooltip>
+                  </li>
+                  <li>
+                    <DropdownMenu open={tipOpen} onOpenChange={setTipOpen}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" title="Tip">
+                              <BookOpen className="h-5 w-5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Tips</TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent className='flex-col flex p-4 gap-6 max-w-[30dvw]'>
+                        <div className='flex justify-between items-center'>
+                          <DropdownMenuLabel className='text-[20px] font-semibold leading-[20px] text-left'>HOW TO USE THE PRODUCT</DropdownMenuLabel>
+                          <button
+                            title='Close'
+                            onClick={() => setTipOpen(false)}
+                          >
+                            <X />
+                          </button>
                         </div>
-                      ))
-                    }
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {
-                  import.meta.env.VITE_LOCAL_MODE &&
-                  <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                    <DialogTrigger asChild>
-                      <button
-                        className="h-full bg-black p-4 text-white rounded-lg"
-                        title="Create new project"
-                      >
-                        <p>Create new project</p>
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent className='sm:max-w-[500px]'>
-                      <DialogHeader>
-                        <DialogTitle>{!isSubmit ? "CREATE A NEW PROJECT" : "THANK YOU FOR A NEW REQUEST"}</DialogTitle>
-                      </DialogHeader>
-                      <DialogDescription className='text-black'>
                         {
-                          !isSubmit
-                            ? "Please provide the URL of the project to connect and start querying data"
-                            : "Processing your graph, this could take a while. We appreciate your patience"
-                        }
-                      </DialogDescription>
-                      {
-                        !isSubmit ?
-                          <form onSubmit={onCreateRepo} className='flex flex-col gap-4'>
-                            <input
-                              className='border p-3 rounded-lg'
-                              type="text"
-                              value={createURL}
-                              onChange={(e) => setCreateURL(e.target.value)}
-                              placeholder="Type Project URL (File:// or https://)"
-                            />
-                            <div className='flex flex-row-reverse'>
-                              <button
-                                className='bg-black p-3 text-white rounded-lg'
-                                type='submit'
-                                title='Create Project'
-                              >
-                                <p>Create</p>
-                              </button>
+                          DESKTOP_TIPS.map((tip, index) => (
+                            <div key={index} className='flex flex-col gap-4 text-muted-foreground'>
+                              <div className='flex gap-3 items-center'>
+                                <h1 className='text-foreground font-bold'>{tip.title}</h1>
+                                <p className='bg-secondary p-1 rounded italic'>{tip.keyboardCommand}</p>
+                              </div>
+                              <p>{tip.description}</p>
                             </div>
-                          </form>
-                          : <Progress value={0} />
-                      }
-                    </DialogContent>
-                  </Dialog>
-                }
-              </ul>
+                          ))
+                        }
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </li>
+                  <li>
+                    <ThemeToggle />
+                  </li>
+                  {
+                    import.meta.env.VITE_LOCAL_MODE &&
+                    <li>
+                      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                        <DialogTrigger asChild>
+                          <Button title="Create new project">
+                            Create new project
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className='sm:max-w-[500px]'>
+                          <DialogHeader>
+                            <DialogTitle>{!isSubmit ? "CREATE A NEW PROJECT" : "THANK YOU FOR A NEW REQUEST"}</DialogTitle>
+                          </DialogHeader>
+                          <DialogDescription className='text-foreground'>
+                            {
+                              !isSubmit
+                                ? "Please provide the URL of the project to connect and start querying data"
+                                : "Processing your graph, this could take a while. We appreciate your patience"
+                            }
+                          </DialogDescription>
+                          {
+                            !isSubmit ?
+                              <form onSubmit={onCreateRepo} className='flex flex-col gap-4'>
+                                <input
+                                  className='border p-3 rounded-lg bg-background text-foreground'
+                                  type="text"
+                                  value={createURL}
+                                  onChange={(e) => setCreateURL(e.target.value)}
+                                  placeholder="Type Project URL (File:// or https://)"
+                                />
+                                <div className='flex flex-row-reverse'>
+                                  <Button type='submit' title='Create Project'>
+                                    Create
+                                  </Button>
+                                </div>
+                              </form>
+                              : <Progress value={0} />
+                          }
+                        </DialogContent>
+                      </Dialog>
+                    </li>
+                  }
+                </ul>
+              </TooltipProvider>
             </div>
-            <div className='h-2.5 bg-gradient-to-r from-[#EC806C] via-[#B66EBD] to-[#7568F2]' />
           </header>
           <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
             <PanelGroup direction="horizontal" className="w-full h-full">
@@ -514,7 +548,7 @@ export default function App() {
                   setHasHiddenElements={setHasHiddenElements}
                 />
               </Panel>
-              <PanelResizeHandle className={cn(!graph.Id && 'hidden')} />
+              <PanelResizeHandle className={cn(!graph.Id && 'hidden', 'w-1 bg-border hover:bg-primary/50 transition-colors')} />
               <Panel
                 ref={chatPanel}
                 className="border-l"
@@ -547,21 +581,25 @@ export default function App() {
           </Suspense>
         </div>
         <div className='flex flex-col md:hidden h-full overflow-hidden' id='mobile'>
-          <header className='flex justify-center items-center relative bg-gray-100'>
-            <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
-              <img style={{ width: 'auto', height: '70px', background: "transparent" }} src="/code-graph-logo.svg" alt="FalkorDB" />
+          <header className='flex justify-between items-center bg-muted py-2 px-4'>
+            <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer" aria-label="FalkorDB" className="flex gap-2 items-center">
+              <Logo width={40} height={34} />
+              <span className='font-semibold text-[22px]'>CODE GRAPH</span>
             </a>
-            <button className='absolute top-6 right-4' onClick={() => setMenuOpen(prev => !prev)}>
-              <AlignRight />
-            </button>
+            <div className='flex gap-2'>
+              <ThemeToggle />
+              <button onClick={() => setMenuOpen(prev => !prev)}>
+                <AlignRight />
+              </button>
+            </div>
           </header>
 
           {menuOpen && (
-            <div className='absolute bottom-0 top-[70px] left-0 right-0 z-20 bg-white shadow-lg'>
+            <div className='absolute bottom-0 top-[70px] left-0 right-0 z-20 bg-background shadow-lg'>
               <ul className='h-full flex flex-col gap-16 p-8 items-center'>
                 <li>
                   <a href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
-                    <p>Github</p>
+                    <p>GitHub</p>
                   </a>
                 </li>
                 <li>
@@ -593,8 +631,8 @@ export default function App() {
                       <div
                         key={index}
                         className={cn(
-                          "h-2 w-2 rounded-full bg-gray-300",
-                          index === activeIndex && "bg-gray-600"
+                          "h-2 w-2 rounded-full bg-muted-foreground/30",
+                          index === activeIndex && "bg-muted-foreground"
                         )}
                       />
                     ))}
@@ -640,11 +678,11 @@ export default function App() {
                 <div className='flex items-center p-4 gap-4'>
                   <Drawer open={chatOpen} onOpenChange={setChatOpen}>
                     <DrawerTrigger asChild>
-                      <button className='grow bg-blue text-white p-2 rounded-md'>
-                        <p>Chat</p>
-                      </button>
+                      <Button className='grow'>
+                        Chat
+                      </Button>
                     </DrawerTrigger>
-                    <DrawerContent handleClassName='bg-gray-500 h-1' className='md:hidden flex flex-col h-[90dvh]'>
+                    <DrawerContent handleClassName='bg-muted-foreground h-1' className='md:hidden flex flex-col h-[90dvh]'>
                       <VisuallyHidden>
                         <DrawerTitle />
                         <DrawerDescription />
@@ -673,11 +711,11 @@ export default function App() {
                   </Drawer>
                   <Drawer open={optionsOpen} onOpenChange={setOptionsOpen}>
                     <DrawerTrigger asChild>
-                      <button className='grow border border-blue text-blue p-2 rounded-md'>
-                        <p>Options</p>
-                      </button>
+                      <Button variant="outline" className='grow'>
+                        Options
+                      </Button>
                     </DrawerTrigger>
-                    <DrawerContent handleClassName='mt-0 bg-gray-500 h-1' overlayClassName='bg-transparent' className='md:hidden flex flex-col gap-8 p-4 items-center bg-gray-300 border-2 border-gray-500'>
+                    <DrawerContent handleClassName='mt-0 bg-muted-foreground h-1' overlayClassName='bg-transparent' className='md:hidden flex flex-col gap-8 p-4 items-center bg-secondary border-2 border-border'>
                       <VisuallyHidden>
                         <DrawerTitle />
                         <DrawerDescription />
@@ -689,7 +727,7 @@ export default function App() {
                         cooldownTicks={cooldownTicks}
                       />
                       <Input
-                        className='border-2 border-gray-500'
+                        className='border-2 border-border'
                         graph={graph}
                         onValueChange={(node) => setSearchNode(node)}
                         icon={<Search />}

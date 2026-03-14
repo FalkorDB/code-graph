@@ -149,7 +149,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                     }
                 }}
                 onKeyDown={handleKeyDown}
-                className={cn("w-full border p-2 rounded-md pointer-events-auto", className)}
+                className={cn("w-full border p-2 rounded-md pointer-events-auto bg-background text-foreground focus:border-primary focus:ring-1 focus:ring-primary/50 focus-visible:outline-none transition-colors", className)}
                 placeholder="Search for nodes in the graph"
                 value={node?.name || ""}
                 onChange={(e) => {
@@ -175,7 +175,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                 open &&
                 <div
                     ref={containerRef}
-                    className="z-10 w-full bg-white absolute flex flex-col pointer-events-auto border rounded-md md:max-h-[50dvh] h-[25dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
+                    className="z-10 w-full bg-background absolute flex flex-col pointer-events-auto border rounded-md md:max-h-[50dvh] h-[25dvh] overflow-y-auto overflow-x-hidden p-2 gap-2"
                     data-name='search-bar-list'
                     style={{
                         top: inputHeight + 16
@@ -201,7 +201,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                                 <button
                                     className={cn(
                                         "w-full flex gap-3 p-1 items-center rounded-md",
-                                        selectedOption === index && "bg-gray-100"
+                                        selectedOption === index && "bg-muted"
                                     )}
                                     onMouseEnter={() => setSelectedOption(index)}
                                     onClick={() => {
@@ -216,7 +216,7 @@ export default function Input({ onValueChange, handleSubmit, graph, icon, node, 
                                         <p className="truncate" title={name}>
                                             {name}
                                         </p>
-                                        <p className="truncate p-1 text-xs font-medium text-gray-400" title={path}>
+                                        <p className="truncate p-1 text-xs font-medium text-muted-foreground" title={path}>
                                             {path}
                                         </p>
                                     </div>
