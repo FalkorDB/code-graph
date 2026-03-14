@@ -4,7 +4,8 @@ from multilspy import SyncLanguageServer
 from pathlib import Path
 
 import tomllib
-from ...entities import *
+from ...entities.entity import Entity
+from ...entities.file import File
 from typing import Optional
 from ..analyzer import AbstractAnalyzer
 
@@ -91,34 +92,40 @@ class PythonAnalyzer(AbstractAnalyzer):
     def resolve_path(self, file_path: str, path: Path) -> str:
         return file_path
 
-    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path, node: Node) -> list[Entity]:
-        res = []
+    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path, graph, node: Node) -> list[Entity]:
         if node.type == 'attribute':
             node = node.child_by_field_name('attribute')
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, node):
-            type_dec = self.find_parent(resolved_node, ['class_definition'])
-            if type_dec in file.entities:
-                res.append(file.entities[type_dec])
-        return res
+        return self.resolve_entities(
+            files,
+            lsp,
+            file_path,
+            path,
+            node,
+            graph,
+            ['class_definition'],
+            ['Class'],
+        )
 
-    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
-        res = []
+    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
         if node.type == 'call':
             node = node.child_by_field_name('function')
             if node.type == 'attribute':
                 node = node.child_by_field_name('attribute')
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, node):
-            method_dec = self.find_parent(resolved_node, ['function_definition', 'class_definition'])
-            if not method_dec:
-                continue
-            if method_dec in file.entities:
-                res.append(file.entities[method_dec])
-        return res
+        return self.resolve_entities(
+            files,
+            lsp,
+            file_path,
+            path,
+            node,
+            graph,
+            ['function_definition', 'class_definition'],
+            ['Function', 'Class'],
+        )
     
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, key: str, symbol: Node) -> list[Entity]:
         if key in ["base_class", "parameters", "return_type"]:
-            return self.resolve_type(files, lsp, file_path, path, symbol)
+            return self.resolve_type(files, lsp, file_path, path, graph, symbol)
         elif key in ["call"]:
-            return self.resolve_method(files, lsp, file_path, path, symbol)
+            return self.resolve_method(files, lsp, file_path, path, graph, symbol)
         else:
             raise ValueError(f"Unknown key {key}")

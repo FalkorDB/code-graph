@@ -93,28 +93,42 @@ def test_urls_no_match_different_repo():
 
 
 # ---------------------------------------------------------------------------
-# Webhook endpoint – no secret configured (open mode)
+# Webhook endpoint – bearer token fallback mode
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()
-def client_open(monkeypatch):
-    """Test client with no webhook secret and no poll-watcher."""
+def client_token_auth(monkeypatch):
+    """Test client with bearer-token webhook auth and no poll-watcher."""
     monkeypatch.setattr(api.index, "WEBHOOK_SECRET", "")
+    monkeypatch.setattr(api.index, "SECRET_TOKEN", "apitoken")
     monkeypatch.setattr(api.index, "POLL_INTERVAL", 0)
     return TestClient(api.index.app, raise_server_exceptions=False)
 
 
-def test_webhook_ignored_wrong_branch(client_open, monkeypatch):
+@pytest.fixture()
+def client_misconfigured(monkeypatch):
+    """Test client with webhook auth disabled entirely."""
+    monkeypatch.setattr(api.index, "WEBHOOK_SECRET", "")
+    monkeypatch.setattr(api.index, "SECRET_TOKEN", None)
+    monkeypatch.setattr(api.index, "POLL_INTERVAL", 0)
+    return TestClient(api.index.app, raise_server_exceptions=False)
+
+
+def test_webhook_ignored_wrong_branch(client_token_auth, monkeypatch):
     """Pushes to non-tracked branches return 200 with status='ignored'."""
     monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
     payload = _make_push_payload(ref="refs/heads/feature/x")
-    resp = client_open.post("/api/webhook", json=payload)
+    resp = client_token_auth.post(
+        "/api/webhook",
+        json=payload,
+        headers={"Authorization": "Bearer apitoken"},
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ignored"
 
 
-def test_webhook_unknown_repo(client_open, monkeypatch):
+def test_webhook_unknown_repo(client_token_auth, monkeypatch):
     """Webhook for a repo URL that is not indexed returns 404."""
     monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
 
@@ -125,11 +139,15 @@ def test_webhook_unknown_repo(client_open, monkeypatch):
     monkeypatch.setattr(api.index, "async_get_repos", _fake_get_repos)
 
     payload = _make_push_payload()
-    resp = client_open.post("/api/webhook", json=payload)
+    resp = client_token_auth.post(
+        "/api/webhook",
+        json=payload,
+        headers={"Authorization": "Bearer apitoken"},
+    )
     assert resp.status_code == 404
 
 
-def test_webhook_success(client_open, monkeypatch):
+def test_webhook_success(client_token_auth, monkeypatch):
     """Valid push to tracked branch triggers incremental_update and returns stats."""
     monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
 
@@ -141,8 +159,8 @@ def test_webhook_success(client_open, monkeypatch):
 
     update_calls = []
 
-    def _fake_update(repo_name, from_sha, to_sha, ignore=None):
-        update_calls.append((repo_name, from_sha, to_sha))
+    def _fake_sync(repo_name, path, to_sha, before_sha=None, repo_url="", ignore=None):
+        update_calls.append((repo_name, before_sha, to_sha, repo_url))
         return {
             "files_added": 1,
             "files_modified": 0,
@@ -152,20 +170,45 @@ def test_webhook_success(client_open, monkeypatch):
 
     monkeypatch.setattr(api.index, "async_get_repos", _fake_get_repos)
     monkeypatch.setattr(api.index, "async_get_repo_info", _fake_get_repo_info)
-    monkeypatch.setattr(api.index, "incremental_update", _fake_update)
+    monkeypatch.setattr(api.index, "_sync_repo_graph", _fake_sync)
     # Skip git fetch (no real clone)
     monkeypatch.setattr(api.index, "fetch_remote", lambda path: None)
     monkeypatch.setattr(api.index, "repo_local_path", lambda name: _FakePath(exists=False))
 
     payload = _make_push_payload()
-    resp = client_open.post("/api/webhook", json=payload)
+    resp = client_token_auth.post(
+        "/api/webhook",
+        json=payload,
+        headers={"Authorization": "Bearer apitoken"},
+    )
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "success"
     assert data["files_added"] == 1
     assert len(update_calls) == 1
-    assert update_calls[0] == ("myrepo", _FULL_SHA_BEFORE, _FULL_SHA_AFTER)
+    assert update_calls[0] == (
+        "myrepo",
+        _FULL_SHA_BEFORE,
+        _FULL_SHA_AFTER,
+        "https://github.com/example/myrepo.git",
+    )
+
+
+def test_webhook_requires_bearer_token_when_secret_missing(client_token_auth, monkeypatch):
+    """Bearer token auth protects the webhook when WEBHOOK_SECRET is unset."""
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+    payload = _make_push_payload()
+    resp = client_token_auth.post("/api/webhook", json=payload)
+    assert resp.status_code == 401
+
+
+def test_webhook_rejected_when_no_auth_is_configured(client_misconfigured, monkeypatch):
+    """The webhook returns 503 when neither WEBHOOK_SECRET nor SECRET_TOKEN is set."""
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+    payload = _make_push_payload()
+    resp = client_misconfigured.post("/api/webhook", json=payload)
+    assert resp.status_code == 503
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +258,7 @@ def test_webhook_valid_signature_accepted(client_secured, monkeypatch):
 
     monkeypatch.setattr(api.index, "async_get_repos", _fake_get_repos)
     monkeypatch.setattr(api.index, "async_get_repo_info", _fake_get_repo_info)
-    monkeypatch.setattr(api.index, "incremental_update", lambda *a, **kw: {
+    monkeypatch.setattr(api.index, "_sync_repo_graph", lambda *a, **kw: {
         "files_added": 0, "files_modified": 0, "files_deleted": 0, "commit": "abc1234",
     })
     monkeypatch.setattr(api.index, "fetch_remote", lambda path: None)
@@ -234,15 +277,134 @@ def test_webhook_valid_signature_accepted(client_secured, monkeypatch):
     assert resp.json()["status"] == "success"
 
 
-def test_webhook_invalid_json(client_open, monkeypatch):
+def test_gitlab_webhook_token_accepted(client_secured, monkeypatch):
+    """GitLab webhooks authenticate via X-Gitlab-Token and git_http_url payloads."""
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+
+    async def _fake_get_repos():
+        return ["myrepo"]
+
+    async def _fake_get_repo_info(repo_name):
+        return {"repo_url": "https://gitlab.com/example/myrepo.git"}
+
+    monkeypatch.setattr(api.index, "async_get_repos", _fake_get_repos)
+    monkeypatch.setattr(api.index, "async_get_repo_info", _fake_get_repo_info)
+    monkeypatch.setattr(api.index, "_sync_repo_graph", lambda *a, **kw: {
+        "files_added": 0, "files_modified": 0, "files_deleted": 0, "commit": "abc1234",
+    })
+    monkeypatch.setattr(api.index, "fetch_remote", lambda path: None)
+    monkeypatch.setattr(api.index, "repo_local_path", lambda name: _FakePath(exists=False))
+
+    payload = {
+        "ref": "refs/heads/main",
+        "before": _FULL_SHA_BEFORE,
+        "after": _FULL_SHA_AFTER,
+        "repository": {"git_http_url": "https://gitlab.com/example/myrepo.git"},
+    }
+    resp = client_secured.post(
+        "/api/webhook",
+        json=payload,
+        headers={"X-Gitlab-Token": "mysecret", "X-Gitlab-Event": "Push Hook"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
+
+
+def test_gitlab_webhook_missing_token_rejected(client_secured, monkeypatch):
+    """GitLab requests without X-Gitlab-Token are rejected."""
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+    payload = _make_push_payload()
+    resp = client_secured.post(
+        "/api/webhook",
+        json=payload,
+        headers={"X-Gitlab-Event": "Push Hook"},
+    )
+    assert resp.status_code == 401
+
+
+def test_webhook_invalid_json(client_token_auth, monkeypatch):
     """Non-JSON bodies are rejected with 400."""
     monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
-    resp = client_open.post(
+    resp = client_token_auth.post(
         "/api/webhook",
         content=b"not-json",
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer apitoken",
+        },
     )
     assert resp.status_code == 400
+
+
+def test_sync_repo_graph_uses_stored_bookmark(monkeypatch, tmp_path):
+    """Incremental sync uses the stored bookmark instead of payload.before."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    calls = []
+    monkeypatch.setattr(api.index, "get_repo_commit", lambda name: "stored123")
+    monkeypatch.setattr(api.index, "can_incrementally_update", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        api.index,
+        "incremental_update",
+        lambda repo_name, from_sha, to_sha, ignore=None: calls.append(
+            (repo_name, from_sha, to_sha, ignore)
+        ) or {
+            "files_added": 0,
+            "files_modified": 0,
+            "files_deleted": 0,
+            "commit": to_sha[:7],
+        },
+    )
+
+    api.index._sync_repo_graph(
+        "myrepo",
+        repo_path,
+        _FULL_SHA_AFTER,
+        before_sha=_FULL_SHA_BEFORE,
+    )
+
+    assert calls == [("myrepo", "stored123", _FULL_SHA_AFTER, [])]
+
+
+def test_sync_repo_graph_full_reindexes_without_bookmark(monkeypatch, tmp_path):
+    """Missing bookmarks fall back to a full reindex instead of partial diffing."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    monkeypatch.setattr(api.index, "get_repo_commit", lambda name: None)
+    monkeypatch.setattr(
+        api.index,
+        "_full_reindex_repository",
+        lambda *args, **kwargs: {"mode": "full_reindex", "commit": "abc1234"},
+    )
+
+    result = api.index._sync_repo_graph("myrepo", repo_path, _FULL_SHA_AFTER)
+
+    assert result["mode"] == "full_reindex"
+
+
+def test_sync_repo_graph_full_reindexes_on_history_gap(monkeypatch, tmp_path):
+    """History gaps or force-pushes fall back to a full reindex."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    monkeypatch.setattr(api.index, "get_repo_commit", lambda name: "stored123")
+    monkeypatch.setattr(api.index, "can_incrementally_update", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        api.index,
+        "_full_reindex_repository",
+        lambda *args, **kwargs: {"mode": "full_reindex", "commit": "abc1234"},
+    )
+
+    result = api.index._sync_repo_graph(
+        "myrepo",
+        repo_path,
+        _FULL_SHA_AFTER,
+        before_sha=_FULL_SHA_BEFORE,
+    )
+
+    assert result["mode"] == "full_reindex"
 
 
 # ---------------------------------------------------------------------------

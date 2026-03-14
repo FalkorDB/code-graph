@@ -16,12 +16,14 @@ from api.analyzers.source_analyzer import SourceAnalyzer
 from api.git_utils import git_utils
 from api.git_utils.git_graph import AsyncGitGraph
 from api.git_utils.incremental_update import (
+    can_incrementally_update,
     fetch_remote,
     get_remote_head,
     incremental_update,
     repo_local_path,
+    repo_update_lock,
 )
-from api.graph import Graph, AsyncGraphQuery, async_get_repos
+from api.graph import Graph, AsyncGraphQuery, async_get_repos, delete_graph_if_exists
 from api.info import async_get_repo_info, get_repo_commit
 from api.llm import ask
 from api.project import Project
@@ -148,6 +150,170 @@ async def _find_repo_by_url(url: str) -> str | None:
             return repo_name
     return None
 
+
+def _webhook_auth_mode() -> str:
+    if WEBHOOK_SECRET:
+        return "shared-secret"
+    if SECRET_TOKEN:
+        return "token"
+    return "disabled"
+
+
+def _log_webhook_auth_mode() -> None:
+    mode = _webhook_auth_mode()
+    if mode == "shared-secret":
+        logger.info(
+            "Webhook auth mode: shared secret (GitHub HMAC or GitLab X-Gitlab-Token)"
+        )
+    elif mode == "token":
+        logger.info("Webhook auth mode: Authorization bearer token fallback")
+    else:
+        logger.warning(
+            "Webhook auth is not configured; /api/webhook will reject requests until "
+            "WEBHOOK_SECRET or SECRET_TOKEN is set"
+        )
+
+
+def _authenticate_webhook_request(request: Request, body: bytes) -> None:
+    """Authenticate a webhook request using the configured webhook auth mode."""
+    if WEBHOOK_SECRET:
+        github_signature = request.headers.get("X-Hub-Signature-256")
+        gitlab_token = request.headers.get("X-Gitlab-Token")
+        gitlab_event = request.headers.get("X-Gitlab-Event")
+        gitlab_signature = request.headers.get("X-Gitlab-Signature")
+
+        if github_signature:
+            mac = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256)
+            expected_signature = "sha256=" + mac.hexdigest()
+            if not hmac.compare_digest(github_signature, expected_signature):
+                raise HTTPException(status_code=401, detail="Invalid GitHub webhook signature")
+            return
+
+        if gitlab_token or gitlab_event or gitlab_signature:
+            if not gitlab_token:
+                raise HTTPException(
+                    status_code=401,
+                    detail="GitLab webhooks must include X-Gitlab-Token",
+                )
+            if not hmac.compare_digest(gitlab_token, WEBHOOK_SECRET):
+                raise HTTPException(status_code=401, detail="Invalid GitLab webhook token")
+            return
+
+        raise HTTPException(
+            status_code=401,
+            detail="Missing supported webhook authentication header",
+        )
+
+    if not SECRET_TOKEN:
+        logger.error(
+            "Webhook auth misconfigured: set WEBHOOK_SECRET or SECRET_TOKEN before "
+            "accepting webhook updates"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook authentication is not configured",
+        )
+
+    token_required(request.headers.get("Authorization"))
+
+
+def _extract_repo_url(payload: dict) -> str:
+    repository = payload.get("repository", {})
+    project = payload.get("project", {})
+    return (
+        repository.get("clone_url")
+        or repository.get("git_http_url")
+        or project.get("git_http_url")
+        or ""
+    )
+
+
+def _full_reindex_repository(
+    repo_name: str,
+    repo_path: Path,
+    repo_url: str = "",
+    ignore: list[str] | None = None,
+    reason: str = "",
+) -> dict:
+    if ignore is None:
+        ignore = []
+
+    logger.warning(
+        "Falling back to a full reindex for '%s'%s",
+        repo_name,
+        f": {reason}" if reason else "",
+    )
+
+    with repo_update_lock(repo_name):
+        delete_graph_if_exists(repo_name)
+        delete_graph_if_exists(git_utils.GitRepoName(repo_name))
+
+        if repo_path.exists():
+            proj = Project.from_local_repository(repo_path)
+        elif repo_url:
+            proj = Project.from_git_repository(repo_url)
+        else:
+            raise ValueError(
+                f"Cannot reindex '{repo_name}': local clone is missing and no repo URL is available"
+            )
+
+        proj.analyze_sources(ignore)
+        proj.process_git_history(ignore)
+
+    return {
+        "mode": "full_reindex",
+        "files_added": 0,
+        "files_modified": 0,
+        "files_deleted": 0,
+        "commit": get_repo_commit(repo_name),
+    }
+
+
+def _sync_repo_graph(
+    repo_name: str,
+    repo_path: Path,
+    target_sha: str,
+    *,
+    before_sha: str | None = None,
+    repo_url: str = "",
+    ignore: list[str] | None = None,
+) -> dict:
+    if ignore is None:
+        ignore = []
+
+    if not repo_path.exists():
+        return _full_reindex_repository(
+            repo_name,
+            repo_path,
+            repo_url,
+            ignore,
+            "local clone missing",
+        )
+
+    stored_sha = get_repo_commit(repo_name)
+    if not stored_sha:
+        return _full_reindex_repository(
+            repo_name,
+            repo_path,
+            repo_url,
+            ignore,
+            "missing stored commit bookmark",
+        )
+
+    if not can_incrementally_update(repo_path, stored_sha, target_sha, before_sha):
+        return _full_reindex_repository(
+            repo_name,
+            repo_path,
+            repo_url,
+            ignore,
+            (
+                f"stored bookmark {stored_sha} does not align with "
+                f"before={before_sha or '<none>'} and target={target_sha}"
+            ),
+        )
+
+    return incremental_update(repo_name, stored_sha, target_sha, ignore)
+
 # ---------------------------------------------------------------------------
 # Background poll-watcher helpers (synchronous, run in thread-pool executor)
 # ---------------------------------------------------------------------------
@@ -174,29 +340,28 @@ def _poll_repo(repo_name: str) -> None:
         return
 
     current_sha = get_repo_commit(repo_name)
-    if not current_sha:
-        logger.debug("Poll: no stored commit for '%s', skipping", repo_name)
-        return
-
-    # Handle comparison between short (7-char) and full (40-char) SHAs: a short
-    # stored SHA is a valid prefix of a full remote SHA for the same commit.
-    # We only apply prefix matching when the stored SHA is shorter.
-    if len(current_sha) < len(remote_head):
-        up_to_date = remote_head.startswith(current_sha)
-    elif len(current_sha) > len(remote_head):
-        up_to_date = current_sha.startswith(remote_head)
+    if current_sha:
+        # Handle comparison between short (7-char) and full (40-char) SHAs: a short
+        # stored SHA is a valid prefix of a full remote SHA for the same commit.
+        # We only apply prefix matching when the stored SHA is shorter.
+        if len(current_sha) < len(remote_head):
+            up_to_date = remote_head.startswith(current_sha)
+        elif len(current_sha) > len(remote_head):
+            up_to_date = current_sha.startswith(remote_head)
+        else:
+            up_to_date = current_sha == remote_head
+        if up_to_date:
+            logger.debug("Poll: '%s' is up-to-date at %s", repo_name, current_sha)
+            return
     else:
-        up_to_date = current_sha == remote_head
-    if up_to_date:
-        logger.debug("Poll: '%s' is up-to-date at %s", repo_name, current_sha)
-        return
+        logger.warning("Poll: '%s' has no stored bookmark; forcing a full reindex", repo_name)
 
     logger.info(
         "Poll: new commits detected for '%s' (%s -> %s), updating …",
         repo_name, current_sha, remote_head,
     )
     try:
-        result = incremental_update(repo_name, current_sha, remote_head)
+        result = _sync_repo_graph(repo_name, path, remote_head)
         logger.info("Poll: '%s' updated — %s", repo_name, result)
     except Exception as exc:
         logger.exception(
@@ -231,6 +396,7 @@ async def _poll_loop() -> None:
 
 @contextlib.asynccontextmanager
 async def _lifespan(application: FastAPI):
+    _log_webhook_auth_mode()
     poll_task = None
     if POLL_INTERVAL > 0:
         poll_task = asyncio.create_task(_poll_loop())
@@ -437,27 +603,21 @@ async def list_commits(data: RepoRequest, _=Depends(public_or_auth)):
 async def webhook(request: Request):
     """Receive a GitHub/GitLab push event and trigger an incremental graph update.
 
-    When ``WEBHOOK_SECRET`` is set the endpoint validates the
-    ``X-Hub-Signature-256`` header using HMAC-SHA256; requests with a missing
-    or invalid signature are rejected with **401 Unauthorized**.
+    When ``WEBHOOK_SECRET`` is set the endpoint validates GitHub's
+    ``X-Hub-Signature-256`` HMAC signature or GitLab's ``X-Gitlab-Token``.
+    Without ``WEBHOOK_SECRET`` the endpoint falls back to the standard bearer
+    token auth used by the other mutating routes.
 
     Only pushes to the branch configured via ``TRACKED_BRANCH`` (default
     ``main``) trigger an update; pushes to other branches are acknowledged
     with a ``200 ignored`` response so that GitHub does not retry them.
 
-    The repository is identified by matching the ``repository.clone_url``
-    field in the payload against the URLs stored for already-indexed
-    repositories.
+    The repository is identified by matching the payload's repository URL
+    (`repository.clone_url`, `repository.git_http_url`, or `project.git_http_url`)
+    against the URLs stored for already-indexed repositories.
     """
     body = await request.body()
-
-    # Validate HMAC-SHA256 signature when a secret is configured
-    if WEBHOOK_SECRET:
-        sig_header = request.headers.get("X-Hub-Signature-256", "")
-        mac = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256)
-        expected_sig = "sha256=" + mac.hexdigest()
-        if not hmac.compare_digest(sig_header, expected_sig):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    _authenticate_webhook_request(request, body)
 
     try:
         payload = await request.json()
@@ -467,7 +627,7 @@ async def webhook(request: Request):
     ref = payload.get("ref", "")
     before = payload.get("before", "")
     after = payload.get("after", "")
-    repo_url = payload.get("repository", {}).get("clone_url", "")
+    repo_url = _extract_repo_url(payload)
 
     # Only process pushes to the configured tracked branch
     expected_ref = f"refs/heads/{TRACKED_BRANCH}"
@@ -478,7 +638,10 @@ async def webhook(request: Request):
     if not before or not after or not repo_url:
         raise HTTPException(
             status_code=400,
-            detail="Payload missing required fields: ref, before, after, repository.clone_url",
+            detail=(
+                "Payload missing required fields: ref, before, after, and a repository URL "
+                "(repository.clone_url, repository.git_http_url, or project.git_http_url)"
+            ),
         )
 
     # Resolve the repository name from the stored index
@@ -498,7 +661,13 @@ async def webhook(request: Request):
         path = repo_local_path(repo_name)
         if path.exists():
             fetch_remote(path)
-        return incremental_update(repo_name, before, after)
+        return _sync_repo_graph(
+            repo_name,
+            path,
+            after,
+            before_sha=before,
+            repo_url=repo_url,
+        )
 
     loop = asyncio.get_running_loop()
     try:

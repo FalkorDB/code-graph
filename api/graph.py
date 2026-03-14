@@ -1,6 +1,6 @@
 import os
 import time
-from .entities import *
+from .entities import File, encode_edge, encode_node
 from typing import Optional
 from falkordb import FalkorDB, Path, Node, QueryResult
 from falkordb.asyncio import FalkorDB as AsyncFalkorDB
@@ -31,6 +31,20 @@ def get_repos() -> list[str]:
     graphs = db.list_graphs()
     graphs = [g for g in graphs if not (g.endswith('_git') or g.endswith('_schema'))]
     return graphs
+
+
+def delete_graph_if_exists(name: str) -> bool:
+    """Delete *name* when it already exists in FalkorDB."""
+    db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
+                  port=os.getenv('FALKORDB_PORT', 6379),
+                  username=os.getenv('FALKORDB_USERNAME', None),
+                  password=os.getenv('FALKORDB_PASSWORD', None))
+
+    if name not in db.list_graphs():
+        return False
+
+    db.select_graph(name).delete()
+    return True
 
 class Graph():
     """
@@ -171,7 +185,7 @@ class Graph():
 
         return result_set
 
-    def get_sub_graph(self, l: int) -> dict:
+    def get_sub_graph(self, limit: int) -> dict:
 
         q = """MATCH (src)
                    OPTIONAL MATCH (src)-[e]->(dest)
@@ -180,7 +194,7 @@ class Graph():
 
         sub_graph = {'nodes': [], 'edges': [] }
 
-        result_set = self._query(q, {'limit': l}).result_set
+        result_set = self._query(q, {'limit': limit}).result_set
         for row in result_set:
             src  = row[0]
             e    = row[1]
@@ -466,6 +480,44 @@ class Graph():
 
         return file
 
+    def get_entity_at_position(self, path: str, line: int, labels: Optional[list[str]] = None) -> Optional[Node]:
+        """Return the smallest entity spanning *line* within *path*."""
+        label_filter = ":" + ":".join(labels) if labels else ""
+        q = f"""MATCH (e{label_filter})
+               WHERE e.path = $path
+                 AND e.src_start <= $line
+                 AND e.src_end >= $line
+               RETURN e
+               ORDER BY (e.src_end - e.src_start) ASC
+               LIMIT 1"""
+
+        res = self._query(q, {'path': path, 'line': line}).result_set
+        if len(res) == 0:
+            return None
+
+        return res[0][0]
+
+    def get_direct_dependent_files(self, files: list[Path]) -> list[Path]:
+        """Return files that directly depend on entities defined in *files*."""
+        if len(files) == 0:
+            return []
+
+        q = """UNWIND $files AS file
+               MATCH (changed_file:File {path: file['path'], name: file['name'], ext: file['ext']})
+               MATCH (changed_file)-[:DEFINES*]->(changed_entity)
+               MATCH (dependent_entity)-[:CALLS|EXTENDS|IMPLEMENTS|RETURNS|PARAMETERS]->(changed_entity)
+               MATCH (dependent_file:File)-[:DEFINES*]->(dependent_entity)
+               RETURN DISTINCT dependent_file.path, dependent_file.name, dependent_file.ext"""
+
+        params = {
+            'files': [
+                {'path': str(file_path), 'name': file_path.name, 'ext': file_path.suffix}
+                for file_path in files
+            ]
+        }
+        result_set = self._query(q, params).result_set
+        return [Path(row[0]) for row in result_set]
+
     # set file code coverage
     # if file coverage is 100% set every defined function coverage to 100% aswell
     def set_file_coverage(self, path: str, name: str, ext: str, coverage: float) -> None:
@@ -478,7 +530,7 @@ class Graph():
 
         params = {'path': path, 'name': name, 'ext': ext, 'coverage': coverage}
 
-        res = self._query(q, params)
+        self._query(q, params)
 
     def connect_entities(self, relation: str, src_id: int, dest_id: int, properties: dict = {}) -> None:
         """
@@ -768,4 +820,3 @@ class AsyncGraphQuery:
 
     async def close(self) -> None:
         await self.db.aclose()
-

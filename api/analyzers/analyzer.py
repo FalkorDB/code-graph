@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -6,6 +7,14 @@ from api.entities.entity import Entity
 from api.entities.file import File
 from abc import ABC, abstractmethod
 from multilspy import SyncLanguageServer
+
+from ..graph import Graph
+
+
+@dataclass(frozen=True)
+class ResolvedEntityRef:
+    id: int
+
 
 class AbstractAnalyzer(ABC):
     def __init__(self, language: Language) -> None:
@@ -56,8 +65,69 @@ class AbstractAnalyzer(ABC):
         try:
             locations = lsp.request_definition(str(file_path), node.start_point.row, node.start_point.column)
             return [(files[Path(self.resolve_path(location['absolutePath'], path))], files[Path(self.resolve_path(location['absolutePath'], path))].tree.root_node.descendant_for_point_range(Point(location['range']['start']['line'], location['range']['start']['character']), Point(location['range']['end']['line'], location['range']['end']['character']))) for location in locations if location and Path(self.resolve_path(location['absolutePath'], path)) in files]
-        except Exception as e:
+        except Exception:
             return []
+
+    def resolve_entities(
+        self,
+        files: dict[Path, File],
+        lsp: SyncLanguageServer,
+        file_path: Path,
+        path: Path,
+        node: Node,
+        graph: Graph,
+        parent_types: list[str],
+        graph_labels: list[str],
+        reject_parent_types: Optional[set[str]] = None,
+    ) -> list[Entity | ResolvedEntityRef]:
+        try:
+            locations = lsp.request_definition(
+                str(file_path), node.start_point.row, node.start_point.column
+            )
+        except Exception:
+            return []
+
+        resolved_entities: list[Entity | ResolvedEntityRef] = []
+        for location in locations:
+            if not location or 'absolutePath' not in location:
+                continue
+
+            resolved_path = Path(self.resolve_path(location['absolutePath'], path))
+            if resolved_path in files:
+                file = files[resolved_path]
+                resolved_node = file.tree.root_node.descendant_for_point_range(
+                    Point(
+                        location['range']['start']['line'],
+                        location['range']['start']['character'],
+                    ),
+                    Point(
+                        location['range']['end']['line'],
+                        location['range']['end']['character'],
+                    ),
+                )
+                entity_node = self.find_parent(resolved_node, parent_types)
+                if entity_node is None:
+                    continue
+                if reject_parent_types and entity_node.type in reject_parent_types:
+                    continue
+
+                entity = file.entities.get(entity_node)
+                if entity is not None:
+                    resolved_entities.append(entity)
+                continue
+
+            if graph is None:
+                continue
+
+            graph_entity = graph.get_entity_at_position(
+                str(resolved_path),
+                location['range']['start']['line'],
+                graph_labels,
+            )
+            if graph_entity is not None:
+                resolved_entities.append(ResolvedEntityRef(graph_entity.id))
+
+        return resolved_entities
         
     @abstractmethod
     def add_dependencies(self, path: Path, files: list[Path]):
@@ -133,7 +203,7 @@ class AbstractAnalyzer(ABC):
         pass
 
     @abstractmethod
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, key: str, symbol: Node) -> list[Entity | ResolvedEntityRef]:
         """
         Resolve a symbol to an entity.
 
@@ -148,4 +218,3 @@ class AbstractAnalyzer(ABC):
         """
 
         pass
-

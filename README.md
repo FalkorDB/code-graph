@@ -86,7 +86,7 @@ cp .env.template .env
 | `MODEL_NAME` | LiteLLM model used by `/api/chat` | No | `gemini/gemini-flash-lite-latest` |
 | `HOST` | Optional Uvicorn bind host for `start.sh`/`make run-*` | No | `0.0.0.0` or `127.0.0.1` depending on command |
 | `PORT` | Optional Uvicorn bind port for `start.sh`/`make run-*` | No | `5000` |
-| `WEBHOOK_SECRET` | Optional HMAC secret for `/api/webhook` signature validation | No | empty |
+| `WEBHOOK_SECRET` | Shared secret for GitHub HMAC or GitLab `X-Gitlab-Token` verification on `/api/webhook` | No | empty |
 | `TRACKED_BRANCH` | Branch watched by the webhook and poll-watcher | No | `main` |
 | `POLL_INTERVAL` | Seconds between background poll checks (`0` disables polling) | No | `60` |
 
@@ -100,7 +100,7 @@ The chat endpoint also needs the provider credential expected by your chosen `MO
 - If `SECRET_TOKEN` is unset, the current implementation accepts requests without an `Authorization` header.
 - Setting `CODE_GRAPH_PUBLIC=1` makes the read-only endpoints public even when `SECRET_TOKEN` is configured.
 
-Continuous graph updates can be triggered either by posting a GitHub/GitLab push payload to `/api/webhook` or by enabling the background poll-watcher with `POLL_INTERVAL > 0`.
+Continuous graph updates can be triggered either by posting a GitHub/GitLab push payload to `/api/webhook` or by enabling the background poll-watcher with `POLL_INTERVAL > 0`. When `WEBHOOK_SECRET` is unset, `/api/webhook` falls back to the same bearer-token auth used by the other mutating endpoints.
 
 ### 3. Install dependencies
 
@@ -246,7 +246,7 @@ A C analyzer exists in the source tree, but it is commented out and is not curre
 | POST | `/api/analyze_folder` | Analyze a local source folder |
 | POST | `/api/analyze_repo` | Clone and analyze a git repository |
 | POST | `/api/switch_commit` | Switch the indexed repository to a specific commit |
-| POST | `/api/webhook` | Receive a push event and apply an incremental graph update |
+| POST | `/api/webhook` | Receive a GitHub/GitLab push event and apply an incremental graph update |
 
 ## License
 

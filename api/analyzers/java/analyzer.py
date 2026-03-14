@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 import subprocess
-from ...entities import *
+from ...entities.entity import Entity
+from ...entities.file import File
 from typing import Optional
 from ..analyzer import AbstractAnalyzer
 
@@ -102,28 +103,35 @@ class JavaAnalyzer(AbstractAnalyzer):
             return f"{path}/temp_deps/{args[1]}/{targs}/{args[-1]}"
         return file_path
 
-    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
-        res = []
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, node):
-            type_dec = self.find_parent(resolved_node, ['class_declaration', 'interface_declaration', 'enum_declaration'])
-            if type_dec in file.entities:
-                res.append(file.entities[type_dec])
-        return res
+    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
+        return self.resolve_entities(
+            files,
+            lsp,
+            file_path,
+            path,
+            node,
+            graph,
+            ['class_declaration', 'interface_declaration', 'enum_declaration'],
+            ['Class', 'Interface', 'Enum'],
+        )
 
-    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
-        res = []
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, node.child_by_field_name('name')):
-            method_dec = self.find_parent(resolved_node, ['method_declaration', 'constructor_declaration', 'class_declaration', 'interface_declaration', 'enum_declaration'])
-            if method_dec and method_dec.type in ['class_declaration', 'interface_declaration', 'enum_declaration']:
-                continue
-            if method_dec in file.entities:
-                res.append(file.entities[method_dec])
-        return res
+    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
+        return self.resolve_entities(
+            files,
+            lsp,
+            file_path,
+            path,
+            node.child_by_field_name('name'),
+            graph,
+            ['method_declaration', 'constructor_declaration', 'class_declaration', 'interface_declaration', 'enum_declaration'],
+            ['Method', 'Constructor'],
+            {'class_declaration', 'interface_declaration', 'enum_declaration'},
+        )
     
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, key: str, symbol: Node) -> list[Entity]:
         if key in ["implement_interface", "base_class", "extend_interface", "parameters", "return_type"]:
-            return self.resolve_type(files, lsp, file_path, path, symbol)
+            return self.resolve_type(files, lsp, file_path, path, graph, symbol)
         elif key in ["call"]:
-            return self.resolve_method(files, lsp, file_path, path, symbol)
+            return self.resolve_method(files, lsp, file_path, path, graph, symbol)
         else:
             raise ValueError(f"Unknown key {key}")

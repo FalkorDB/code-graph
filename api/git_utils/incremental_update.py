@@ -6,6 +6,7 @@ and bookmarks the new commit SHA in Redis so the system can resume
 correctly after restarts or failures.
 """
 
+from contextlib import contextmanager
 import logging
 import os
 import subprocess
@@ -17,10 +18,12 @@ from pygit2.repository import Repository
 
 from ..analyzers.source_analyzer import SourceAnalyzer
 from ..graph import Graph
-from ..info import set_repo_commit
+from ..info import get_redis_connection, set_repo_commit
 from .git_utils import classify_changes
 
 logger = logging.getLogger(__name__)
+REPO_UPDATE_LOCK_TIMEOUT = int(os.getenv("REPO_UPDATE_LOCK_TIMEOUT", "300"))
+REPO_UPDATE_LOCK_WAIT = int(os.getenv("REPO_UPDATE_LOCK_WAIT", "30"))
 
 
 def repo_local_path(repo_name: str) -> Path:
@@ -76,6 +79,94 @@ def get_remote_head(repo_path: Path, branch: str) -> Optional[str]:
     except subprocess.CalledProcessError:
         logger.warning("Could not resolve origin/%s in %s", branch, repo_path)
         return None
+
+
+@contextmanager
+def repo_update_lock(repo_name: str):
+    """Acquire a repo-scoped distributed lock for graph mutations."""
+    redis_connection = get_redis_connection()
+    lock = redis_connection.lock(
+        f"code-graph:repo-update:{repo_name}",
+        timeout=REPO_UPDATE_LOCK_TIMEOUT,
+        blocking_timeout=REPO_UPDATE_LOCK_WAIT,
+        thread_local=False,
+    )
+
+    logger.debug("Acquiring repo update lock for '%s'", repo_name)
+    if not lock.acquire(blocking=True):
+        raise TimeoutError(f"Timed out waiting for update lock for '{repo_name}'")
+
+    try:
+        yield
+    finally:
+        if lock.owned():
+            lock.release()
+            logger.debug("Released repo update lock for '%s'", repo_name)
+
+
+def _resolve_commit(repo: Repository, sha: str):
+    return repo.revparse_single(sha)
+
+
+def _is_ancestor(repo: Repository, ancestor_sha: str, descendant_sha: str) -> bool:
+    ancestor = _resolve_commit(repo, ancestor_sha)
+    descendant = _resolve_commit(repo, descendant_sha)
+    return ancestor.id == descendant.id or repo.merge_base(ancestor.id, descendant.id) == ancestor.id
+
+
+def can_incrementally_update(
+    repo_path: Path,
+    from_sha: str,
+    to_sha: str,
+    before_sha: Optional[str] = None,
+) -> bool:
+    """Return True when the stored bookmark can be safely advanced incrementally."""
+    try:
+        repo = Repository(str(repo_path))
+        if before_sha is not None and not _is_ancestor(repo, from_sha, before_sha):
+            return False
+
+        anchor_sha = before_sha or from_sha
+        return _is_ancestor(repo, anchor_sha, to_sha)
+    except Exception as exc:
+        logger.warning(
+            "Cannot validate incremental update range for '%s' -> '%s' (before=%s): %s",
+            from_sha,
+            to_sha,
+            before_sha,
+            exc,
+        )
+        return False
+
+
+def _dedupe_paths(paths: list[Path]) -> list[Path]:
+    seen: set[Path] = set()
+    deduped: list[Path] = []
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        deduped.append(path)
+    return deduped
+
+
+def _collect_transitive_dependents(g: Graph, changed_files: list[Path]) -> list[Path]:
+    seen = set(changed_files)
+    dependents: list[Path] = []
+    frontier = _dedupe_paths(changed_files)
+
+    while frontier:
+        direct_dependents = g.get_direct_dependent_files(frontier)
+        next_frontier: list[Path] = []
+        for dependent in direct_dependents:
+            if dependent in seen:
+                continue
+            seen.add(dependent)
+            dependents.append(dependent)
+            next_frontier.append(dependent)
+        frontier = next_frontier
+
+    return dependents
 
 
 def incremental_update(
@@ -162,28 +253,47 @@ def incremental_update(
         len(deleted),
     )
 
-    # Checkout target commit so files on disk reflect to_sha
-    repo.checkout_tree(to_commit.tree, strategy=CheckoutStrategy.FORCE)
-    repo.set_head_detached(to_commit.id)
+    files_to_remove = _dedupe_paths(deleted + modified)
 
-    # Apply graph changes
-    g = Graph(repo_name)
+    with repo_update_lock(repo_name):
+        try:
+            # Checkout target commit so files on disk reflect to_sha
+            repo.checkout_tree(to_commit.tree, strategy=CheckoutStrategy.FORCE)
+            repo.set_head_detached(to_commit.id)
 
-    files_to_remove = deleted + modified
-    if files_to_remove:
-        logger.info("Removing %d file(s) from graph", len(files_to_remove))
-        g.delete_files(files_to_remove)
+            # Apply graph changes
+            g = Graph(repo_name)
+            dependent_files = _collect_transitive_dependents(g, files_to_remove)
 
-    files_to_add = added + modified
-    if files_to_add:
-        logger.info("Inserting/updating %d file(s) in graph", len(files_to_add))
-        analyzer.analyze_files(files_to_add, repo_path, g)
+            if dependent_files:
+                logger.info(
+                    "Reprocessing %d dependent file(s) for '%s'",
+                    len(dependent_files),
+                    repo_name,
+                )
 
-    # Persist the new commit bookmark using the short ID for consistency
-    # with the rest of the system (build_commit_graph, analyze_sources …)
-    new_commit_short = to_commit.short_id
-    set_repo_commit(repo_name, new_commit_short)
-    logger.info("Graph for '%s' updated to commit %s", repo_name, new_commit_short)
+            if files_to_remove:
+                logger.info("Removing %d file(s) from graph", len(files_to_remove))
+                g.delete_files(files_to_remove)
+
+            deleted_files = set(deleted)
+            files_to_add = [
+                file_path
+                for file_path in _dedupe_paths(added + modified + dependent_files)
+                if file_path not in deleted_files
+            ]
+            if files_to_add:
+                logger.info("Inserting/updating %d file(s) in graph", len(files_to_add))
+                analyzer.analyze_files(files_to_add, repo_path, g)
+
+            # Persist the new commit bookmark using the short ID for consistency
+            # with the rest of the system (build_commit_graph, analyze_sources …)
+            new_commit_short = to_commit.short_id
+            set_repo_commit(repo_name, new_commit_short)
+            logger.info("Graph for '%s' updated to commit %s", repo_name, new_commit_short)
+        except Exception:
+            logger.exception("Incremental update failed for '%s'", repo_name)
+            raise
 
     return {
         "files_added": len(added),
