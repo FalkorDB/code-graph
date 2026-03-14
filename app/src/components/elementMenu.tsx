@@ -40,7 +40,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                     if (!ref) return
                     setContainerWidth(ref.clientWidth)
                 }}
-                className="absolute z-10 bg-black rounded-lg shadow-lg flex divide-x divide-[#434343]"
+                className="absolute z-10 bg-popover text-popover-foreground rounded-lg shadow-lg flex divide-x divide-border"
                 id="elementMenu"
                 style={{
                     left: Math.max(8, Math.min(position.x - containerWidth / 2, (parentRef?.current?.clientWidth || 0) - containerWidth - 8)),
@@ -57,7 +57,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                     title="Create a path"
                                     onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].data.name }, end: { id: Number(objects[1].id), name: objects[1].data.name } })}
                                 >
-                                    <Waypoints color="white" />
+                                    <Waypoints />
                                 </button>
                             }
                             <button
@@ -65,19 +65,19 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                 title="Remove"
                                 onClick={() => handleRemove(objects.map(o => o.id), "nodes")}
                             >
-                                <EyeOff color="white" />
+                                <EyeOff />
                             </button>
                             <button
                                 className="p-2"
                                 onClick={() => handleExpand(objects, true)}
                             >
-                                <Maximize2 color="white" />
+                                <Maximize2 />
                             </button>
                             <button
                                 className="p-2"
                                 onClick={() => handleExpand(objects, false)}
                             >
-                                <Minimize2 color="white" />
+                                <Minimize2 />
                             </button>
                         </>
                         : <>
@@ -107,7 +107,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                             }
                                         }}
                                     >
-                                        <Copy color="white" />
+                                        <Copy />
                                     </button>
                                 </>
                             }
@@ -116,7 +116,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                 title="Remove"
                                 onClick={() => handleRemove([obj.id], "category" in obj ? "nodes" : "links")}
                             >
-                                <EyeOff color="white" />
+                                <EyeOff />
                             </button>
                             {
                                 "category" in obj &&
@@ -130,7 +130,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                             window.open(objURL, '_blank');
                                         }}
                                     >
-                                        <Globe color="white" />
+                                        <Globe />
                                     </a>
                                 </>
                             }
@@ -139,7 +139,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                 title="View Node"
                                 onClick={() => setCurrentObj(obj)}
                             >
-                                <ChevronsLeftRight color="white" />
+                                <ChevronsLeftRight />
                             </button>
                             {
                                 "category" in obj &&
@@ -148,13 +148,13 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                         className="p-2"
                                         onClick={() => handleExpand([obj as Node], true)}
                                     >
-                                        <Maximize2 color="white" />
+                                        <Maximize2 />
                                     </button>
                                     <button
                                         className="p-2"
                                         onClick={() => handleExpand([obj as Node], false)}
                                     >
-                                        <Minimize2 color="white" />
+                                        <Minimize2 />
                                     </button>
                                 </>
                             }
