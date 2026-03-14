@@ -30,14 +30,14 @@ export default class CodeGraph extends BasePage {
 
     /* NavBar Locators*/
     private get falkorDBLogo(): Locator {
-        return this.scopedLocator("//*[img[@alt='FalkorDB']]")
+        return this.scopedLocator("//a[@aria-label='FalkorDB']")
     }
 
     private get navBaritem(): (navItem: string) => Locator {
         return (navItem: string) => {
             const navItemSelectors: Record<string, string> = {
                 "Main Website": "//a[@title='Home' or .//p[normalize-space()='Main Website'] or contains(@href, 'falkordb.com')]",
-                "Github": "//a[@title='GitHub' or .//p[normalize-space()='GitHub'] or contains(@href, 'github.com/FalkorDB/code-graph')]",
+                "GitHub": "//a[@title='GitHub' or .//p[normalize-space()='GitHub'] or contains(@href, 'github.com/FalkorDB/code-graph')]",
                 "Discord": "//a[@title='Discord' or .//p[normalize-space()='Discord'] or contains(@href, 'discord.gg/falkordb')]",
             };
             const selector = navItemSelectors[navItem] ?? `//a[@title='${navItem}' or .//p[normalize-space()='${navItem}']]`;
