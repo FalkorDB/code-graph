@@ -30,7 +30,15 @@ export default class CodeGraph extends BasePage {
     }
 
     private get navBaritem(): (navItem: string) => Locator {
-        return (navItem: string) => this.scopedLocator(`//a[p[text() = '${navItem}']]`);
+        return (navItem: string) => {
+            const navItemSelectors: Record<string, string> = {
+                "Main Website": "//a[@title='Home' or .//p[normalize-space()='Main Website'] or contains(@href, 'falkordb.com')]",
+                "Github": "//a[@title='Github' or .//p[normalize-space()='Github'] or contains(@href, 'github.com/FalkorDB/code-graph')]",
+                "Discord": "//a[@title='Discord' or .//p[normalize-space()='Discord'] or contains(@href, 'discord.gg/falkordb')]",
+            };
+            const selector = navItemSelectors[navItem] ?? `//a[@title='${navItem}' or .//p[normalize-space()='${navItem}']]`;
+            return this.scopedLocator(selector).first();
+        };
     }
 
     private get createNewProjectBtn(): Locator {
@@ -186,6 +194,10 @@ export default class CodeGraph extends BasePage {
         return this.scopedLocator("//falkordb-canvas").locator("canvas").first();
     }
 
+    private get canvasHost(): Locator {
+        return this.scopedLocator("falkordb-canvas").first();
+    }
+
     private get zoomInBtn(): Locator {
         return this.scopedLocator("//button[@title='Zoom In']");
     }
@@ -203,11 +215,11 @@ export default class CodeGraph extends BasePage {
     }
 
     private get clearGraphBtn(): Locator {
-        return this.scopedLocator("//button[p[text()='Reset Graph']]");
+        return this.container.getByRole('button', { name: 'Reset Graph' });
     }
 
     private get unhideNodesBtn(): Locator {
-        return this.scopedLocator("//button[p[text()='Unhide Nodes']]");
+        return this.container.getByRole('button', { name: 'Unhide Nodes' });
     }
 
     private get elementMenuButton(): (buttonID: string) => Locator {
@@ -411,7 +423,14 @@ export default class CodeGraph extends BasePage {
         } else {
             await interactWhenVisible(this.selectGraphInComboBoxByName(graph), (el) => el.click(), `Graph option ${graph}`);
         }
-        await this.page.waitForTimeout(2000); // graph animation delay
+        const graphGetter = this.isMobile ? "graphMobile" : "graphDesktop";
+        await this.page.waitForFunction((getterName) => {
+            const getter = (window as any)[getterName];
+            const graphData = typeof getter === "function" ? getter() : null;
+            const nodes = graphData?.elements?.nodes || graphData?.nodes;
+            return Array.isArray(nodes) && nodes.length > 0;
+        }, graphGetter, { timeout: 10000 });
+        await this.page.waitForTimeout(3000);
     }
 
     async createProject(url: string): Promise<void> {
@@ -486,10 +505,14 @@ export default class CodeGraph extends BasePage {
 
     async nodeClick(x: number, y: number): Promise<void> {
         await this.waitForCanvasAnimationToEnd();
+        const boundingBox = await this.canvasElement.boundingBox();
+        if (!boundingBox) throw new Error("Canvas bounding box not found");
+        const targetX = Math.min(Math.max(x, boundingBox.x + 1), boundingBox.x + boundingBox.width - 1);
+        const targetY = Math.min(Math.max(y, boundingBox.y + 1), boundingBox.y + boundingBox.height - 1);
         for (let attempt = 1; attempt <= 3; attempt++) {
-            await this.canvasElement.hover({ position: { x, y } });
+            await this.page.mouse.move(targetX, targetY);
             await this.page.waitForTimeout(500);
-            await this.canvasElement.click({ position: { x, y }, button: 'right' });
+            await this.page.mouse.click(targetX, targetY, { button: 'right' });
             if (await this.elementMenu.isVisible()) {
                 return;
             }
@@ -628,6 +651,10 @@ export default class CodeGraph extends BasePage {
                 return {
                     left: rect.left,
                     top: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                    canvasWidth: canvas.width,
+                    canvasHeight: canvas.height,
                     transform: ctx?.getTransform() || null,
                 };
             });
@@ -642,16 +669,20 @@ export default class CodeGraph extends BasePage {
         const nodes = graphData.elements?.nodes || graphData.nodes;
         if (!nodes) throw new Error("No nodes found in graph data!");
 
-        const { a, e, d, f } = transformData.transform;
+        const { a, b, c, d, e, f } = transformData.transform;
+        const cssScaleX = transformData.canvasWidth ? transformData.width / transformData.canvasWidth : 1;
+        const cssScaleY = transformData.canvasHeight ? transformData.height / transformData.canvasHeight : 1;
         return nodes.map((node: any) => {
+            const relativeX = (node.x * a + node.y * c + e) * cssScaleX;
+            const relativeY = (node.x * b + node.y * d + f) * cssScaleY;
             // Canvas format has properties nested in 'data' object and 'labels' instead of 'category'
             // Flatten the structure for backward compatibility
             const flatNode = {
                 ...node,
                 ...(node.data || {}), // Spread data properties to top level
                 category: node.labels?.[0] || node.category, // Use labels[0] or fallback to category
-                screenX: transformData.left + node.x * a + e - 35,
-                screenY: transformData.top + node.y * d + f - 190,
+                screenX: transformData.left + relativeX,
+                screenY: transformData.top + relativeY,
             };
             return flatNode;
         });
@@ -660,15 +691,10 @@ export default class CodeGraph extends BasePage {
 
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
         await this.waitForCanvasAnimationToEnd();
-        const { scaleX, scaleY } = await this.canvasElement.evaluate((canvas: HTMLCanvasElement) => {
-            const ctx = canvas.getContext('2d');
-            const transform = ctx?.getTransform();
-            return {
-                scaleX: transform?.a || 1,
-                scaleY: transform?.d || 1,
-            };
+        const zoom = await this.canvasHost.evaluate((canvas: { getZoom?: () => number }) => {
+            return typeof canvas.getZoom === "function" ? canvas.getZoom() : 1;
         });
-        return { scaleX, scaleY };
+        return { scaleX: zoom, scaleY: zoom };
     }
 
     async downloadImage(): Promise<Download> {
