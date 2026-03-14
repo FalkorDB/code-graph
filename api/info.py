@@ -1,5 +1,6 @@
 import os
 import redis
+import redis.asyncio as aioredis
 import logging
 from typing import Optional, Dict
 
@@ -111,6 +112,38 @@ def get_repo_info(repo_name: str) -> Optional[Dict[str, str]]:
         logging.info(f"Repository info retrieved for {repo_name}")
         return repo_info
 
+    except Exception as e:
+        logging.error(f"Error retrieving repo info for '{repo_name}': {e}")
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Async versions (for async endpoints)
+# ---------------------------------------------------------------------------
+
+async def async_get_redis_connection() -> aioredis.Redis:
+    return aioredis.Redis(
+        host=os.getenv('FALKORDB_HOST', "localhost"),
+        port=int(os.getenv('FALKORDB_PORT', "6379")),
+        username=os.getenv('FALKORDB_USERNAME'),
+        password=os.getenv('FALKORDB_PASSWORD'),
+        decode_responses=True,
+    )
+
+
+async def async_get_repo_info(repo_name: str) -> Optional[Dict[str, str]]:
+    try:
+        r = await async_get_redis_connection()
+        try:
+            key = _repo_info_key(repo_name)
+            repo_info = await r.hgetall(key)
+            if not repo_info:
+                logging.warning(f"No repository info found for {repo_name}")
+                return None
+            logging.info(f"Repository info retrieved for {repo_name}")
+            return repo_info
+        finally:
+            await r.aclose()
     except Exception as e:
         logging.error(f"Error retrieving repo info for '{repo_name}': {e}")
         raise

@@ -23,7 +23,7 @@ while ! nc -z "$FALKORDB_HOST" "$FALKORDB_PORT"; do
   sleep 0.5
 done
 
-echo "FalkorDB is up - launching Flask..."
+echo "FalkorDB is up - launching server..."
 
-# Start the Flask backend
-exec flask --app api/index.py run --host "${HOST:-0.0.0.0}" --port "${PORT:-5000}" ${FLASK_DEBUG:+--debug}
+# Start the backend
+exec uvicorn api.index:app --host "${HOST:-0.0.0.0}" --port "${PORT:-5000}" ${APP_RELOAD:+--reload}

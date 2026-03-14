@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 
 from graphrag_sdk.models.litellm import LiteModel
@@ -256,7 +257,7 @@ def _create_kg_agent(repo_name: str):
 
     return code_graph_kg.chat_session()
 
-def ask(repo_name: str, question: str) -> str:
+def _ask_sync(repo_name: str, question: str) -> str:
     chat = _create_kg_agent(repo_name)
 
     logging.debug(f"Question: {question}")
@@ -265,3 +266,8 @@ def ask(repo_name: str, question: str) -> str:
     logging.debug(f"Response: {response}")
     print(f"Response: {response['response']}")
     return response['response']
+
+
+async def ask(repo_name: str, question: str) -> str:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _ask_sync, repo_name, question)
