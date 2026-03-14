@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ThemeToggle } from './components/theme-toggle';
 import Logo from './components/logo';
-import CodeGraphLogo from './components/code-graph-logo';
+
 
 const Chat = lazy(() => import('./components/chat').then(mod => ({ default: mod.Chat })));
 const CodeGraph = lazy(() => import('./components/code-graph').then(mod => ({ default: mod.CodeGraph })));
@@ -581,11 +581,12 @@ export default function App() {
           </Suspense>
         </div>
         <div className='flex flex-col md:hidden h-full overflow-hidden' id='mobile'>
-          <header className='flex justify-center items-center relative bg-muted'>
-            <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer" aria-label="FalkorDB">
-              <CodeGraphLogo style={{ width: 'auto', height: '70px' }} />
+          <header className='flex justify-between items-center bg-muted py-2 px-4'>
+            <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer" aria-label="FalkorDB" className="flex gap-2 items-center">
+              <Logo width={40} height={34} />
+              <span className='font-semibold text-[22px]'>CODE GRAPH</span>
             </a>
-            <div className='absolute top-4 right-4 flex gap-2'>
+            <div className='flex gap-2'>
               <ThemeToggle />
               <button onClick={() => setMenuOpen(prev => !prev)}>
                 <AlignRight />
