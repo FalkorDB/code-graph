@@ -408,12 +408,12 @@ export default function App() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" asChild>
-                          <a title="Github" href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
+                          <a title="GitHub" href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
                             <Github className="h-5 w-5" />
                           </a>
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Github</TooltipContent>
+                      <TooltipContent>GitHub</TooltipContent>
                     </Tooltip>
                   </li>
                   <li>
@@ -596,7 +596,7 @@ export default function App() {
               <ul className='h-full flex flex-col gap-16 p-8 items-center'>
                 <li>
                   <a href="https://github.com/FalkorDB/code-graph" target='_blank' rel="noopener noreferrer">
-                    <p>Github</p>
+                    <p>GitHub</p>
                   </a>
                 </li>
                 <li>

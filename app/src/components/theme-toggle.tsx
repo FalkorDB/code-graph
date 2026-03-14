@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button"
 import { useTheme } from "./theme-provider"
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
 
-  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+  const isDark = resolvedTheme === "dark"
 
   return (
     <Button
