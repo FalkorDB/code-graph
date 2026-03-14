@@ -1,6 +1,6 @@
 import { toast } from "@/components/ui/use-toast";
 import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
-import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Undo2 } from "lucide-react";
+import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Loader2, Undo2 } from "lucide-react";
 import { Message, MessageTypes, Path, PathData, PATH_COLOR } from "@/lib/utils";
 import Input from "./Input";
 import { Graph, GraphData, Node } from "./model";
@@ -616,7 +616,10 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             )
             default: return (
                 <div key={index} className="flex gap-2">
-                    <img src="/dots.gif" width={100} height={10} alt="Waiting for response" />
+                    <div className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Thinking...</span>
+                    </div>
                 </div>
             )
         }

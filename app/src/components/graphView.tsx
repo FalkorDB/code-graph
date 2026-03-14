@@ -6,6 +6,7 @@ import { Fullscreen } from 'lucide-react';
 import { GraphRef } from '@/lib/utils';
 import ForceGraph from './ForceGraph';
 import { GraphLink, GraphNode } from '@falkordb/canvas';
+import { useTheme } from './theme-provider';
 
 export interface Position {
     x: number,
@@ -37,6 +38,14 @@ interface Props {
 
 const NODE_SIZE = 6;
 const PADDING = 2;
+const LIGHT_CANVAS_BACKGROUND = '#FFFFFF';
+const DARK_CANVAS_BACKGROUND = '#1A1A1A';
+const LIGHT_CANVAS_FOREGROUND = '#000000';
+const DARK_CANVAS_FOREGROUND = '#F5F5F5';
+const LIGHT_DIMMED_NODE_FILL = '#E5E5E5';
+const DARK_DIMMED_NODE_FILL = '#525252';
+const LIGHT_DIMMED_NODE_STROKE = 'gray';
+const DARK_DIMMED_NODE_STROKE = '#A3A3A3';
 
 export default function GraphView({
     data,
@@ -63,6 +72,12 @@ export default function GraphView({
     const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
     const [screenSize, setScreenSize] = useState<number>(0)
     const [hoverElement, setHoverElement] = useState<Node | Link | null>()
+    const { resolvedTheme } = useTheme()
+    const isDark = resolvedTheme === 'dark'
+    const canvasBackgroundColor = isDark ? DARK_CANVAS_BACKGROUND : LIGHT_CANVAS_BACKGROUND
+    const canvasForegroundColor = isDark ? DARK_CANVAS_FOREGROUND : LIGHT_CANVAS_FOREGROUND
+    const dimmedNodeFillColor = isDark ? DARK_DIMMED_NODE_FILL : LIGHT_DIMMED_NODE_FILL
+    const dimmedNodeStrokeColor = isDark ? DARK_DIMMED_NODE_STROKE : LIGHT_DIMMED_NODE_STROKE
 
     useEffect(() => {
         const handleResize = () => {
@@ -181,8 +196,8 @@ export default function GraphView({
                 ctx.strokeStyle = PATH_COLOR;
                 ctx.lineWidth = 1
             } else {
-                ctx.fillStyle = '#E5E5E5';
-                ctx.strokeStyle = 'gray';
+                ctx.fillStyle = dimmedNodeFillColor;
+                ctx.strokeStyle = dimmedNodeStrokeColor;
                 ctx.lineWidth = 1
             }
         } else if (isPathResponse === undefined) {
@@ -196,12 +211,12 @@ export default function GraphView({
                 ctx.lineWidth = 1
             } else {
                 ctx.fillStyle = node.color;
-                ctx.strokeStyle = 'black';
+                ctx.strokeStyle = canvasForegroundColor;
                 ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
             }
         } else {
             ctx.fillStyle = node.color;
-            ctx.strokeStyle = 'black';
+            ctx.strokeStyle = canvasForegroundColor;
             ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
         }
 
@@ -210,7 +225,7 @@ export default function GraphView({
         ctx.stroke();
         ctx.fill();
 
-        ctx.fillStyle = 'black';
+        ctx.fillStyle = canvasForegroundColor;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = '2px Arial';
@@ -230,7 +245,15 @@ export default function GraphView({
 
         // add label
         ctx.fillText(name, node.x, node.y);
-    }, [selectedObj, selectedObjects, isPathResponse, hoverElement])
+    }, [
+        selectedObj,
+        selectedObjects,
+        isPathResponse,
+        hoverElement,
+        dimmedNodeFillColor,
+        dimmedNodeStrokeColor,
+        canvasForegroundColor,
+    ])
 
     const nodePointerAreaPaint = useCallback((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
         if (node.x === undefined || node.y === undefined) {
@@ -280,6 +303,8 @@ export default function GraphView({
                 nodePointerAreaPaint={nodePointerAreaPaint}
                 linkLineDash={linkLineDash}
                 cooldownTicks={cooldownTicks}
+                backgroundColor={canvasBackgroundColor}
+                foregroundColor={canvasForegroundColor}
             />
         </div>
     )
