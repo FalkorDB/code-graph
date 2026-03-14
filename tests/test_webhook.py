@@ -6,6 +6,7 @@ Redis, git) so they run without a live database or network connection.
 
 import hashlib
 import hmac
+import importlib
 import json
 
 import pytest
@@ -250,12 +251,16 @@ def test_webhook_invalid_json(client_open, monkeypatch):
 
 def test_incremental_update_idempotent(monkeypatch, tmp_path):
     """Calling incremental_update with the same SHA twice is a no-op."""
-    from api.git_utils.incremental_update import incremental_update as _iu
+    incremental_update_module = importlib.import_module("api.git_utils.incremental_update")
+    _iu = incremental_update_module.incremental_update
 
     # Patch set_repo_commit to detect unexpected writes
     writes = []
-    monkeypatch.setattr("api.git_utils.incremental_update.set_repo_commit",
-                        lambda *a: writes.append(a))
+    monkeypatch.setattr(
+        incremental_update_module,
+        "set_repo_commit",
+        lambda *a: writes.append(a),
+    )
 
     sha = "abc1234"
     result = _iu("some-repo", sha, sha)
@@ -269,10 +274,12 @@ def test_incremental_update_idempotent(monkeypatch, tmp_path):
 
 def test_incremental_update_missing_repo(monkeypatch, tmp_path):
     """incremental_update raises ValueError when local clone does not exist."""
-    from api.git_utils.incremental_update import incremental_update as _iu
+    incremental_update_module = importlib.import_module("api.git_utils.incremental_update")
+    _iu = incremental_update_module.incremental_update
 
     monkeypatch.setattr(
-        "api.git_utils.incremental_update.repo_local_path",
+        incremental_update_module,
+        "repo_local_path",
         lambda name: tmp_path / "nonexistent",
     )
 
