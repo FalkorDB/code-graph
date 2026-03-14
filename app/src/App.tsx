@@ -20,6 +20,8 @@ import GTM from './GTM';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ThemeToggle } from './components/theme-toggle';
+import Logo from './components/logo';
+import CodeGraphLogo from './components/code-graph-logo';
 
 const Chat = lazy(() => import('./components/chat').then(mod => ({ default: mod.Chat })));
 const CodeGraph = lazy(() => import('./components/code-graph').then(mod => ({ default: mod.CodeGraph })));
@@ -383,8 +385,8 @@ export default function App() {
           <header className="flex flex-col text-xl">
             <div className="flex items-center justify-between py-2 px-4 border-b border-border">
               <div className="flex gap-4 items-center">
-                <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
-                  <img src="/logo_02.svg" alt="FalkorDB" width={27.73} height={23.95} />
+                <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer" aria-label="FalkorDB">
+                  <Logo />
                 </a>
                 <h1 className='font-semibold text-[22px]'>
                   CODE GRAPH
@@ -580,8 +582,8 @@ export default function App() {
         </div>
         <div className='flex flex-col md:hidden h-full overflow-hidden' id='mobile'>
           <header className='flex justify-center items-center relative bg-muted'>
-            <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer">
-              <img style={{ width: 'auto', height: '70px', background: "transparent" }} src="/code-graph-logo.svg" alt="FalkorDB" />
+            <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer" aria-label="FalkorDB">
+              <CodeGraphLogo style={{ width: 'auto', height: '70px' }} />
             </a>
             <div className='absolute top-4 right-4 flex gap-2'>
               <ThemeToggle />
