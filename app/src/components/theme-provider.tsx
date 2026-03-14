@@ -9,11 +9,9 @@ type ThemeProviderState = {
   setTheme: (theme: Theme) => void
 }
 
-const ThemeProviderContext = createContext<ThemeProviderState>({
-  theme: "system",
-  resolvedTheme: "light",
-  setTheme: () => null,
-})
+const VALID_THEMES: Theme[] = ["light", "dark", "system"]
+
+const ThemeProviderContext = createContext<ThemeProviderState | undefined>(undefined)
 
 const MEDIA_QUERY = "(prefers-color-scheme: dark)"
 
@@ -29,9 +27,10 @@ export function ThemeProvider({
   defaultTheme?: Theme
   storageKey?: string
 }) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  )
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem(storageKey)
+    return stored && VALID_THEMES.includes(stored as Theme) ? (stored as Theme) : defaultTheme
+  })
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme)
 
   useEffect(() => {
