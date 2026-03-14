@@ -430,7 +430,7 @@ export default class CodeGraph extends BasePage {
             const nodes = graphData?.elements?.nodes || graphData?.nodes;
             return Array.isArray(nodes) && nodes.length > 0;
         }, graphGetter, { timeout: 10000 });
-        await this.page.waitForTimeout(3000);
+        await this.waitForCanvasViewportToSettle();
     }
 
     async createProject(url: string): Promise<void> {
@@ -771,5 +771,47 @@ export default class CodeGraph extends BasePage {
             return;
         }
         throw new Error(`Canvas animation did not stop within ${timeout}ms; final status: "${finalStatus}"`);
+    }
+
+    private async waitForCanvasViewportToSettle(timeout = 5000, interval = 250): Promise<void> {
+        await this.canvasHost.waitFor({ state: "attached", timeout: 10000 });
+
+        let previousZoom: number | null = null;
+        let stableReads = 0;
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < timeout) {
+            const { cooldown, zoom } = await this.canvasHost.evaluate((canvas: {
+                getGraph?: () => { cooldownTicks?: () => number } | undefined;
+                getZoom?: () => number;
+            }) => {
+                const graph = typeof canvas.getGraph === "function" ? canvas.getGraph() : undefined;
+                return {
+                    cooldown: typeof graph?.cooldownTicks === "function" ? graph.cooldownTicks() : null,
+                    zoom: typeof canvas.getZoom === "function" ? canvas.getZoom() : null,
+                };
+            });
+
+            if (cooldown === 0 && typeof zoom === "number" && Number.isFinite(zoom)) {
+                if (previousZoom !== null && Math.abs(zoom - previousZoom) < 0.0001) {
+                    stableReads += 1;
+                } else {
+                    stableReads = 0;
+                }
+
+                previousZoom = zoom;
+
+                if (stableReads >= 2) {
+                    return;
+                }
+            } else {
+                previousZoom = null;
+                stableReads = 0;
+            }
+
+            await this.page.waitForTimeout(interval);
+        }
+
+        throw new Error("Canvas viewport did not settle after graph selection");
     }
 }
