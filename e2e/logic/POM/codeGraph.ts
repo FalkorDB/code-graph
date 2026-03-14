@@ -33,7 +33,7 @@ export default class CodeGraph extends BasePage {
         return (navItem: string) => {
             const navItemSelectors: Record<string, string> = {
                 "Main Website": "//a[@title='Home' or .//p[normalize-space()='Main Website'] or contains(@href, 'falkordb.com')]",
-                "Github": "//a[@title='Github' or .//p[normalize-space()='Github'] or contains(@href, 'github.com/FalkorDB/code-graph')]",
+                "Github": "//a[@title='GitHub' or .//p[normalize-space()='GitHub'] or contains(@href, 'github.com/FalkorDB/code-graph')]",
                 "Discord": "//a[@title='Discord' or .//p[normalize-space()='Discord'] or contains(@href, 'discord.gg/falkordb')]",
             };
             const selector = navItemSelectors[navItem] ?? `//a[@title='${navItem}' or .//p[normalize-space()='${navItem}']]`;
