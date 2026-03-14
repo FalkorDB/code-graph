@@ -58,7 +58,7 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
 
     return (
         <Select open={open} onOpenChange={setOpen} value={selectedValue} onValueChange={onSelectedValue}>
-            <SelectTrigger className="z-10 md:z-0 rounded-md border border-gray-400 md:border-gray-100 focus:ring-0 focus:ring-offset-0">
+            <SelectTrigger className="z-10 md:z-0 rounded-md border border-border focus:ring-1 focus:ring-primary">
                 <SelectValue placeholder="Select a repo" />
             </SelectTrigger>
             <SelectContent>

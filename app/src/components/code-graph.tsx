@@ -3,6 +3,7 @@ import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
 import { Download, GitFork, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
@@ -346,9 +347,9 @@ export function CodeGraph({
     }
 
     return (
-        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 pt-0 md:p-8 md:bg-gray-100">
+        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 pt-0 md:p-8 md:bg-muted">
             <header className="flex flex-col gap-4 relative">
-                <div className="absolute md:hidden inset-x-0 top-8 h-[50%] bg-gray-100 -mx-8 -mt-8 px-8 border-b border-gray-400" />
+                <div className="absolute md:hidden inset-x-0 top-8 h-[50%] bg-muted -mx-8 -mt-8 px-8 border-b border-border" />
                 <Combobox
                     options={options}
                     setOptions={setOptions}
@@ -357,7 +358,7 @@ export function CodeGraph({
                 />
             </header>
             <div className='h-1 grow flex flex-col'>
-                <main ref={containerRef} className="bg-white h-1 grow">
+                <main ref={containerRef} className="bg-background h-1 grow">
                     {
                         graph.Id ?
                             <div className="h-full relative border flex flex-col md:block">
@@ -377,8 +378,10 @@ export function CodeGraph({
                                     <div className="flex gap-2">
                                         {
                                             (isPathResponse || isPathResponse === undefined) &&
-                                            <button
-                                                className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                className='pointer-events-auto'
                                                 onClick={() => {
                                                     const canvas = canvasRef.current
 
@@ -406,13 +409,15 @@ export function CodeGraph({
                                                 }}
                                             >
                                                 <X size={15} />
-                                                <p>Reset Graph</p>
-                                            </button>
+                                                Reset Graph
+                                            </Button>
                                         }
                                         {
                                             hasHiddenElements &&
-                                            <button
-                                                className='bg-[#ECECEC] hover:bg-[#D3D3D3] p-2 rounded-md flex gap-2 items-center pointer-events-auto'
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                className='pointer-events-auto'
                                                 onClick={() => {
                                                     const canvas = canvasRef.current;
 
@@ -435,8 +440,8 @@ export function CodeGraph({
                                                 }}
                                             >
                                                 <X size={15} />
-                                                <p>Unhide Nodes</p>
-                                            </button>
+                                                Unhide Nodes
+                                            </Button>
                                         }
                                     </div>
                                 </div>
@@ -476,7 +481,7 @@ export function CodeGraph({
                                     zoomedNodes={zoomedNodes}
                                 />
                                 <div data-name="canvas-info-panel" className="w-full md:absolute md:bottom-0 md:left-0 md:flex md:justify-between md:items-center md:p-4 z-10 pointer-events-none">
-                                    <div data-name="metrics-panel" className="flex gap-4 justify-center bg-gray-100 md:bg-transparent md:text-gray-500 p-2 md:p-0">
+                                    <div data-name="metrics-panel" className="flex gap-4 justify-center bg-muted md:bg-transparent md:text-muted-foreground p-2 md:p-0">
                                         <p>{nodesCount} Nodes</p>
                                         <p className="md:hidden">|</p>
                                         <p>{edgesCount} Edges</p>
@@ -484,7 +489,7 @@ export function CodeGraph({
                                     <div className='hidden md:flex gap-4'>
                                         {
                                             commitIndex !== commits.length &&
-                                            <div className='bg-white flex gap-2 border rounded-md p-2 pointer-events-auto'>
+                                            <div className='bg-background flex gap-2 border rounded-md p-2 pointer-events-auto'>
                                                 <div className='flex gap-2 items-center'>
                                                     <Checkbox
                                                         className='h-5 w-5 bg-gray-500 data-[state true]'
@@ -511,8 +516,8 @@ export function CodeGraph({
                                     </div>
                                 </div>
                             </div>
-                            : <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                                <GitFork className="md:w-24 md:h-24 w-16 h-16" color="gray" />
+                            : <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                                <GitFork className="md:w-24 md:h-24 w-16 h-16" />
                                 <h1 className="md:text-4xl text-2xl text-center">Select a repo to show its graph here</h1>
                             </div>
                     }
