@@ -24,6 +24,10 @@ export default class CodeGraph extends BasePage {
         return (selector: string) => this.container.locator(selector);
     }
 
+    private get activeGraphGetterName(): "graphDesktop" | "graphMobile" {
+        return this.isMobile ? "graphMobile" : "graphDesktop";
+    }
+
     /* NavBar Locators*/
     private get falkorDBLogo(): Locator {
         return this.scopedLocator("//*[img[@alt='FalkorDB']]")
@@ -417,19 +421,31 @@ export default class CodeGraph extends BasePage {
 
     /* CodeGraph functionality */
     async selectGraph(graph: string | number): Promise<void> {
+        const previousGraphSnapshot = await this.getActiveGraphSnapshot();
         await interactWhenVisible(this.comboBoxbtn, (el) => el.click(), 'ComboBox button');
         if (typeof graph === 'number') {
             await interactWhenVisible(this.selectGraphInComboBoxById(graph.toString()), (el) => el.click(), `Graph option ${graph}`);
         } else {
             await interactWhenVisible(this.selectGraphInComboBoxByName(graph), (el) => el.click(), `Graph option ${graph}`);
         }
-        const graphGetter = this.isMobile ? "graphMobile" : "graphDesktop";
-        await this.page.waitForFunction((getterName) => {
+        await this.page.waitForFunction(({ getterName, previousGraphId, previousNodeIds }) => {
             const getter = (window as any)[getterName];
             const graphData = typeof getter === "function" ? getter() : null;
             const nodes = graphData?.elements?.nodes || graphData?.nodes;
-            return Array.isArray(nodes) && nodes.length > 0;
-        }, graphGetter, { timeout: 10000 });
+            if (!Array.isArray(nodes) || nodes.length === 0) return false;
+
+            const currentGraphId = (window as any).graph?.Id != null ? String((window as any).graph.Id) : null;
+            if (currentGraphId !== previousGraphId) return true;
+
+            const currentNodeIds = nodes.map((node: { id: string | number }) => String(node.id)).sort();
+            if (currentNodeIds.length !== previousNodeIds.length) return true;
+
+            return currentNodeIds.some((id: string, index: number) => id !== previousNodeIds[index]);
+        }, {
+            getterName: this.activeGraphGetterName,
+            previousGraphId: previousGraphSnapshot.graphId,
+            previousNodeIds: previousGraphSnapshot.nodeIds,
+        }, { timeout: 10000 });
         await this.waitForCanvasViewportToSettle();
     }
 
@@ -507,19 +523,26 @@ export default class CodeGraph extends BasePage {
         await this.waitForCanvasAnimationToEnd();
         const boundingBox = await this.canvasElement.boundingBox();
         if (!boundingBox) throw new Error("Canvas bounding box not found");
-        const targetX = Math.min(Math.max(x, boundingBox.x + 1), boundingBox.x + boundingBox.width - 1);
-        const targetY = Math.min(Math.max(y, boundingBox.y + 1), boundingBox.y + boundingBox.height - 1);
+        const maxX = boundingBox.x + boundingBox.width;
+        const maxY = boundingBox.y + boundingBox.height;
+        if (x < boundingBox.x || x > maxX || y < boundingBox.y || y > maxY) {
+            throw new Error(
+                `Node click coordinates (${x}, ${y}) are outside canvas bounds ` +
+                `[${boundingBox.x}, ${maxX}] x [${boundingBox.y}, ${maxY}]`
+            );
+        }
+
         for (let attempt = 1; attempt <= 3; attempt++) {
-            await this.page.mouse.move(targetX, targetY);
+            await this.page.mouse.move(x, y);
             await this.page.waitForTimeout(500);
-            await this.page.mouse.click(targetX, targetY, { button: 'right' });
-            if (await this.elementMenu.isVisible()) {
+            await this.page.mouse.click(x, y, { button: 'right' });
+            if (await waitForElementToBeVisible(this.elementMenuButton("View Node"), 100, 5)) {
                 return;
             }
             await this.page.waitForTimeout(1000);
         }
 
-        throw new Error(`Failed to click, elementMenu not visible after multiple attempts.`);
+        throw new Error(`Failed to open node context menu at (${x}, ${y}); "View Node" did not appear after multiple attempts.`);
     }
 
 
@@ -624,18 +647,18 @@ export default class CodeGraph extends BasePage {
 
     private async waitForGraphData(): Promise<any> {
         await this.waitForCanvasAnimationToEnd();
-        // Wait for the graph data to be available
-        await this.page.waitForFunction(() => {
-            const data = (window as any).graphDesktop?.();
-            return data && ((Array.isArray(data.nodes) && data.nodes.length > 0) ||
-                (data.elements && Array.isArray(data.elements.nodes) && data.elements.nodes.length > 0));
-        }, { timeout: 5000 });
-
-        // Safety guard: wait for engine to fully stop and data to settle
+        await this.page.waitForFunction((getterName) => {
+            const getter = (window as any)[getterName];
+            const data = typeof getter === "function" ? getter() : null;
+            const nodes = data?.elements?.nodes || data?.nodes;
+            return Array.isArray(nodes) && nodes.length > 0;
+        }, this.activeGraphGetterName, { timeout: 5000 });
         await this.page.waitForTimeout(3000);
         await this.waitForCanvasAnimationToEnd();
 
-        return await this.page.evaluate(() => (window as any).graphDesktop());
+        const graphData = await this.getActiveGraphData();
+        if (!graphData) throw new Error(`Graph data not available from ${this.activeGraphGetterName}`);
+        return graphData;
     }
 
     async getGraphNodes(): Promise<any[]> {
@@ -813,5 +836,25 @@ export default class CodeGraph extends BasePage {
         }
 
         throw new Error("Canvas viewport did not settle after graph selection");
+    }
+
+    private async getActiveGraphData(): Promise<any | null> {
+        return await this.page.evaluate((getterName) => {
+            const getter = (window as any)[getterName];
+            return typeof getter === "function" ? getter() : null;
+        }, this.activeGraphGetterName);
+    }
+
+    private async getActiveGraphSnapshot(): Promise<{ graphId: string | null; nodeIds: string[] }> {
+        return await this.page.evaluate((getterName) => {
+            const getter = (window as any)[getterName];
+            const graphData = typeof getter === "function" ? getter() : null;
+            const nodes = graphData?.elements?.nodes || graphData?.nodes || [];
+
+            return {
+                graphId: (window as any).graph?.Id != null ? String((window as any).graph.Id) : null,
+                nodeIds: Array.isArray(nodes) ? nodes.map((node: { id: string | number }) => String(node.id)).sort() : [],
+            };
+        }, this.activeGraphGetterName);
     }
 }
