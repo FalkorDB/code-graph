@@ -16,20 +16,20 @@ test.describe(' Navbar tests', () => {
 
   test("Verify clicking on falkordb logo redirects to specified URL", async () => {
     const navBar = await browser.createNewPage(CodeGraph, urls.baseUrl)
-    const page = await navBar.clickOnFalkorDbLogo();
-    expect(page.url()).toBe(urls.falkorDBUrl)
+    const href = await navBar.clickOnFalkorDbLogo();
+    expect(href).toContain('falkordb.com')
   })
 
   const navitems: { navItem: string; expectedRes: string }[] = [
     { navItem: "Main Website", expectedRes: urls.falkorDBUrl },
-    { navItem: "Github", expectedRes: urls.falkorDbGithubUrl }
+    { navItem: "GitHub", expectedRes: urls.falkorDbGithubUrl }
   ];  
 
   navitems.forEach(({navItem, expectedRes}) => {
     test(`Verify clicking on ${navItem} redirects to specified URL`, async () => {
         const navBar = await browser.createNewPage(CodeGraph, urls.baseUrl)
-        const page = await navBar.getNavBarItem(navItem);
-        expect(page.url()).toBe(expectedRes)
+        const href = await navBar.getNavBarItem(navItem);
+        expect(href).toContain(expectedRes)
     })
   })
 

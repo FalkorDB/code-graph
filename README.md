@@ -1,113 +1,249 @@
+<div align="center">
+
 # CodeGraph - Knowledge Graph Visualization Tool
 
-### Visualize your repository with our graph for code analysis
+**Visualize codebases as knowledge graphs to analyze dependencies, detect bottlenecks, and optimize projects.**
+
+Connect and ask questions: [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?&logo=discord&logoColor=white)](https://discord.gg/b32KEzMzce)
 
 [![Try Free](https://img.shields.io/badge/Try%20Free-FalkorDB%20Cloud-FF8101?labelColor=FDE900&link=https://app.falkordb.cloud)](https://app.falkordb.cloud)
 [![Dockerhub](https://img.shields.io/docker/pulls/falkordb/falkordb?label=Docker)](https://hub.docker.com/r/falkordb/falkordb/)
-[![Discord](https://img.shields.io/discord/1146782921294884966?style=flat-square)](https://discord.com/invite/6M4QwDXn2w)
-[![Workflow](https://github.com/FalkorDB/code-graph/actions/workflows/nextjs.yml/badge.svg?branch=main)](https://github.com/FalkorDB/code-graph/actions/workflows/nextjs.yml)
--
 
 ![Alt Text](https://res.cloudinary.com/dhd0k02an/image/upload/v1739719361/FalkorDB_-_Github_-_readme_jr6scy.gif)
 
-**👉🏻[Live Demo](https://code-graph.falkordb.com/)**
+**[Live Demo](https://code-graph.falkordb.com/)**
 
-## Running Locally  
+</div>
 
-This project consists of three core components:  
+## Project Structure
 
-1. **FalkorDB Graph DB** – Stores and queries your graphs.  
-2. **Code-Graph-Backend** – Handles backend logic.  
-3. **Code-Graph-Frontend** – Provides the web interface.  
+```
+code-graph/
+├── api/                  # Python backend (FastAPI)
+│   ├── index.py          # FastAPI app, auth deps, API routes, SPA serving
+│   ├── graph.py          # FalkorDB graph operations
+│   ├── llm.py            # GraphRAG + LiteLLM chat integration
+│   ├── project.py        # Repository cloning and analysis orchestration
+│   ├── info.py           # Repository metadata stored in Redis/FalkorDB
+│   ├── prompts.py        # LLM system and prompt templates
+│   ├── auto_complete.py  # Prefix search helper
+│   ├── analyzers/        # Source analyzers (Python, Java, C#)
+│   ├── entities/         # Graph/entity models
+│   ├── git_utils/        # Git history graph utilities
+│   └── code_coverage/    # Coverage utilities
+├── app/                  # React frontend (Vite)
+│   ├── src/              # Frontend source code
+│   ├── public/           # Static assets
+│   ├── package.json      # Frontend dependencies and scripts
+│   ├── vite.config.ts    # Vite config and /api proxy for dev mode
+│   └── tsconfig*.json    # TypeScript config
+├── tests/                # Backend/unit and endpoint tests
+├── e2e/                  # End-to-end helpers and Playwright assets
+├── Dockerfile            # Unified container image
+├── docker-compose.yml    # Local FalkorDB + app stack
+├── Makefile              # Common dev/build/test commands
+├── start.sh              # Container entrypoint
+├── pyproject.toml        # Python package and dependency config
+└── .env.template         # Example environment variables
+```
 
-To set up the project, you’ll need to start all three components.  
+## Running Locally
 
-### 1. Start FalkorDB  
+### Prerequisites
 
-Run the following command to start FalkorDB using Docker:  
+- Python `>=3.12,<3.14`
+- Node.js 20+
+- [`uv`](https://docs.astral.sh/uv/)
+- A FalkorDB instance (local or cloud)
+
+### 1. Start FalkorDB
+
+**Option A:** Free cloud instance at [app.falkordb.cloud](https://app.falkordb.cloud/signup)
+
+**Option B:** Run locally with Docker:
 
 ```bash
 docker run -p 6379:6379 -it --rm falkordb/falkordb
 ```
 
-### 2. Start the Backend  
+### 2. Configure environment variables
 
-#### Clone the Backend Repository  
+Copy the template and adjust it for your setup:
 
 ```bash
-git clone https://github.com/FalkorDB/code-graph-backend.git
-cd code-graph-backend
+cp .env.template .env
 ```
 
-#### Set Up Environment Variables  
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `FALKORDB_HOST` | FalkorDB hostname | No | `localhost` |
+| `FALKORDB_PORT` | FalkorDB port | No | `6379` |
+| `FALKORDB_USERNAME` | Optional FalkorDB username | No | empty |
+| `FALKORDB_PASSWORD` | Optional FalkorDB password | No | empty |
+| `SECRET_TOKEN` | Token checked by protected endpoints | No | empty |
+| `CODE_GRAPH_PUBLIC` | Set `1` to skip auth on read-only endpoints | No | `0` |
+| `ALLOWED_ANALYSIS_DIR` | Root path allowed for `/api/analyze_folder` | No | repository root |
+| `MODEL_NAME` | LiteLLM model used by `/api/chat` | No | `gemini/gemini-flash-lite-latest` |
+| `HOST` | Optional Uvicorn bind host for `start.sh`/`make run-*` | No | `0.0.0.0` or `127.0.0.1` depending on command |
+| `PORT` | Optional Uvicorn bind port for `start.sh`/`make run-*` | No | `5000` |
 
-Define the required environment variables:  
+The chat endpoint also needs the provider credential expected by your chosen `MODEL_NAME`. The default model is Gemini, so set `GEMINI_API_KEY` unless you switch to a different LiteLLM provider/model.
 
-```bash
-export FALKORDB_HOST=localhost FALKORDB_PORT=6379 \
-    OPENAI_API_KEY=<YOUR_OPENAI_API_KEY> SECRET_TOKEN=<YOUR_SECRET_TOKEN> \
-    FLASK_RUN_HOST=0.0.0.0 FLASK_RUN_PORT=5000
-```
+### Authentication behavior
 
-`SECRET_TOKEN` is a user-defined token used for request authorization.  
+- Send `Authorization: Bearer <SECRET_TOKEN>` (or the raw token string) when `SECRET_TOKEN` is configured.
+- Read endpoints use the `public_or_auth` dependency.
+- Mutating endpoints (`/api/analyze_folder`, `/api/analyze_repo`, `/api/switch_commit`) use the `token_required` dependency.
+- If `SECRET_TOKEN` is unset, the current implementation accepts requests without an `Authorization` header.
+- Setting `CODE_GRAPH_PUBLIC=1` makes the read-only endpoints public even when `SECRET_TOKEN` is configured.
 
-#### Install Dependencies & Start the Backend  
-
-```bash
-pip install --no-cache-dir -r requirements.txt
-flask --app api/index.py run --debug > flask.log 2>&1 &
-```
-
-### 3. Start the Frontend  
-
-#### Clone the Frontend Repository  
-
-```bash
-git clone https://github.com/FalkorDB/code-graph.git
-cd code-graph
-```
-
-#### Set Up Environment Variables  
+### 3. Install dependencies
 
 ```bash
-export BACKEND_URL=http://${FLASK_RUN_HOST}:${FLASK_RUN_PORT} \
-    SECRET_TOKEN=<YOUR_SECRET_TOKEN> OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
-```
+# Install backend dependencies
+uv sync --all-extras
 
-#### Install Dependencies & Start the Frontend  
+# Install frontend dependencies
+npm install --prefix ./app
 
-```bash
+# Optional: install Playwright dependencies from the repo root
 npm install
-npm run dev
 ```
 
-### 4. Process a Local Repository  
+If you do not use `uv`, `pip install -e ".[test]"` also installs the backend package and test dependencies.
 
-Use the following `curl` command to analyze a local repository:  
+### 4. Run the app
+
+**Backend API with auto-reload:**
 
 ```bash
-curl -X POST http://127.0.0.1:5000/analyze_folder \
-    -H "Content-Type: application/json" \
-    -H "Authorization: <YOUR_SECRET_TOKEN>" \
-    -d '{"path": "<PATH_TO_LOCAL_REPO>", "ignore": ["./.github", "./sbin", "./.git", "./deps", "./bin", "./build"]}'
+uv run uvicorn api.index:app --host 127.0.0.1 --port 5000 --reload
 ```
 
-**Note:** Currently, Code-Graph supports analyzing C and Python source files.  
-Support for additional languages (e.g., JavaScript, Go, Java) is planned.  
+**Frontend hot-reload with Vite:**
 
-### 5. Access the Web Interface  
+```bash
+# Terminal 1: backend API
+uv run uvicorn api.index:app --host 127.0.0.1 --port 5000 --reload
 
-Once everything is running, open your browser and go to:  
+# Terminal 2: Vite dev server
+cd app && npm run dev
+```
 
-[http://localhost:3000](http://localhost:3000)  
+The Vite dev server runs on `http://localhost:3000` and proxies `/api/*` requests to `http://127.0.0.1:5000`.
 
-## Community
+**Single-process built frontend + backend:**
 
-Have questions or feedback? Reach out via:
+```bash
+npm --prefix ./app run build
+uv run uvicorn api.index:app --host 0.0.0.0 --port 5000
+```
 
-* [GitHub Issues](https://github.com/FalkorDB/GraphRAG-SDK/issues)
-* Join our [Discord](https://discord.com/invite/6M4QwDXn2w)
+In this mode, the FastAPI app serves the built React SPA from `app/dist` on `http://localhost:5000`.
 
-⭐️ If you find this repository helpful, please consider giving it a star!
+### Using Make
 
-Knowledge Graph, Code Analysis, Code Visualization, Dead Code Analysis, Graph Database
+```bash
+make install       # Install backend + frontend dependencies
+make build-dev     # Build frontend in development mode
+make build-prod    # Build frontend for production
+make run-dev       # Build dev frontend + run Uvicorn with reload
+make run-prod      # Build prod frontend + run Uvicorn
+make test          # Run backend pytest suite
+make lint          # Run Ruff + frontend type-check
+make e2e           # Run Playwright tests from repo root
+make clean         # Remove build/test artifacts
+```
+
+`make test` currently points at the right backend test entrypoint, but some legacy analyzer/git-history tests still need maintenance before the suite passes on a clean checkout.
+
+## Running with Docker
+
+### Using Docker Compose
+
+```bash
+docker compose up --build
+```
+
+This starts FalkorDB and the CodeGraph app together. The checked-in compose file sets `CODE_GRAPH_PUBLIC=1` for the app service.
+
+### Using Docker directly
+
+```bash
+docker build -t code-graph .
+
+docker run -p 5000:5000 \
+  -e FALKORDB_HOST=host.docker.internal \
+  -e FALKORDB_PORT=6379 \
+  -e MODEL_NAME=gemini/gemini-flash-lite-latest \
+  -e GEMINI_API_KEY=<YOUR_GEMINI_API_KEY> \
+  -e SECRET_TOKEN=<YOUR_SECRET_TOKEN> \
+  code-graph
+```
+
+## Creating a Code Graph
+
+### Analyze a local folder
+
+`analyze_folder` only accepts paths under `ALLOWED_ANALYSIS_DIR` (defaults to the repository root unless you override it).
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/analyze_folder \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_SECRET_TOKEN>" \
+  -d '{"path": "<FULL_PATH_TO_FOLDER>", "ignore": [".github", ".git"]}'
+```
+
+### Analyze a Git repository
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/analyze_repo \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_SECRET_TOKEN>" \
+  -d '{"repo_url": "https://github.com/user/repo", "ignore": [".github", ".git"]}'
+```
+
+### List indexed repositories
+
+```bash
+curl http://127.0.0.1:5000/api/list_repos
+```
+
+## Supported Languages
+
+`api/analyzers/source_analyzer.py` currently enables these analyzers:
+
+- Python (`.py`)
+- Java (`.java`)
+- C# (`.cs`)
+
+A C analyzer exists in the source tree, but it is commented out and is not currently registered.
+
+## API Endpoints
+
+### Read endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/list_repos` | List all indexed repositories |
+| GET | `/api/graph_entities?repo=<name>` | Fetch a subgraph for a repository |
+| POST | `/api/get_neighbors` | Return neighboring nodes for the provided IDs |
+| POST | `/api/auto_complete` | Prefix-search indexed entities |
+| POST | `/api/repo_info` | Return repository stats and saved metadata |
+| POST | `/api/find_paths` | Find paths between two graph nodes |
+| POST | `/api/chat` | Ask questions over the code graph via GraphRAG |
+| POST | `/api/list_commits` | List commits from the repository's git graph |
+
+### Mutating endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/analyze_folder` | Analyze a local source folder |
+| POST | `/api/analyze_repo` | Clone and analyze a git repository |
+| POST | `/api/switch_commit` | Switch the indexed repository to a specific commit |
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright FalkorDB Ltd. 2025
