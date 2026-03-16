@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { Download, GitFork, Loader2, Search, X } from "lucide-react";
+import { GitFork, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
