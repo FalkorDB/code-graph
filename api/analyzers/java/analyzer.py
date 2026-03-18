@@ -4,7 +4,8 @@ import subprocess
 from ...entities.entity import Entity
 from ...entities.file import File
 from typing import Optional
-from ..analyzer import AbstractAnalyzer
+from ..analyzer import AbstractAnalyzer, ResolvedEntityRef
+from ...graph import Graph
 
 from multilspy import SyncLanguageServer
 
@@ -103,7 +104,7 @@ class JavaAnalyzer(AbstractAnalyzer):
             return f"{path}/temp_deps/{args[1]}/{targs}/{args[-1]}"
         return file_path
 
-    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
+    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, node: Node) -> list[Entity | ResolvedEntityRef]:
         return self.resolve_entities(
             files,
             lsp,
@@ -115,7 +116,7 @@ class JavaAnalyzer(AbstractAnalyzer):
             ['Class', 'Interface', 'Enum'],
         )
 
-    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
+    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, node: Node) -> list[Entity | ResolvedEntityRef]:
         return self.resolve_entities(
             files,
             lsp,
@@ -127,8 +128,8 @@ class JavaAnalyzer(AbstractAnalyzer):
             ['Method', 'Constructor'],
             {'class_declaration', 'interface_declaration', 'enum_declaration'},
         )
-    
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, key: str, symbol: Node) -> list[Entity]:
+
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, key: str, symbol: Node) -> list[Entity | ResolvedEntityRef]:
         if key in ["implement_interface", "base_class", "extend_interface", "parameters", "return_type"]:
             return self.resolve_type(files, lsp, file_path, path, graph, symbol)
         elif key in ["call"]:

@@ -5,6 +5,8 @@ import os
 import asyncio
 import contextlib
 import logging
+import re
+import subprocess
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -23,10 +25,12 @@ from api.git_utils.incremental_update import (
     repo_local_path,
     repo_update_lock,
 )
-from api.graph import Graph, AsyncGraphQuery, async_get_repos, delete_graph_if_exists
+from api.graph import Graph, AsyncGraphQuery, async_get_repos, delete_graph_if_exists, _make_falkordb_connection
 from api.info import async_get_repo_info, get_repo_commit
 from api.llm import ask
 from api.project import Project
+from pygit2.enums import CheckoutStrategy
+from pygit2.repository import Repository as GitRepository
 
 
 # Load environment variables from .env file
@@ -246,14 +250,13 @@ def _full_reindex_repository(
     )
 
     with repo_update_lock(repo_name):
-        delete_graph_if_exists(repo_name)
-        delete_graph_if_exists(git_utils.GitRepoName(repo_name))
+        db = _make_falkordb_connection()
+        delete_graph_if_exists(repo_name, db)
+        delete_graph_if_exists(git_utils.GitRepoName(repo_name), db)
 
         if repo_path.exists():
             if target_sha:
-                from pygit2.enums import CheckoutStrategy
-                from pygit2.repository import Repository
-                repo = Repository(str(repo_path))
+                repo = GitRepository(str(repo_path))
                 target_commit = repo.revparse_single(target_sha)
                 repo.checkout_tree(target_commit.tree, strategy=CheckoutStrategy.FORCE)
                 repo.set_head_detached(target_commit.id)
@@ -352,16 +355,26 @@ def _poll_repo(repo_name: str) -> None:
 
     current_sha = get_repo_commit(repo_name)
     if current_sha:
-        # Handle comparison between short (7-char) and full (40-char) SHAs: a short
-        # stored SHA is a valid prefix of a full remote SHA for the same commit.
-        # We only apply prefix matching when the stored SHA is shorter.
-        if len(current_sha) < len(remote_head):
-            up_to_date = remote_head.startswith(current_sha)
-        elif len(current_sha) > len(remote_head):
-            up_to_date = current_sha.startswith(remote_head)
-        else:
-            up_to_date = current_sha == remote_head
-        if up_to_date:
+        # Validate SHA format before passing to git: must be 7-40 hex characters.
+        if not re.fullmatch(r"[0-9a-f]{7,40}", current_sha):
+            logger.warning(
+                "Poll: '%s' stored SHA '%s' is not valid hex; skipping",
+                repo_name, current_sha,
+            )
+            return
+
+        # Resolve the stored (potentially short) SHA to its full 40-char form so
+        # the comparison is unambiguous — short SHAs can be ambiguous in large repos.
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", current_sha],
+                cwd=str(path), capture_output=True, text=True, check=True,
+            )
+            full_current = result.stdout.strip()
+        except subprocess.CalledProcessError:
+            full_current = None
+
+        if full_current and full_current == remote_head:
             logger.debug("Poll: '%s' is up-to-date at %s", repo_name, current_sha)
             return
     else:
@@ -632,8 +645,8 @@ async def webhook(request: Request):
 
     try:
         payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
     ref = payload.get("ref", "")
     before = payload.get("before", "")

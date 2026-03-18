@@ -5,7 +5,8 @@ from multilspy import SyncLanguageServer
 from ...entities.entity import Entity
 from ...entities.file import File
 from typing import Optional
-from ..analyzer import AbstractAnalyzer
+from ..analyzer import AbstractAnalyzer, ResolvedEntityRef
+from ...graph import Graph
 
 import tree_sitter_c_sharp as tscsharp
 from tree_sitter import Language, Node
@@ -105,7 +106,7 @@ class CSharpAnalyzer(AbstractAnalyzer):
     def resolve_path(self, file_path: str, path: Path) -> str:
         return file_path
 
-    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
+    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, node: Node) -> list[Entity | ResolvedEntityRef]:
         return self.resolve_entities(
             files,
             lsp,
@@ -117,7 +118,7 @@ class CSharpAnalyzer(AbstractAnalyzer):
             ['Class', 'Interface', 'Enum', 'Struct'],
         )
 
-    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
+    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, node: Node) -> list[Entity | ResolvedEntityRef]:
         if node.type == 'invocation_expression':
             func_node = node.child_by_field_name('function')
             if func_node and func_node.type == 'member_access_expression':
@@ -136,7 +137,7 @@ class CSharpAnalyzer(AbstractAnalyzer):
             {'class_declaration', 'interface_declaration', 'enum_declaration', 'struct_declaration'},
         )
 
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, key: str, symbol: Node) -> list[Entity]:
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, key: str, symbol: Node) -> list[Entity | ResolvedEntityRef]:
         if key in ["implement_interface", "base_class", "extend_interface", "parameters", "return_type"]:
             return self.resolve_type(files, lsp, file_path, path, graph, symbol)
         elif key in ["call"]:

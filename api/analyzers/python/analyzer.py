@@ -7,7 +7,8 @@ import tomllib
 from ...entities.entity import Entity
 from ...entities.file import File
 from typing import Optional
-from ..analyzer import AbstractAnalyzer
+from ..analyzer import AbstractAnalyzer, ResolvedEntityRef
+from ...graph import Graph
 
 import tree_sitter_python as tspython
 from tree_sitter import Language, Node
@@ -92,7 +93,7 @@ class PythonAnalyzer(AbstractAnalyzer):
     def resolve_path(self, file_path: str, path: Path) -> str:
         return file_path
 
-    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path, graph, node: Node) -> list[Entity]:
+    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, node: Node) -> list[Entity | ResolvedEntityRef]:
         if node.type == 'attribute':
             node = node.child_by_field_name('attribute')
         return self.resolve_entities(
@@ -106,7 +107,7 @@ class PythonAnalyzer(AbstractAnalyzer):
             ['Class'],
         )
 
-    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, node: Node) -> list[Entity]:
+    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, node: Node) -> list[Entity | ResolvedEntityRef]:
         if node.type == 'call':
             node = node.child_by_field_name('function')
             if node.type == 'attribute':
@@ -121,8 +122,8 @@ class PythonAnalyzer(AbstractAnalyzer):
             ['function_definition', 'class_definition'],
             ['Function', 'Class'],
         )
-    
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph, key: str, symbol: Node) -> list[Entity]:
+
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, graph: Graph, key: str, symbol: Node) -> list[Entity | ResolvedEntityRef]:
         if key in ["base_class", "parameters", "return_type"]:
             return self.resolve_type(files, lsp, file_path, path, graph, symbol)
         elif key in ["call"]:

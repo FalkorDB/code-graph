@@ -10,12 +10,18 @@ import logging
 logging.basicConfig(level=logging.DEBUG,
                     format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
-def graph_exists(name: str):
-    db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
-                  port=os.getenv('FALKORDB_PORT', 6379),
-                  username=os.getenv('FALKORDB_USERNAME', None),
-                  password=os.getenv('FALKORDB_PASSWORD', None))
+def _make_falkordb_connection() -> FalkorDB:
+    """Create a FalkorDB connection using the standard environment variables."""
+    return FalkorDB(
+        host=os.getenv('FALKORDB_HOST', 'localhost'),
+        port=os.getenv('FALKORDB_PORT', 6379),
+        username=os.getenv('FALKORDB_USERNAME', None),
+        password=os.getenv('FALKORDB_PASSWORD', None),
+    )
 
+
+def graph_exists(name: str):
+    db = _make_falkordb_connection()
     return name in db.list_graphs()
 
 def get_repos() -> list[str]:
@@ -23,22 +29,22 @@ def get_repos() -> list[str]:
         List processed repositories
     """
 
-    db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
-                  port=os.getenv('FALKORDB_PORT', 6379),
-                  username=os.getenv('FALKORDB_USERNAME', None),
-                  password=os.getenv('FALKORDB_PASSWORD', None))
-
+    db = _make_falkordb_connection()
     graphs = db.list_graphs()
     graphs = [g for g in graphs if not (g.endswith('_git') or g.endswith('_schema'))]
     return graphs
 
 
-def delete_graph_if_exists(name: str) -> bool:
-    """Delete *name* when it already exists in FalkorDB."""
-    db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
-                  port=os.getenv('FALKORDB_PORT', 6379),
-                  username=os.getenv('FALKORDB_USERNAME', None),
-                  password=os.getenv('FALKORDB_PASSWORD', None))
+def delete_graph_if_exists(name: str, db: Optional[FalkorDB] = None) -> bool:
+    """Delete *name* when it already exists in FalkorDB.
+
+    Args:
+        name: The graph name to delete.
+        db:   Optional existing FalkorDB connection to reuse.  When omitted a
+              new connection is created from environment variables.
+    """
+    if db is None:
+        db = _make_falkordb_connection()
 
     if name not in db.list_graphs():
         return False
@@ -480,8 +486,20 @@ class Graph():
 
         return file
 
+    # Allowlist of graph node labels that may be passed to get_entity_at_position.
+    # Only labels produced by the analyzers are permitted; any other value raises
+    # ValueError to prevent Cypher injection via f-string interpolation.
+    _VALID_ENTITY_LABELS: frozenset[str] = frozenset({
+        "File", "Class", "Function", "Method", "Interface",
+        "Enum", "Struct", "Constructor",
+    })
+
     def get_entity_at_position(self, path: str, line: int, labels: Optional[list[str]] = None) -> Optional[Node]:
         """Return the smallest entity spanning *line* within *path*."""
+        if labels:
+            invalid = set(labels) - self._VALID_ENTITY_LABELS
+            if invalid:
+                raise ValueError(f"Invalid graph labels: {invalid}")
         label_filter = ":" + ":".join(labels) if labels else ""
         q = f"""MATCH (e{label_filter})
                WHERE e.path = $path

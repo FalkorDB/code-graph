@@ -505,11 +505,19 @@ def test_poll_repo_skips_when_up_to_date(monkeypatch, tmp_path):
     monkeypatch.setattr(api.index, "repo_local_path", lambda name: repo_path)
     monkeypatch.setattr(api.index, "fetch_remote", lambda p: None)
     monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
-    monkeypatch.setattr(
-        api.index, "get_remote_head", lambda p, b: "abcdef1234567890" * 2 + "abcdef12"
-    )
-    # Stored bookmark is a short SHA prefix of the remote HEAD
+    full_sha = "abcdef12" * 5  # 40-char remote HEAD
+    monkeypatch.setattr(api.index, "get_remote_head", lambda p, b: full_sha)
+    # Stored bookmark is the short (7-char) form of the same commit
     monkeypatch.setattr(api.index, "get_repo_commit", lambda name: "abcdef1")
+
+    # Mock subprocess.run so git rev-parse resolves short SHA to the full SHA
+    rev_parse_calls = []
+    def _fake_run(cmd, **kwargs):
+        rev_parse_calls.append(cmd)
+        class _Result:
+            stdout = full_sha + "\n"
+        return _Result()
+    monkeypatch.setattr(api.index.subprocess, "run", _fake_run)
 
     sync_calls = []
     monkeypatch.setattr(
@@ -521,6 +529,7 @@ def test_poll_repo_skips_when_up_to_date(monkeypatch, tmp_path):
     api.index._poll_repo("myrepo")
 
     assert sync_calls == [], "sync should not be called when repo is up-to-date"
+    assert rev_parse_calls == [["git", "rev-parse", "abcdef1"]]
 
 
 def test_poll_repo_triggers_sync_when_behind(monkeypatch, tmp_path):
@@ -534,6 +543,15 @@ def test_poll_repo_triggers_sync_when_behind(monkeypatch, tmp_path):
     monkeypatch.setattr(api.index, "get_remote_head", lambda p, b: remote_sha)
     monkeypatch.setattr(api.index, "get_repo_commit", lambda name: "aaaa111")
 
+    # Mock subprocess.run so git rev-parse returns a different full SHA
+    rev_parse_calls = []
+    def _fake_run(cmd, **kwargs):
+        rev_parse_calls.append(cmd)
+        class _Result:
+            stdout = "aaaa1111" * 5 + "\n"  # different from remote_sha
+        return _Result()
+    monkeypatch.setattr(api.index.subprocess, "run", _fake_run)
+
     sync_calls = []
 
     def _fake_sync(repo_name, path, target_sha, **kwargs):
@@ -546,6 +564,7 @@ def test_poll_repo_triggers_sync_when_behind(monkeypatch, tmp_path):
 
     assert len(sync_calls) == 1
     assert sync_calls[0] == ("myrepo", remote_sha)
+    assert rev_parse_calls == [["git", "rev-parse", "aaaa111"]]
 
 
 def test_poll_repo_handles_no_remote_head(monkeypatch, tmp_path):
