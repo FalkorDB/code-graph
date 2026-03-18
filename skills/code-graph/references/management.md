@@ -8,7 +8,15 @@
 
 ## Installation
 
-### From the code-graph repository
+### Install the skill (Claude Code)
+
+```bash
+npx skills add @falkordb/code-graph
+```
+
+### Install the cgraph CLI
+
+From the code-graph repository:
 
 ```bash
 cd /path/to/code-graph
@@ -16,7 +24,7 @@ uv sync --all-extras
 uv pip install -e .
 ```
 
-### Via pipx (standalone)
+Or standalone via pipx:
 
 ```bash
 pipx install code-graph-backend

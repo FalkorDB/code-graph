@@ -1,0 +1,26 @@
+{
+  "name": "@falkordb/code-graph",
+  "version": "0.1.0",
+  "description": "Claude Code skill for code-graph: index codebases and query knowledge graphs (call graphs, dependencies, inheritance)",
+  "files": [
+    "SKILL.md",
+    "references/"
+  ],
+  "keywords": [
+    "claude-code",
+    "skill",
+    "agent-skill",
+    "code-graph",
+    "knowledge-graph",
+    "falkordb",
+    "call-graph",
+    "code-analysis"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FalkorDB/code-graph.git",
+    "directory": "skills/code-graph"
+  },
+  "homepage": "https://github.com/FalkorDB/code-graph#cli-tool-cgraph"
+}
