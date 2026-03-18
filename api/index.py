@@ -234,6 +234,7 @@ def _full_reindex_repository(
     repo_url: str = "",
     ignore: list[str] | None = None,
     reason: str = "",
+    target_sha: str | None = None,
 ) -> dict:
     if ignore is None:
         ignore = []
@@ -249,6 +250,14 @@ def _full_reindex_repository(
         delete_graph_if_exists(git_utils.GitRepoName(repo_name))
 
         if repo_path.exists():
+            if target_sha:
+                from pygit2.enums import CheckoutStrategy
+                from pygit2.repository import Repository
+                repo = Repository(str(repo_path))
+                target_commit = repo.revparse_single(target_sha)
+                repo.checkout_tree(target_commit.tree, strategy=CheckoutStrategy.FORCE)
+                repo.set_head_detached(target_commit.id)
+                logger.info("Checked out target commit %s before full reindex", target_sha[:8])
             proj = Project.from_local_repository(repo_path)
         elif repo_url:
             proj = Project.from_git_repository(repo_url)
@@ -298,6 +307,7 @@ def _sync_repo_graph(
             repo_url,
             ignore,
             "missing stored commit bookmark",
+            target_sha=target_sha,
         )
 
     if not can_incrementally_update(repo_path, stored_sha, target_sha, before_sha):
@@ -310,6 +320,7 @@ def _sync_repo_graph(
                 f"stored bookmark {stored_sha} does not align with "
                 f"before={before_sha or '<none>'} and target={target_sha}"
             ),
+            target_sha=target_sha,
         )
 
     return incremental_update(repo_name, stored_sha, target_sha, ignore)

@@ -372,16 +372,21 @@ def test_sync_repo_graph_full_reindexes_without_bookmark(monkeypatch, tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
+    reindex_calls = []
+
     monkeypatch.setattr(api.index, "get_repo_commit", lambda name: None)
     monkeypatch.setattr(
         api.index,
         "_full_reindex_repository",
-        lambda *args, **kwargs: {"mode": "full_reindex", "commit": "abc1234"},
+        lambda *args, **kwargs: reindex_calls.append(kwargs) or {
+            "mode": "full_reindex", "commit": "abc1234",
+        },
     )
 
     result = api.index._sync_repo_graph("myrepo", repo_path, _FULL_SHA_AFTER)
 
     assert result["mode"] == "full_reindex"
+    assert reindex_calls[0].get("target_sha") == _FULL_SHA_AFTER
 
 
 def test_sync_repo_graph_full_reindexes_on_history_gap(monkeypatch, tmp_path):
@@ -389,12 +394,16 @@ def test_sync_repo_graph_full_reindexes_on_history_gap(monkeypatch, tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
+    reindex_calls = []
+
     monkeypatch.setattr(api.index, "get_repo_commit", lambda name: "stored123")
     monkeypatch.setattr(api.index, "can_incrementally_update", lambda *args, **kwargs: False)
     monkeypatch.setattr(
         api.index,
         "_full_reindex_repository",
-        lambda *args, **kwargs: {"mode": "full_reindex", "commit": "abc1234"},
+        lambda *args, **kwargs: reindex_calls.append(kwargs) or {
+            "mode": "full_reindex", "commit": "abc1234",
+        },
     )
 
     result = api.index._sync_repo_graph(
@@ -405,6 +414,7 @@ def test_sync_repo_graph_full_reindexes_on_history_gap(monkeypatch, tmp_path):
     )
 
     assert result["mode"] == "full_reindex"
+    assert reindex_calls[0].get("target_sha") == _FULL_SHA_AFTER
 
 
 # ---------------------------------------------------------------------------
