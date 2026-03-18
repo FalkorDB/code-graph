@@ -250,7 +250,7 @@ wheels = [
 [[package]]
 name = "code-graph-backend"
 version = "0.4.2"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "falkordb" },
     { name = "fastapi" },
@@ -266,6 +266,7 @@ dependencies = [
     { name = "tree-sitter-javascript" },
     { name = "tree-sitter-kotlin" },
     { name = "tree-sitter-python" },
+    { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "validators" },
 ]
@@ -296,6 +297,7 @@ requires-dist = [
     { name = "tree-sitter-javascript", specifier = ">=0.23.0,<0.26.0" },
     { name = "tree-sitter-kotlin", specifier = ">=1.1.0,<2.0.0" },
     { name = "tree-sitter-python", specifier = ">=0.25.0,<0.26.0" },
+    { name = "typer", specifier = ">=0.24.0,<1.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0,<1.0.0" },
     { name = "validators", specifier = ">=0.35.0,<0.36.0" },
 ]

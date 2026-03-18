@@ -1,4 +1,4 @@
-.PHONY: help install test e2e lint lint-py lint-fe clean build-dev build-prod run-dev run-prod docker-falkordb docker-stop
+.PHONY: help install install-cli test e2e lint lint-py lint-fe clean build-dev build-prod run-dev run-prod docker-falkordb docker-stop
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -9,6 +9,9 @@ help: ## Show this help message
 install: ## Install all dependencies (backend + frontend)
 	uv sync --all-extras
 	npm install --prefix ./app
+
+install-cli: ## Install cgraph CLI entry point
+	uv pip install -e .
 
 build-dev: ## Build frontend for development
 	npm --prefix ./app run build:dev
