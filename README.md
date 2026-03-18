@@ -26,6 +26,7 @@ code-graph/
 │   ├── project.py        # Repository cloning and analysis orchestration
 │   ├── info.py           # Repository metadata stored in Redis/FalkorDB
 │   ├── prompts.py        # LLM system and prompt templates
+│   ├── cli.py            # cgraph CLI tool (typer)
 │   ├── auto_complete.py  # Prefix search helper
 │   ├── analyzers/        # Source analyzers (Python, Java, C#)
 │   ├── entities/         # Graph/entity models
@@ -37,6 +38,7 @@ code-graph/
 │   ├── package.json      # Frontend dependencies and scripts
 │   ├── vite.config.ts    # Vite config and /api proxy for dev mode
 │   └── tsconfig*.json    # TypeScript config
+├── skills/code-graph/    # Claude Code skill for CLI-driven indexing/querying
 ├── tests/                # Backend/unit and endpoint tests
 ├── e2e/                  # End-to-end helpers and Playwright assets
 ├── Dockerfile            # Unified container image
@@ -145,6 +147,7 @@ In this mode, the FastAPI app serves the built React SPA from `app/dist` on `htt
 
 ```bash
 make install       # Install backend + frontend dependencies
+make install-cli   # Install cgraph CLI entry point
 make build-dev     # Build frontend in development mode
 make build-prod    # Build frontend for production
 make run-dev       # Build dev frontend + run Uvicorn with reload
@@ -156,6 +159,58 @@ make clean         # Remove build/test artifacts
 ```
 
 `make test` currently points at the right backend test entrypoint, but some legacy analyzer/git-history tests still need maintenance before the suite passes on a clean checkout.
+
+## CLI Tool (`cgraph`)
+
+CodeGraph includes a CLI tool for indexing codebases and querying the knowledge graph directly from the terminal. All output is JSON (to stdout), with status messages on stderr.
+
+### Install
+
+```bash
+make install-cli
+# or
+uv pip install -e .
+```
+
+### Usage
+
+```bash
+# Ensure FalkorDB is running (auto-starts a Docker container if needed)
+cgraph ensure-db
+
+# Index the current project
+cgraph index . --ignore node_modules --ignore .git --ignore venv --ignore __pycache__
+
+# Index a remote repository
+cgraph index-repo https://github.com/user/repo --ignore node_modules
+
+# List indexed repos
+cgraph list
+
+# Search for entities by name prefix
+cgraph search parse_config
+
+# Explore relationships (what does node 42 call?)
+cgraph neighbors 42 --rel CALLS
+
+# Find call-chain paths between two nodes
+cgraph paths 42 99
+
+# Show repo statistics
+cgraph info
+```
+
+The `--repo` flag defaults to the current directory name. Run `cgraph --help` for full details.
+
+### Claude Code Skill
+
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill is included in `skills/code-graph/`. Copy it to your skills directory to let Claude autonomously index and query codebases during coding sessions:
+
+```bash
+cp -r skills/code-graph/ ~/.claude/skills/code-graph/
+```
+
+Then ask Claude things like *"what functions call analyze_sources?"* or *"find the dependency chain between parse_config and send_request"* — it will handle the indexing and querying automatically.
 
 ## Running with Docker
 
