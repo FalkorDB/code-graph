@@ -1,5 +1,5 @@
 {
-  "name": "@falkordb/code-graph",
+  "name": "@falkordb/code-graph-skill",
   "version": "0.1.0",
   "description": "Claude Code skill for code-graph: index codebases and query knowledge graphs (call graphs, dependencies, inheritance)",
   "files": [

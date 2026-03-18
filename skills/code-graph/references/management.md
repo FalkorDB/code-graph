@@ -11,7 +11,7 @@
 ### Install the skill (Claude Code)
 
 ```bash
-npx skills add @falkordb/code-graph
+npx skills add @falkordb/code-graph-skill
 ```
 
 ### Install the cgraph CLI

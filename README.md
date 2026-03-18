@@ -207,7 +207,7 @@ The `--repo` flag defaults to the current directory name. Run `cgraph --help` fo
 A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill is included in `skills/code-graph/`. Install it with:
 
 ```bash
-npx skills add @falkordb/code-graph
+npx skills add @falkordb/code-graph-skill
 ```
 
 Then ask Claude things like *"what functions call analyze_sources?"* or *"find the dependency chain between parse_config and send_request"* — it will handle the indexing and querying automatically.
