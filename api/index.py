@@ -676,7 +676,10 @@ async def webhook(request: Request):
         logger.exception(
             "Webhook: incremental update failed for '%s': %s", repo_name, exc
         )
-        return JSONResponse({"status": "error", "detail": str(exc)}, status_code=500)
+        return JSONResponse(
+            {"status": "error", "detail": "Incremental update failed"},
+            status_code=500,
+        )
 
     return {"status": "success", **result}
 

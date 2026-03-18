@@ -216,7 +216,7 @@ def incremental_update(
             "files_added": 0,
             "files_modified": 0,
             "files_deleted": 0,
-            "commit": to_sha,
+            "commit": to_sha[:7],
         }
 
     repo_path = repo_local_path(repo_name)

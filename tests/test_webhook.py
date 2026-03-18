@@ -430,7 +430,7 @@ def test_incremental_update_idempotent(monkeypatch, tmp_path):
     assert result["files_added"] == 0
     assert result["files_modified"] == 0
     assert result["files_deleted"] == 0
-    assert result["commit"] == sha
+    assert result["commit"] == sha[:7]
     assert writes == [], "set_repo_commit must not be called for no-op update"
 
 
@@ -447,3 +447,138 @@ def test_incremental_update_missing_repo(monkeypatch, tmp_path):
 
     with pytest.raises(ValueError, match="Local repository not found"):
         _iu("some-repo", "aaa1111", "bbb2222")
+
+
+# ---------------------------------------------------------------------------
+# Poll-watcher – unit tests
+# ---------------------------------------------------------------------------
+
+def test_poll_repo_skips_missing_clone(monkeypatch, tmp_path):
+    """_poll_repo returns early when the local clone does not exist."""
+    monkeypatch.setattr(
+        api.index, "repo_local_path", lambda name: tmp_path / "nonexistent"
+    )
+    fetch_calls = []
+    monkeypatch.setattr(api.index, "fetch_remote", lambda p: fetch_calls.append(p))
+
+    api.index._poll_repo("myrepo")
+
+    assert fetch_calls == [], "fetch_remote should not be called for missing clones"
+
+
+def test_poll_repo_handles_fetch_failure(monkeypatch, tmp_path):
+    """_poll_repo logs a warning and returns when git fetch fails."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.setattr(api.index, "repo_local_path", lambda name: repo_path)
+    monkeypatch.setattr(
+        api.index,
+        "fetch_remote",
+        lambda p: (_ for _ in ()).throw(RuntimeError("network error")),
+    )
+    sync_calls = []
+    monkeypatch.setattr(
+        api.index,
+        "_sync_repo_graph",
+        lambda *a, **kw: sync_calls.append(1),
+    )
+
+    api.index._poll_repo("myrepo")
+
+    assert sync_calls == [], "sync should not be called when fetch fails"
+
+
+def test_poll_repo_skips_when_up_to_date(monkeypatch, tmp_path):
+    """_poll_repo does nothing when stored bookmark matches remote HEAD."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.setattr(api.index, "repo_local_path", lambda name: repo_path)
+    monkeypatch.setattr(api.index, "fetch_remote", lambda p: None)
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+    monkeypatch.setattr(
+        api.index, "get_remote_head", lambda p, b: "abcdef1234567890" * 2 + "abcdef12"
+    )
+    # Stored bookmark is a short SHA prefix of the remote HEAD
+    monkeypatch.setattr(api.index, "get_repo_commit", lambda name: "abcdef1")
+
+    sync_calls = []
+    monkeypatch.setattr(
+        api.index,
+        "_sync_repo_graph",
+        lambda *a, **kw: sync_calls.append(1),
+    )
+
+    api.index._poll_repo("myrepo")
+
+    assert sync_calls == [], "sync should not be called when repo is up-to-date"
+
+
+def test_poll_repo_triggers_sync_when_behind(monkeypatch, tmp_path):
+    """_poll_repo calls _sync_repo_graph when remote HEAD has advanced."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.setattr(api.index, "repo_local_path", lambda name: repo_path)
+    monkeypatch.setattr(api.index, "fetch_remote", lambda p: None)
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+    remote_sha = "bbbb2222" * 5
+    monkeypatch.setattr(api.index, "get_remote_head", lambda p, b: remote_sha)
+    monkeypatch.setattr(api.index, "get_repo_commit", lambda name: "aaaa111")
+
+    sync_calls = []
+
+    def _fake_sync(repo_name, path, target_sha, **kwargs):
+        sync_calls.append((repo_name, target_sha))
+        return {"files_added": 1, "files_modified": 0, "files_deleted": 0, "commit": "bbbb222"}
+
+    monkeypatch.setattr(api.index, "_sync_repo_graph", _fake_sync)
+
+    api.index._poll_repo("myrepo")
+
+    assert len(sync_calls) == 1
+    assert sync_calls[0] == ("myrepo", remote_sha)
+
+
+def test_poll_repo_handles_no_remote_head(monkeypatch, tmp_path):
+    """_poll_repo returns early when the remote branch HEAD cannot be resolved."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.setattr(api.index, "repo_local_path", lambda name: repo_path)
+    monkeypatch.setattr(api.index, "fetch_remote", lambda p: None)
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+    monkeypatch.setattr(api.index, "get_remote_head", lambda p, b: None)
+
+    sync_calls = []
+    monkeypatch.setattr(
+        api.index,
+        "_sync_repo_graph",
+        lambda *a, **kw: sync_calls.append(1),
+    )
+
+    api.index._poll_repo("myrepo")
+
+    assert sync_calls == [], "sync should not be called when remote HEAD is unknown"
+
+
+def test_poll_repo_forces_reindex_without_bookmark(monkeypatch, tmp_path):
+    """_poll_repo triggers sync even without a stored bookmark (full reindex path)."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.setattr(api.index, "repo_local_path", lambda name: repo_path)
+    monkeypatch.setattr(api.index, "fetch_remote", lambda p: None)
+    monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+    remote_sha = "cccc3333" * 5
+    monkeypatch.setattr(api.index, "get_remote_head", lambda p, b: remote_sha)
+    monkeypatch.setattr(api.index, "get_repo_commit", lambda name: None)
+
+    sync_calls = []
+
+    def _fake_sync(repo_name, path, target_sha, **kwargs):
+        sync_calls.append((repo_name, target_sha))
+        return {"mode": "full_reindex", "commit": "cccc333"}
+
+    monkeypatch.setattr(api.index, "_sync_repo_graph", _fake_sync)
+
+    api.index._poll_repo("myrepo")
+
+    assert len(sync_calls) == 1
+    assert sync_calls[0] == ("myrepo", remote_sha)
