@@ -204,7 +204,13 @@ The `--repo` flag defaults to the current directory name. Run `cgraph --help` fo
 
 ### Claude Code Skill
 
-A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill is included in `skills/code-graph/`. Copy it to your skills directory to let Claude autonomously index and query codebases during coding sessions:
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skill is included in `skills/code-graph/`. Install it with:
+
+```bash
+npx skills add FalkorDB/code-graph
+```
+
+Or copy manually:
 
 ```bash
 cp -r skills/code-graph/ ~/.claude/skills/code-graph/
