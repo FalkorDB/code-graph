@@ -67,7 +67,7 @@ cgraph neighbors 42 --rel CALLS
 
 ### "Who calls function X?"
 
-The graph stores directed edges `(caller)-[:CALLS]->(callee)`. To find callers, search for the function, then look for *incoming* CALLS edges. Since `neighbors` follows outgoing edges, use `find_paths` or search for likely callers and check their CALLS neighbors.
+The graph stores directed edges `(caller)-[:CALLS]->(callee)`. To find callers, search for the function, then look for *incoming* CALLS edges. Since `neighbors` follows outgoing edges, use `cgraph paths` or search for likely callers and check their CALLS neighbors.
 
 ### "What does class Y define?"
 

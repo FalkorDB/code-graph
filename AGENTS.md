@@ -146,9 +146,9 @@ cgraph index . --ignore node_modules      # Index local folder
 cgraph index-repo <url>                   # Clone + index a repo
 cgraph list                               # List indexed repos
 cgraph search <prefix> [--repo <name>]    # Full-text prefix search
-cgraph neighbors <id>... [--repo] [--rel] [--label]  # Connected entities
-cgraph paths <src-id> <dest-id> [--repo]  # Call-chain paths
-cgraph info [--repo]                      # Repo stats + metadata
+cgraph neighbors <id>... [--repo <name>] [--rel <type>] [--label <label>]  # Connected entities
+cgraph paths <src-id> <dest-id> [--repo <name>]  # Call-chain paths
+cgraph info [--repo <name>]              # Repo stats + metadata
 ```
 
 `--repo` defaults to the current directory name. Claude Code skill in `skills/code-graph/`.
