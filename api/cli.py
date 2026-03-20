@@ -41,15 +41,18 @@ def _default_repo(repo: Optional[str]) -> str:
 
 def _check_connection(host: str, port: int) -> bool:
     """Check if FalkorDB/Redis is reachable via PING."""
-    try:
-        import redis
+    import redis
 
+    r: Optional[redis.Redis] = None
+    try:
         r = redis.Redis(host=host, port=port, socket_connect_timeout=2)
         r.ping()
-        r.close()
         return True
     except Exception:
         return False
+    finally:
+        if r is not None:
+            r.close()
 
 
 # ── ensure-db ──────────────────────────────────────────────────────────
