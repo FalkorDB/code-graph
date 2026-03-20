@@ -27,7 +27,7 @@ uv pip install -e .
 Or standalone via pipx:
 
 ```bash
-pipx install code-graph-backend
+pipx install code-graph
 ```
 
 After installation, verify:
@@ -73,7 +73,7 @@ Ensure the package is installed and the entry point is on your PATH:
 ```bash
 uv pip install -e .   # from the code-graph repo
 # or
-pipx install code-graph-backend
+pipx install code-graph
 ```
 
 ### Connection refused

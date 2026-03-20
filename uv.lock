@@ -248,7 +248,7 @@ wheels = [
 ]
 
 [[package]]
-name = "code-graph-backend"
+name = "code-graph"
 version = "0.4.2"
 source = { editable = "." }
 dependencies = [
