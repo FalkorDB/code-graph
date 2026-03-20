@@ -67,6 +67,29 @@ def get_repo_commit(repo_name: str) -> str:
         raise
 
 
+def set_repo_branch(repo_name: str, branch: str) -> None:
+    """Save the tracked branch name for *repo_name*."""
+    try:
+        r = get_redis_connection()
+        key = _repo_info_key(repo_name)
+        r.hset(key, 'branch', branch)
+        logging.info(f"Repository '{repo_name}' tracked branch set to: {branch}")
+    except Exception as e:
+        logging.error(f"Error saving branch for '{repo_name}': {e}")
+        raise
+
+
+def get_repo_branch(repo_name: str) -> Optional[str]:
+    """Return the tracked branch for *repo_name*, or ``None`` if not stored."""
+    try:
+        r = get_redis_connection()
+        key = _repo_info_key(repo_name)
+        return r.hget(key, "branch")
+    except Exception as e:
+        logging.error(f"Error retrieving branch for '{repo_name}': {e}")
+        raise
+
+
 def save_repo_info(repo_name: str, repo_url: str) -> None:
     """
     Saves repository information (URL) to Redis under a hash named {repo_name}_info.

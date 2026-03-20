@@ -26,7 +26,7 @@ from api.git_utils.incremental_update import (
     repo_update_lock,
 )
 from api.graph import Graph, AsyncGraphQuery, async_get_repos, delete_graph_if_exists, _make_falkordb_connection
-from api.info import async_get_repo_info, get_repo_commit
+from api.info import async_get_repo_info, get_repo_branch, get_repo_commit
 from api.llm import ask
 from api.project import Project
 from pygit2.enums import CheckoutStrategy
@@ -349,7 +349,7 @@ def _poll_repo(repo_name: str) -> None:
         logger.warning("Poll: git fetch failed for '%s': %s", repo_name, exc)
         return
 
-    remote_head = get_remote_head(path, TRACKED_BRANCH)
+    remote_head = get_remote_head(path, get_repo_branch(repo_name) or TRACKED_BRANCH)
     if not remote_head:
         return
 
@@ -653,12 +653,6 @@ async def webhook(request: Request):
     after = payload.get("after", "")
     repo_url = _extract_repo_url(payload)
 
-    # Only process pushes to the configured tracked branch
-    expected_ref = f"refs/heads/{TRACKED_BRANCH}"
-    if ref != expected_ref:
-        logger.debug("Webhook: ignoring push to '%s' (tracking '%s')", ref, expected_ref)
-        return {"status": "ignored", "reason": f"Branch not tracked: {ref}"}
-
     if not before or not after or not repo_url:
         raise HTTPException(
             status_code=400,
@@ -676,6 +670,13 @@ async def webhook(request: Request):
             {"status": "error", "detail": "Repository not indexed"},
             status_code=404,
         )
+
+    # Only process pushes to the repo's tracked branch
+    tracked = get_repo_branch(repo_name) or TRACKED_BRANCH
+    expected_ref = f"refs/heads/{tracked}"
+    if ref != expected_ref:
+        logger.debug("Webhook: ignoring push to '%s' (tracking '%s')", ref, expected_ref)
+        return {"status": "ignored", "reason": f"Branch not tracked: {ref}"}
 
     logger.info(
         "Webhook: updating '%s' from %s to %s", repo_name, before[:8], after[:8]

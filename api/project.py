@@ -83,12 +83,16 @@ class Project():
         self.analyzer.analyze_local_folder(self.path, self.graph, ignore)
 
         try:
-            # Save processed commit hash to the DB
+            # Save processed commit hash and branch to the DB
             repo = Repository(self.path)
             current_commit = repo.walk(repo.head.target).__next__()
             set_repo_commit(self.name, current_commit.short_id)
+
+            if not repo.head_is_detached:
+                branch_name = repo.head.shorthand
+                set_repo_branch(self.name, branch_name)
         except Exception:
-            # Probably not .git folder is missing
+            # Probably .git folder is missing
             pass
 
         return self.graph

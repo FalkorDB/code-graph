@@ -117,6 +117,17 @@ def client_misconfigured(monkeypatch):
 def test_webhook_ignored_wrong_branch(client_token_auth, monkeypatch):
     """Pushes to non-tracked branches return 200 with status='ignored'."""
     monkeypatch.setattr(api.index, "TRACKED_BRANCH", "main")
+
+    async def _fake_get_repos():
+        return ["myrepo"]
+
+    async def _fake_get_repo_info(repo_name):
+        return {"repo_url": "https://github.com/example/myrepo.git"}
+
+    monkeypatch.setattr(api.index, "async_get_repos", _fake_get_repos)
+    monkeypatch.setattr(api.index, "async_get_repo_info", _fake_get_repo_info)
+    monkeypatch.setattr(api.index, "get_repo_branch", lambda name: None)
+
     payload = _make_push_payload(ref="refs/heads/feature/x")
     resp = client_token_auth.post(
         "/api/webhook",
