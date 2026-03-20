@@ -86,6 +86,9 @@ cp .env.template .env
 | `MODEL_NAME` | LiteLLM model used by `/api/chat` | No | `gemini/gemini-flash-lite-latest` |
 | `HOST` | Optional Uvicorn bind host for `start.sh`/`make run-*` | No | `0.0.0.0` or `127.0.0.1` depending on command |
 | `PORT` | Optional Uvicorn bind port for `start.sh`/`make run-*` | No | `5000` |
+| `WEBHOOK_SECRET` | Shared secret for GitHub HMAC or GitLab `X-Gitlab-Token` verification on `/api/webhook` | No | empty |
+| `TRACKED_BRANCH` | Branch watched by the webhook and poll-watcher | No | `main` |
+| `POLL_INTERVAL` | Seconds between background poll checks (`0` disables polling) | No | `60` |
 
 The chat endpoint also needs the provider credential expected by your chosen `MODEL_NAME`. The default model is Gemini, so set `GEMINI_API_KEY` unless you switch to a different LiteLLM provider/model.
 
@@ -96,6 +99,31 @@ The chat endpoint also needs the provider credential expected by your chosen `MO
 - Mutating endpoints (`/api/analyze_folder`, `/api/analyze_repo`, `/api/switch_commit`) use the `token_required` dependency.
 - If `SECRET_TOKEN` is unset, the current implementation accepts requests without an `Authorization` header.
 - Setting `CODE_GRAPH_PUBLIC=1` makes the read-only endpoints public even when `SECRET_TOKEN` is configured.
+
+Continuous graph updates can be triggered either by posting a GitHub/GitLab push payload to `/api/webhook` or by enabling the background poll-watcher with `POLL_INTERVAL > 0`. When `WEBHOOK_SECRET` is unset, `/api/webhook` falls back to the same bearer-token auth used by the other mutating endpoints.
+
+#### Setting up a webhook
+
+After indexing a repository with `/api/analyze_repo`, you can register a webhook so the graph stays in sync automatically.
+
+**GitHub:**
+
+1. Go to your repository → **Settings** → **Webhooks** → **Add webhook**.
+2. Set **Payload URL** to `https://<your-server>/api/webhook`.
+3. Set **Content type** to `application/json`.
+4. Set **Secret** to the same value as your `WEBHOOK_SECRET` environment variable.
+5. Under **Which events?**, select **Just the push event**.
+6. Click **Add webhook**.
+
+**GitLab:**
+
+1. Go to your project → **Settings** → **Webhooks** → **Add new webhook**.
+2. Set **URL** to `https://<your-server>/api/webhook`.
+3. Set **Secret token** to the same value as your `WEBHOOK_SECRET` environment variable.
+4. Check **Push events** as the trigger.
+5. Click **Add webhook**.
+
+> **Tip:** If you cannot configure a webhook (e.g. you don't have admin access), enable the background poll-watcher instead by setting `POLL_INTERVAL` to a non-zero value (in seconds). It will periodically check the remote for new commits on `TRACKED_BRANCH`.
 
 ### 3. Install dependencies
 
@@ -241,6 +269,7 @@ A C analyzer exists in the source tree, but it is commented out and is not curre
 | POST | `/api/analyze_folder` | Analyze a local source folder |
 | POST | `/api/analyze_repo` | Clone and analyze a git repository |
 | POST | `/api/switch_commit` | Switch the indexed repository to a specific commit |
+| POST | `/api/webhook` | Receive a GitHub/GitLab push event and apply an incremental graph update |
 
 ## License
 

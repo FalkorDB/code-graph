@@ -149,7 +149,7 @@ class SourceAnalyzer():
                 file = self.files[file_path]
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
                 for _, entity in file.entities.items():
-                    entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, key, symbol))
+                    entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, graph, key, symbol))
                     for key, symbols in entity.symbols.items():
                         for symbol in symbols:
                             if len(symbol.resolved_symbol) == 0:
@@ -220,4 +220,3 @@ class SourceAnalyzer():
         graph.set_graph_commit(current_commit.short_id)
 
         return graph
-
