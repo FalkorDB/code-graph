@@ -139,5 +139,22 @@ class TestGraphOps(unittest.TestCase):
     def test_connect_entities_batch_empty(self):
         self.graph.connect_entities_batch([])
 
+    def test_batch_chunking(self):
+        """Verify batches are correctly chunked when exceeding BATCH_SIZE."""
+        import api.graph as graph_module
+        original = graph_module.BATCH_SIZE
+        try:
+            graph_module.BATCH_SIZE = 3
+            files = [File(Path(f'/chunked/f{i}.py'), None) for i in range(7)]
+            self.graph.add_files_batch(files)
+            for f in files:
+                self.assertIsNotNone(f.id)
+            # Verify all 7 files are actually in the DB
+            for i in range(7):
+                result = self.graph.get_file(f'/chunked/f{i}.py', f'f{i}.py', '.py')
+                self.assertIsNotNone(result)
+        finally:
+            graph_module.BATCH_SIZE = original
+
 if __name__ == '__main__':
     unittest.main()

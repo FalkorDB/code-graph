@@ -6,6 +6,9 @@ from typing import Optional
 from falkordb import FalkorDB, Path, Node, QueryResult
 from falkordb.asyncio import FalkorDB as AsyncFalkorDB
 
+# Maximum items per UNWIND batch to avoid overwhelming FalkorDB/Redis
+BATCH_SIZE = 500
+
 # Configure the logger
 import logging
 logging.basicConfig(level=logging.DEBUG,
@@ -271,7 +274,7 @@ class Graph():
     def add_entities_batch(self, entities_data: list) -> None:
         """
         Batch add entity nodes to the graph database using UNWIND.
-        Reduces N individual queries to one query per entity label.
+        Groups by label, then processes in chunks of BATCH_SIZE.
 
         Args:
             entities_data: list of tuples
@@ -287,11 +290,6 @@ class Graph():
             by_label[item[1]].append(item)
 
         for label, group in by_label.items():
-            data = [{
-                'name': item[2], 'doc': item[3], 'path': item[4],
-                'src_start': item[5], 'src_end': item[6], 'props': item[7]
-            } for item in group]
-
             q = f"""UNWIND $entities AS e
                     MERGE (c:{label}:Searchable {{name: e['name'], path: e['path'],
                                                    src_start: e['src_start'],
@@ -300,9 +298,16 @@ class Graph():
                     SET c += e['props']
                     RETURN c"""
 
-            res = self._query(q, {'entities': data})
-            for j, item in enumerate(group):
-                item[0].id = res.result_set[j][0].id
+            for start in range(0, len(group), BATCH_SIZE):
+                chunk = group[start:start + BATCH_SIZE]
+                data = [{
+                    'name': item[2], 'doc': item[3], 'path': item[4],
+                    'src_start': item[5], 'src_end': item[6], 'props': item[7]
+                } for item in chunk]
+
+                res = self._query(q, {'entities': data})
+                for j, item in enumerate(chunk):
+                    item[0].id = res.result_set[j][0].id
 
     def get_class_by_name(self, class_name: str) -> Optional[Node]:
         q = "MATCH (c:Class) WHERE c.name = $name RETURN c LIMIT 1"
@@ -446,7 +451,7 @@ class Graph():
     def add_files_batch(self, files: list[File]) -> None:
         """
         Batch add file nodes to the graph database using UNWIND.
-        Reduces N individual queries to a single query.
+        Processes in chunks of BATCH_SIZE to avoid oversized queries.
 
         Args:
             files: list of File objects. Each file.id will be set after insertion.
@@ -455,16 +460,17 @@ class Graph():
         if not files:
             return
 
-        file_data = [{'path': str(f.path), 'name': f.path.name, 'ext': f.path.suffix}
-                     for f in files]
-
         q = """UNWIND $files AS fd
                MERGE (f:File:Searchable {path: fd['path'], name: fd['name'], ext: fd['ext']})
                RETURN f"""
 
-        res = self._query(q, {'files': file_data})
-        for i, row in enumerate(res.result_set):
-            files[i].id = row[0].id
+        for start in range(0, len(files), BATCH_SIZE):
+            chunk = files[start:start + BATCH_SIZE]
+            file_data = [{'path': str(f.path), 'name': f.path.name, 'ext': f.path.suffix}
+                         for f in chunk]
+            res = self._query(q, {'files': file_data})
+            for i, row in enumerate(res.result_set):
+                chunk[i].id = row[0].id
 
     def delete_files(self, files: list[Path]) -> tuple[str, dict, list[int]]:
         """
@@ -548,7 +554,7 @@ class Graph():
     def connect_entities_batch(self, relationships: list[tuple[str, int, int, dict]]) -> None:
         """
         Batch create relationships between entities using UNWIND.
-        Reduces K individual queries to one query per relationship type.
+        Groups by relation type, then processes in chunks of BATCH_SIZE.
 
         Args:
             relationships: list of (relation, src_id, dest_id, properties)
@@ -562,9 +568,6 @@ class Graph():
             by_relation[rel[0]].append(rel)
 
         for relation, group in by_relation.items():
-            data = [{'src_id': r[1], 'dest_id': r[2], 'properties': r[3]}
-                    for r in group]
-
             q = f"""UNWIND $rels AS r
                     MATCH (src), (dest)
                     WHERE ID(src) = r['src_id'] AND ID(dest) = r['dest_id']
@@ -572,7 +575,11 @@ class Graph():
                     SET e += r['properties']
                     RETURN e"""
 
-            self._query(q, {'rels': data})
+            for start in range(0, len(group), BATCH_SIZE):
+                chunk = group[start:start + BATCH_SIZE]
+                data = [{'src_id': r[1], 'dest_id': r[2], 'properties': r[3]}
+                        for r in chunk]
+                self._query(q, {'rels': data})
 
     def function_calls_function(self, caller_id: int, callee_id: int, pos: int) -> None:
         """
