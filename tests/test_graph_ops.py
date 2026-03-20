@@ -1,7 +1,8 @@
 import unittest
+from pathlib import Path
 from falkordb import FalkorDB
-from typing import List, Optional
-from api import *
+from api import Graph
+from api.entities import File
 
 
 class TestGraphOps(unittest.TestCase):
@@ -11,50 +12,60 @@ class TestGraphOps(unittest.TestCase):
         self.graph = Graph(name='test')
 
     def test_add_function(self):
-        # Create function
-        func = Function('/path/to/function', 'func', '', 'int', '', 1, 10)
-        func.add_argument('x', 'int')
-        func.add_argument('y', 'float')
-
-        self.graph.add_function(func)
-        self.assertEqual(func, self.graph.get_function(func.id))
+        func_id = self.graph.add_entity(
+            'Function', 'func', '', '/path/to/function', 1, 10,
+            {'ret_type': 'int', 'src': '', 'args': [['x', 'int'], ['y', 'float']]}
+        )
+        result = self.graph.get_function(func_id)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.properties['name'], 'func')
+        self.assertEqual(result.properties['ret_type'], 'int')
+        self.assertEqual(result.properties['args'], [['x', 'int'], ['y', 'float']])
 
     def test_add_file(self):
-        file = File('/path/to/file', 'file', 'txt')
-
+        file = File(Path('/path/to/file.txt'), None)
         self.graph.add_file(file)
-        self.assertEqual(file, self.graph.get_file('/path/to/file', 'file', 'txt'))
+        result = self.graph.get_file('/path/to/file.txt', 'file.txt', '.txt')
+        self.assertIsNotNone(result)
+        self.assertEqual(result.properties['name'], 'file.txt')
+        self.assertEqual(result.properties['ext'], '.txt')
 
     def test_file_add_function(self):
-        file = File('/path/to/file', 'file', 'txt')
-        func = Function('/path/to/function', 'func', '', 'int', '', 1, 10)
-
+        file = File(Path('/path/to/file.txt'), None)
         self.graph.add_file(file)
-        self.graph.add_function(func)
 
-        self.graph.connect_entities("CONTAINS", file.id, func.id)
+        func_id = self.graph.add_entity(
+            'Function', 'func', '', '/path/to/function', 1, 10,
+            {'ret_type': 'int', 'src': '', 'args': []}
+        )
+
+        self.graph.connect_entities("CONTAINS", file.id, func_id)
 
         query = """MATCH (file:File)-[:CONTAINS]->(func:Function)
                    WHERE ID(func) = $func_id AND ID(file) = $file_id
                    RETURN true"""
 
-        params = {'file_id': file.id, 'func_id': func.id}
+        params = {'file_id': file.id, 'func_id': func_id}
         res = self.g.query(query, params).result_set
         self.assertTrue(res[0][0])
 
     def test_function_calls_function(self):
-        caller = Function('/path/to/function', 'func_A', '', 'int', '', 1, 10)
-        callee = Function('/path/to/function', 'func_B', '', 'int', '', 11, 21)
+        caller_id = self.graph.add_entity(
+            'Function', 'func_A', '', '/path/to/function', 1, 10,
+            {'ret_type': 'int', 'src': '', 'args': []}
+        )
+        callee_id = self.graph.add_entity(
+            'Function', 'func_B', '', '/path/to/function', 11, 21,
+            {'ret_type': 'int', 'src': '', 'args': []}
+        )
 
-        self.graph.add_function(caller)
-        self.graph.add_function(callee)
-        self.graph.function_calls_function(caller.id, callee.id, 10)
+        self.graph.function_calls_function(caller_id, callee_id, 10)
 
         query = """MATCH (caller:Function)-[:CALLS]->(callee:Function)
                WHERE ID(caller) = $caller_id AND ID(callee) = $callee_id
                RETURN true"""
 
-        params = {'caller_id': caller.id, 'callee_id': callee.id}
+        params = {'caller_id': caller_id, 'callee_id': callee_id}
         res = self.g.query(query, params).result_set
         self.assertTrue(res[0][0])
 
