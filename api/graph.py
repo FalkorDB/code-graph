@@ -426,9 +426,10 @@ class Graph():
 
         return None
 
-    def get_file(self, path: str, name: str, ext: str) -> Optional[File]:
+    def get_file(self, path: str, name: str, ext: str) -> Optional[Node]:
         """
-        Retrieves a File entity from the graph database based on its path, name, and extension.
+        Retrieves a File node from the graph database based on its path, name,
+        and extension.
 
         Args:
             path (str): The file path.
@@ -436,12 +437,7 @@ class Graph():
             ext (str): The file extension.
 
         Returns:
-            Optional[File]: The File object if found, otherwise None.
-
-        This method constructs and executes a query to find a file node in the graph
-        database with the specified path, name, and extension. If the file node is found,
-        it creates and returns a File object with its properties and ID. If no such node
-        is found, it returns None.
+            Optional[Node]: The File node if found, otherwise None.
 
         Example:
             file = self.get_file('/path/to/file', 'filename', '.py')
@@ -452,19 +448,10 @@ class Graph():
         params = {'path': path, 'name': name, 'ext': ext}
 
         res = self._query(q, params)
-        if(len(res.result_set) == 0):
+        if len(res.result_set) == 0:
             return None
 
-        node = res.result_set[0][0]
-
-        ext  = node.properties['ext']
-        path = node.properties['path']
-        name = node.properties['name']
-        file = File(path, name, ext)
-
-        file.id = node.id
-
-        return file
+        return res.result_set[0][0]
 
     # set file code coverage
     # if file coverage is 100% set every defined function coverage to 100% aswell

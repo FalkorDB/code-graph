@@ -1,8 +1,7 @@
 import os
 import unittest
-from git import Repo
+import pygit2
 from api import (
-    Graph,
     Project,
     switch_commit
 )
@@ -30,8 +29,8 @@ class Test_Git_History(unittest.TestCase):
         repo_dir = os.path.join(current_dir, 'git_repo')
 
         # Checkout HEAD commit
-        repo = Repo(repo_dir)
-        repo.git.checkout("HEAD")
+        repo = pygit2.Repository(repo_dir)
+        repo.checkout_head()
 
         proj      = Project.from_local_repository(repo_dir)
         graph     = proj.analyze_sources()
@@ -45,13 +44,13 @@ class Test_Git_History(unittest.TestCase):
         f = graph.get_file(path, name, ext)
 
         self.assertIsNotNone(f)
-        self.assertEqual(f.ext, ext)
-        self.assertEqual(f.path, path)
-        self.assertEqual(f.name, name)
+        self.assertEqual(f.properties['ext'], ext)
+        self.assertEqual(f.properties['path'], path)
+        self.assertEqual(f.properties['name'], name)
 
     def test_git_graph_structure(self):
         # validate git graph structure
-        c = repo.commit("HEAD")
+        c = repo.revparse_single("HEAD")
 
         while True:
             commits = git_graph.get_commits([c.short_id])
@@ -62,13 +61,13 @@ class Test_Git_History(unittest.TestCase):
             self.assertEqual(c.short_id,       actual['hash'])
             self.assertEqual(c.message,        actual['message'])
             self.assertEqual(c.author.name,    actual['author'])
-            self.assertEqual(c.committed_date, actual['date'])
+            self.assertEqual(c.commit_time,    actual['date'])
 
             # Advance to previous commit
-            if len(c.parents) == 0:
+            if len(c.parent_ids) == 0:
                 break
 
-            c = c.parents[0]
+            c = repo.get(c.parent_ids[0])
 
     def test_git_transitions(self):
         # our test git repo:
