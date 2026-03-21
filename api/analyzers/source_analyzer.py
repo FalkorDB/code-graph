@@ -153,20 +153,20 @@ class SourceAnalyzer():
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
                 for _, entity in file.entities.items():
                     entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, key, symbol))
-                    for key, symbols in entity.symbols.items():
-                        for symbol in symbols:
+                    for key, resolved_set in entity.resolved_symbols.items():
+                        for resolved in resolved_set:
                             if key == "base_class":
-                                graph.connect_entities("EXTENDS", entity.id, symbol.id)
+                                graph.connect_entities("EXTENDS", entity.id, resolved.id)
                             elif key == "implement_interface":
-                                graph.connect_entities("IMPLEMENTS", entity.id, symbol.id)
+                                graph.connect_entities("IMPLEMENTS", entity.id, resolved.id)
                             elif key == "extend_interface":
-                                graph.connect_entities("EXTENDS", entity.id, symbol.id)
+                                graph.connect_entities("EXTENDS", entity.id, resolved.id)
                             elif key == "call":
-                                graph.connect_entities("CALLS", entity.id, symbol.id)
+                                graph.connect_entities("CALLS", entity.id, resolved.id)
                             elif key == "return_type":
-                                graph.connect_entities("RETURNS", entity.id, symbol.id)
+                                graph.connect_entities("RETURNS", entity.id, resolved.id)
                             elif key == "parameters":
-                                graph.connect_entities("PARAMETERS", entity.id, symbol.id)
+                                graph.connect_entities("PARAMETERS", entity.id, resolved.id)
 
     def analyze_files(self, files: list[Path], path: Path, graph: Graph) -> None:
         self.first_pass(path, files, [], graph)

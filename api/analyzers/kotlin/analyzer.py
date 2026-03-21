@@ -1,5 +1,6 @@
 from pathlib import Path
-from ...entities import *
+from ...entities.entity import Entity
+from ...entities.file import File
 from typing import Optional
 from ..analyzer import AbstractAnalyzer
 
@@ -38,15 +39,9 @@ class KotlinAnalyzer(AbstractAnalyzer):
         raise ValueError(f"Unknown entity type: {node.type}")
 
     def get_entity_name(self, node: Node) -> str:
-        if node.type in ['class_declaration', 'object_declaration']:
-            # Find the type_identifier child
+        if node.type in ['class_declaration', 'object_declaration', 'function_declaration']:
             for child in node.children:
-                if child.type == 'type_identifier':
-                    return child.text.decode('utf-8')
-        elif node.type == 'function_declaration':
-            # Find the simple_identifier child
-            for child in node.children:
-                if child.type == 'simple_identifier':
+                if child.type == 'identifier':
                     return child.text.decode('utf-8')
         raise ValueError(f"Cannot extract name from entity type: {node.type}")
     
@@ -64,52 +59,58 @@ class KotlinAnalyzer(AbstractAnalyzer):
     def get_entity_types(self) -> list[str]:
         return ['class_declaration', 'object_declaration', 'function_declaration']
     
+    def _get_delegation_types(self, entity: Entity) -> list:
+        """Extract type identifiers from delegation specifiers in order."""
+        types = []
+        for child in entity.node.children:
+            if child.type == 'delegation_specifiers':
+                for spec in child.children:
+                    if spec.type == 'delegation_specifier':
+                        for sub in spec.children:
+                            if sub.type == 'constructor_invocation':
+                                for s in sub.children:
+                                    if s.type == 'user_type':
+                                        for id_node in s.children:
+                                            if id_node.type == 'identifier':
+                                                types.append(id_node)
+                            elif sub.type == 'user_type':
+                                for id_node in sub.children:
+                                    if id_node.type == 'identifier':
+                                        types.append(id_node)
+        return types
+
     def add_symbols(self, entity: Entity) -> None:
         if entity.node.type == 'class_declaration':
-            # Find superclass (extends)
-            superclass_query = self.language.query("(delegation_specifier (user_type (type_identifier) @superclass))")
-            superclass_captures = superclass_query.captures(entity.node)
-            if 'superclass' in superclass_captures:
-                for superclass in superclass_captures['superclass']:
-                    entity.add_symbol("base_class", superclass)
-            
-            # Find interfaces (implements)
-            # In Kotlin, both inheritance and interface implementation use the same syntax
-            # We'll treat all as interfaces for now since Kotlin can only extend one class
-            interface_query = self.language.query("(delegation_specifier (user_type (type_identifier) @interface))")
-            interface_captures = interface_query.captures(entity.node)
-            if 'interface' in interface_captures:
-                for interface in interface_captures['interface']:
-                    entity.add_symbol("implement_interface", interface)
+            types = self._get_delegation_types(entity)
+            if types:
+                # First one is the superclass (base_class)
+                entity.add_symbol("base_class", types[0])
+                # Remaining are interfaces
+                for iface in types[1:]:
+                    entity.add_symbol("implement_interface", iface)
                     
         elif entity.node.type == 'object_declaration':
-            # Objects can also have delegation specifiers
-            interface_query = self.language.query("(delegation_specifier (user_type (type_identifier) @interface))")
-            interface_captures = interface_query.captures(entity.node)
-            if 'interface' in interface_captures:
-                for interface in interface_captures['interface']:
-                    entity.add_symbol("implement_interface", interface)
+            types = self._get_delegation_types(entity)
+            for t in types:
+                entity.add_symbol("implement_interface", t)
                     
         elif entity.node.type == 'function_declaration':
             # Find function calls
-            query = self.language.query("(call_expression) @reference.call")
-            captures = query.captures(entity.node)
+            captures = self._captures("(call_expression) @reference.call", entity.node)
             if 'reference.call' in captures:
                 for caller in captures['reference.call']:
                     entity.add_symbol("call", caller)
             
             # Find parameters with types
-            param_query = self.language.query("(parameter type: (user_type (type_identifier) @parameter))")
-            param_captures = param_query.captures(entity.node)
-            if 'parameter' in param_captures:
-                for parameter in param_captures['parameter']:
+            captures = self._captures("(parameter (user_type (identifier) @parameter))", entity.node)
+            if 'parameter' in captures:
+                for parameter in captures['parameter']:
                     entity.add_symbol("parameters", parameter)
             
             # Find return type
-            return_type_query = self.language.query("(function_declaration type: (user_type (type_identifier) @return_type))")
-            return_type_captures = return_type_query.captures(entity.node)
-            if 'return_type' in return_type_captures:
-                for return_type in return_type_captures['return_type']:
+            captures = self._captures("(function_declaration (user_type (identifier) @return_type))", entity.node)
+            if 'return_type' in captures:
+                for return_type in captures['return_type']:
                     entity.add_symbol("return_type", return_type)
 
     def is_dependency(self, file_path: str) -> bool:
@@ -134,7 +135,7 @@ class KotlinAnalyzer(AbstractAnalyzer):
         if node.type == 'call_expression':
             # Find the identifier being called
             for child in node.children:
-                if child.type in ['simple_identifier', 'navigation_expression']:
+                if child.type in ['identifier', 'navigation_expression']:
                     for file, resolved_node in self.resolve(files, lsp, file_path, path, child):
                         method_dec = self.find_parent(resolved_node, ['function_declaration', 'class_declaration', 'object_declaration'])
                         if method_dec and method_dec.type in ['class_declaration', 'object_declaration']:
