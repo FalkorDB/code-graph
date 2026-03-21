@@ -90,6 +90,7 @@ export default function App() {
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
   const [zoomedNodes, setZoomedNodes] = useState<Node[]>([])
   const [hasHiddenElements, setHasHiddenElements] = useState(false);
+  const [isFetchingGraph, setIsFetchingGraph] = useState(false);
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -153,6 +154,7 @@ export default function App() {
   }
 
   async function onFetchGraph(graphName: string) {
+    setIsFetchingGraph(true);
     try {
       const result = await fetch(`/api/graph_entities?repo=${prepareArg(graphName)}`, {
         method: 'GET',
@@ -186,6 +188,8 @@ export default function App() {
         title: "Uh oh! Something went wrong.",
         description: "Failed to load repository graph. Please try again.",
       })
+    } finally {
+      setIsFetchingGraph(false);
     }
   }
 
@@ -527,6 +531,7 @@ export default function App() {
                   options={options}
                   setOptions={setOptions}
                   onFetchGraph={onFetchGraph}
+                  isFetchingGraph={isFetchingGraph}
                   onFetchNode={onFetchNode}
                   setPath={setPath}
                   isShowPath={!!path}
@@ -654,6 +659,7 @@ export default function App() {
                 options={options}
                 setOptions={setOptions}
                 onFetchGraph={onFetchGraph}
+                isFetchingGraph={isFetchingGraph}
                 onFetchNode={onFetchNode}
                 setPath={setPath}
                 isShowPath={!!path}
