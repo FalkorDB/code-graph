@@ -69,5 +69,91 @@ class TestGraphOps(unittest.TestCase):
         res = self.g.query(query, params).result_set
         self.assertTrue(res[0][0])
 
+    def test_add_files_batch(self):
+        files = [File(Path(f'/batch/file{i}.py'), None) for i in range(5)]
+        self.graph.add_files_batch(files)
+
+        for i, f in enumerate(files):
+            self.assertIsNotNone(f.id)
+            result = self.graph.get_file(f'/batch/file{i}.py', f'file{i}.py', '.py')
+            self.assertIsNotNone(result)
+            self.assertEqual(result.properties['name'], f'file{i}.py')
+
+    def test_add_files_batch_empty(self):
+        self.graph.add_files_batch([])
+
+    def test_add_entities_batch(self):
+        from unittest.mock import MagicMock
+
+        entities_data = []
+        for i in range(3):
+            mock_entity = MagicMock()
+            mock_entity.id = None
+            entities_data.append((
+                mock_entity, 'Function', f'func_{i}', f'doc {i}',
+                '/batch/path', i * 10, i * 10 + 5, {}
+            ))
+
+        self.graph.add_entities_batch(entities_data)
+
+        for item in entities_data:
+            self.assertIsNotNone(item[0].id)
+
+    def test_connect_entities_batch(self):
+        file = File(Path('/batch/connect_test.py'), None)
+        self.graph.add_file(file)
+
+        func_a_id = self.graph.add_entity(
+            'Function', 'batch_a', '', '/batch/connect_test.py', 1, 5, {}
+        )
+        func_b_id = self.graph.add_entity(
+            'Function', 'batch_b', '', '/batch/connect_test.py', 6, 10, {}
+        )
+        func_c_id = self.graph.add_entity(
+            'Function', 'batch_c', '', '/batch/connect_test.py', 11, 15, {}
+        )
+
+        self.graph.connect_entities_batch([
+            ("DEFINES", file.id, func_a_id, {}),
+            ("DEFINES", file.id, func_b_id, {}),
+            ("DEFINES", file.id, func_c_id, {}),
+            ("CALLS", func_a_id, func_b_id, {"line": 3, "text": "batch_b()"}),
+        ])
+
+        # Verify DEFINES relationships
+        q = """MATCH (f:File)-[:DEFINES]->(fn:Function)
+               WHERE ID(f) = $file_id
+               RETURN count(fn)"""
+        res = self.g.query(q, {'file_id': file.id}).result_set
+        self.assertEqual(res[0][0], 3)
+
+        # Verify CALLS relationship with properties
+        q = """MATCH (a:Function)-[c:CALLS]->(b:Function)
+               WHERE ID(a) = $a_id AND ID(b) = $b_id
+               RETURN c.line, c.text"""
+        res = self.g.query(q, {'a_id': func_a_id, 'b_id': func_b_id}).result_set
+        self.assertEqual(res[0][0], 3)
+        self.assertEqual(res[0][1], "batch_b()")
+
+    def test_connect_entities_batch_empty(self):
+        self.graph.connect_entities_batch([])
+
+    def test_batch_chunking(self):
+        """Verify batches are correctly chunked when exceeding BATCH_SIZE."""
+        import api.graph as graph_module
+        original = graph_module.BATCH_SIZE
+        try:
+            graph_module.BATCH_SIZE = 3
+            files = [File(Path(f'/chunked/f{i}.py'), None) for i in range(7)]
+            self.graph.add_files_batch(files)
+            for f in files:
+                self.assertIsNotNone(f.id)
+            # Verify all 7 files are actually in the DB
+            for i in range(7):
+                result = self.graph.get_file(f'/chunked/f{i}.py', f'f{i}.py', '.py')
+                self.assertIsNotNone(result)
+        finally:
+            graph_module.BATCH_SIZE = original
+
 if __name__ == '__main__':
     unittest.main()

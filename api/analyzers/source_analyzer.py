@@ -41,36 +41,52 @@ class SourceAnalyzer():
         """
         return list(analyzers.keys())
 
-    def create_entity_hierarchy(self, entity: Entity, file: File, analyzer: AbstractAnalyzer, graph: Graph):
+    def create_entity_hierarchy(self, entity: Entity, file: File, analyzer: AbstractAnalyzer,
+                                pending_entities: list, pending_rels: list):
         types = analyzer.get_entity_types()
         stack = list(entity.node.children)
         while stack:
             node = stack.pop()
             if node.type in types:
                 child = Entity(node)
-                child.id = graph.add_entity(analyzer.get_entity_label(node), analyzer.get_entity_name(node), analyzer.get_entity_docstring(node), str(file.path), node.start_point.row, node.end_point.row, {})
+                pending_entities.append((
+                    child, analyzer.get_entity_label(node),
+                    analyzer.get_entity_name(node),
+                    analyzer.get_entity_docstring(node),
+                    str(file.path), node.start_point.row,
+                    node.end_point.row, {}
+                ))
                 if not analyzer.is_dependency(str(file.path)):
                     analyzer.add_symbols(child)
                 file.add_entity(child)
                 entity.add_child(child)
-                graph.connect_entities("DEFINES", entity.id, child.id)
-                self.create_entity_hierarchy(child, file, analyzer, graph)
+                pending_rels.append(("DEFINES", entity, child))
+                self.create_entity_hierarchy(child, file, analyzer,
+                                             pending_entities, pending_rels)
             else:
                 stack.extend(node.children)
 
-    def create_hierarchy(self, file: File, analyzer: AbstractAnalyzer, graph: Graph):
+    def create_hierarchy(self, file: File, analyzer: AbstractAnalyzer,
+                         pending_entities: list, pending_rels: list):
         types = analyzer.get_entity_types()
         stack = [file.tree.root_node]
         while stack:
             node = stack.pop()
             if node.type in types:
                 entity = Entity(node)
-                entity.id = graph.add_entity(analyzer.get_entity_label(node), analyzer.get_entity_name(node), analyzer.get_entity_docstring(node), str(file.path), node.start_point.row, node.end_point.row, {})
+                pending_entities.append((
+                    entity, analyzer.get_entity_label(node),
+                    analyzer.get_entity_name(node),
+                    analyzer.get_entity_docstring(node),
+                    str(file.path), node.start_point.row,
+                    node.end_point.row, {}
+                ))
                 if not analyzer.is_dependency(str(file.path)):
                     analyzer.add_symbols(entity)
                 file.add_entity(entity)
-                graph.connect_entities("DEFINES", file.id, entity.id)
-                self.create_entity_hierarchy(entity, file, analyzer, graph)
+                pending_rels.append(("DEFINES", file, entity))
+                self.create_entity_hierarchy(entity, file, analyzer,
+                                             pending_entities, pending_rels)
             else:
                 stack.extend(node.children)
 
@@ -87,6 +103,11 @@ class SourceAnalyzer():
         for ext in set([file.suffix for file in files if file.suffix in supoorted_types]):
             analyzers[ext].add_dependencies(path, files)
         
+        # Phase 1: Parse files and build in-memory hierarchy
+        pending_files = []
+        pending_entities = []
+        pending_rels = []
+
         files_len = len(files)
         for i, file_path in enumerate(files):
             # Skip none supported files
@@ -95,7 +116,7 @@ class SourceAnalyzer():
                 continue
 
             # Skip ignored files
-            if any([i in str(file_path) for i in ignore]):
+            if any(ig in str(file_path) for ig in ignore):
                 logging.info(f"Skipping ignored file {file_path}")
                 continue
 
@@ -110,10 +131,17 @@ class SourceAnalyzer():
             # Create file entity
             file = File(file_path, tree)
             self.files[file_path] = file
+            pending_files.append(file)
 
-            # Walk thought the AST
-            graph.add_file(file)
-            self.create_hierarchy(file, analyzer, graph)
+            # Walk through the AST and collect entities/relationships
+            self.create_hierarchy(file, analyzer, pending_entities, pending_rels)
+
+        # Phase 2: Batch insert files, entities, and relationships
+        graph.add_files_batch(pending_files)
+        graph.add_entities_batch(pending_entities)
+        graph.connect_entities_batch([
+            (rel, src.id, dest.id, {}) for rel, src, dest in pending_rels
+        ])
 
     def second_pass(self, graph: Graph, files: list[Path], path: Path) -> None:
         """
@@ -144,8 +172,11 @@ class SourceAnalyzer():
         else:
             lsps[".cs"] = NullLanguageServer()
         with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server():
+            pending_rels = []
             files_len = len(self.files)
             for i, file_path in enumerate(files):
+                if file_path not in self.files:
+                    continue
                 file = self.files[file_path]
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
                 for _, entity in file.entities.items():
@@ -155,18 +186,25 @@ class SourceAnalyzer():
                             if len(symbol.resolved_symbol) == 0:
                                 continue
                             resolved_symbol = next(iter(symbol.resolved_symbol))
+                            rel = None
+                            props = {}
                             if key == "base_class":
-                                graph.connect_entities("EXTENDS", entity.id, resolved_symbol.id)
+                                rel = "EXTENDS"
                             elif key == "implement_interface":
-                                graph.connect_entities("IMPLEMENTS", entity.id, resolved_symbol.id)
+                                rel = "IMPLEMENTS"
                             elif key == "extend_interface":
-                                graph.connect_entities("EXTENDS", entity.id, resolved_symbol.id)
+                                rel = "EXTENDS"
                             elif key == "call":
-                                graph.connect_entities("CALLS", entity.id, resolved_symbol.id, {"line": symbol.symbol.start_point.row, "text": symbol.symbol.text.decode("utf-8")})
+                                rel = "CALLS"
+                                props = {"line": symbol.symbol.start_point.row, "text": symbol.symbol.text.decode("utf-8")}
                             elif key == "return_type":
-                                graph.connect_entities("RETURNS", entity.id, resolved_symbol.id)
+                                rel = "RETURNS"
                             elif key == "parameters":
-                                graph.connect_entities("PARAMETERS", entity.id, resolved_symbol.id)
+                                rel = "PARAMETERS"
+                            if rel:
+                                pending_rels.append((rel, entity.id, resolved_symbol.id, props))
+
+            graph.connect_entities_batch(pending_rels)
 
     def analyze_files(self, files: list[Path], path: Path, graph: Graph) -> None:
         self.first_pass(path, files, [], graph)
