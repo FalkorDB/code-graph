@@ -63,7 +63,10 @@ def ensure_db() -> None:
     """Ensure FalkorDB is running, auto-starting a Docker container if needed."""
 
     host = os.getenv("FALKORDB_HOST", "localhost")
-    port = int(os.getenv("FALKORDB_PORT", "6379"))
+    try:
+        port = int(os.getenv("FALKORDB_PORT", "6379"))
+    except ValueError:
+        _json_error(f"Invalid FALKORDB_PORT: {os.getenv('FALKORDB_PORT')!r} — must be an integer")
 
     if _check_connection(host, port):
         _stderr(f"FalkorDB already running on {host}:{port}")
@@ -96,6 +99,25 @@ def ensure_db() -> None:
         )
 
         if inspect.returncode == 0:
+            # Check that the existing container maps to the expected port
+            port_inspect = subprocess.run(
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{(index (index .NetworkSettings.Ports \"6379/tcp\") 0).HostPort}}",
+                    "falkordb-cgraph",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            existing_port = port_inspect.stdout.strip() if port_inspect.returncode == 0 else None
+            if existing_port and existing_port != str(port):
+                _json_error(
+                    f"Existing falkordb-cgraph container is bound to port {existing_port}, "
+                    f"but FALKORDB_PORT is {port}. Remove the container and retry."
+                )
+
             if inspect.stdout.strip() == "false":
                 subprocess.run(
                     ["docker", "start", "falkordb-cgraph"],
@@ -164,13 +186,16 @@ def index(
     url = None
     try:
         from pygit2.repository import Repository as GitRepo
+        import re as _re
 
         remote_url = GitRepo(str(folder)).remotes[0].url
-        url = (
-            remote_url.replace("git@", "https://")
-            .replace(":", "/")
-            .replace(".git", "")
-        )
+        # Convert SSH-style URLs (git@host:org/repo.git) to HTTPS
+        ssh_match = _re.match(r'^git@([^:]+):(.+?)(?:\.git)?$', remote_url)
+        if ssh_match:
+            url = f"https://{ssh_match.group(1)}/{ssh_match.group(2)}"
+        else:
+            # Already HTTPS — just strip trailing .git
+            url = _re.sub(r'\.git$', '', remote_url)
     except Exception:
         # Not a git repo or no remote configured — metadata will be skipped
         pass
@@ -202,7 +227,11 @@ def index_repo(
 
     _stderr(f"Cloning and indexing {url}…")
     try:
-        project = Project.from_git_repository(url)
+        # Redirect stdout to suppress clone output (keep JSON-only stdout)
+        import io
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            project = Project.from_git_repository(url)
         graph = project.analyze_sources(ignore=list(ignore) if ignore else [])
         stats = graph.stats()
     except Exception as e:
