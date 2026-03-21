@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from collections import defaultdict
 from .entities import *
@@ -8,6 +9,9 @@ from falkordb.asyncio import FalkorDB as AsyncFalkorDB
 
 # Maximum items per UNWIND batch to avoid overwhelming FalkorDB/Redis
 BATCH_SIZE = 500
+
+# Regex to validate graph labels/relation types (alphanumeric + underscore only)
+_VALID_LABEL_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
 # Configure the logger
 import logging
@@ -252,6 +256,9 @@ class Graph():
         Args:
         """
 
+        if not _VALID_LABEL_RE.match(label):
+            raise ValueError(f"Invalid entity label: {label!r}")
+
         q = f"""MERGE (c:{label}:Searchable {{name: $name, path: $path, src_start: $src_start,
                                src_end: $src_end}})
                SET c.doc = $doc
@@ -290,6 +297,9 @@ class Graph():
             by_label[item[1]].append(item)
 
         for label, group in by_label.items():
+            if not _VALID_LABEL_RE.match(label):
+                raise ValueError(f"Invalid entity label: {label!r}")
+
             q = f"""UNWIND $entities AS e
                     MERGE (c:{label}:Searchable {{name: e['name'], path: e['path'],
                                                    src_start: e['src_start'],
@@ -565,12 +575,20 @@ class Graph():
 
         by_relation = defaultdict(list)
         for rel in relationships:
+            if rel[1] is None or rel[2] is None:
+                logging.warning(f"Skipping relationship {rel[0]} with None ID: src={rel[1]}, dest={rel[2]}")
+                continue
             by_relation[rel[0]].append(rel)
 
         for relation, group in by_relation.items():
+            if not _VALID_LABEL_RE.match(relation):
+                raise ValueError(f"Invalid relation type: {relation!r}")
+
             q = f"""UNWIND $rels AS r
-                    MATCH (src), (dest)
-                    WHERE ID(src) = r['src_id'] AND ID(dest) = r['dest_id']
+                    MATCH (src)
+                    WHERE ID(src) = r['src_id']
+                    MATCH (dest)
+                    WHERE ID(dest) = r['dest_id']
                     MERGE (src)-[e:{relation}]->(dest)
                     SET e += r['properties']
                     RETURN e"""

@@ -83,7 +83,6 @@ class TestGraphOps(unittest.TestCase):
         self.graph.add_files_batch([])
 
     def test_add_entities_batch(self):
-        from api.entities.entity import Entity
         from unittest.mock import MagicMock
 
         entities_data = []

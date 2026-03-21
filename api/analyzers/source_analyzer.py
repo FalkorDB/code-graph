@@ -116,7 +116,7 @@ class SourceAnalyzer():
                 continue
 
             # Skip ignored files
-            if any([ig in str(file_path) for ig in ignore]):
+            if any(ig in str(file_path) for ig in ignore):
                 logging.info(f"Skipping ignored file {file_path}")
                 continue
 
