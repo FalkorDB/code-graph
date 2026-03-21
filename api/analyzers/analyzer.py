@@ -56,7 +56,7 @@ class AbstractAnalyzer(ABC):
         try:
             locations = lsp.request_definition(str(file_path), node.start_point.row, node.start_point.column)
             return [(files[Path(self.resolve_path(location['absolutePath'], path))], files[Path(self.resolve_path(location['absolutePath'], path))].tree.root_node.descendant_for_point_range(Point(location['range']['start']['line'], location['range']['start']['character']), Point(location['range']['end']['line'], location['range']['end']['character']))) for location in locations if location and Path(self.resolve_path(location['absolutePath'], path)) in files]
-        except Exception as e:
+        except Exception:
             return []
         
     @abstractmethod
@@ -133,9 +133,9 @@ class AbstractAnalyzer(ABC):
         pass
 
     @abstractmethod
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> Entity:
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
         """
-        Resolve a symbol to an entity.
+        Resolve a symbol to entities.
 
         Args:
             lsp (SyncLanguageServer): The language server.
@@ -144,7 +144,7 @@ class AbstractAnalyzer(ABC):
             symbol (Node): The symbol node.
 
         Returns:
-            Entity: The entity.
+            list[Entity]: The resolved entities.
         """
 
         pass

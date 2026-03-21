@@ -173,6 +173,7 @@ class SourceAnalyzer():
         self.second_pass(graph, files, path)
 
     def analyze_sources(self, path: Path, ignore: list[str], graph: Graph) -> None:
+        path = path.resolve()
         files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.kt")) + list(path.rglob("*.kts"))
         # First pass analysis of the source code
         self.first_pass(path, files, ignore, graph)
