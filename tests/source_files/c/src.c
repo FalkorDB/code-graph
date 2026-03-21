@@ -1,3 +1,6 @@
+#include "myheader.h"
+#include <stdio.h>
+
 int add
 (
 	int a,
