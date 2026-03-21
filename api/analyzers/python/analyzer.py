@@ -137,16 +137,10 @@ class PythonAnalyzer(AbstractAnalyzer):
         - from module import name as alias
         """
         try:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                # Query for both import types
-                import_query = self.language.query("""
+            captures = self._captures("""
                     (import_statement) @import
                     (import_from_statement) @import_from
-                """)
-            
-            captures = import_query.captures(file.tree.root_node)
+                """, file.tree.root_node)
             
             # Add all import statement nodes to the file
             if 'import' in captures:

@@ -55,8 +55,6 @@ class Test_PY_Imports(unittest.TestCase):
             self.assertGreater(len(result.result_set), 0, 
                              "module_b.py should import function_a")
             
-            print("✓ Import tracking test passed")
-            
         finally:
             # Cleanup: delete the test graph
             g.delete()

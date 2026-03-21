@@ -141,6 +141,6 @@ class CSharpAnalyzer(AbstractAnalyzer):
         # C# import tracking not yet implemented
         pass
 
-    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node) -> list[Entity]:
+    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
         # C# import resolution not yet implemented
         return []
