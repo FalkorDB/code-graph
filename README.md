@@ -246,8 +246,6 @@ A C analyzer exists in the source tree, but it is commented out and is not curre
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-Knowledge Graph, Code Analysis, Code Visualization, Dead Code Analysis, Graph Database
-
 ## API Reference
 
 ### Retrieve a graph
@@ -255,12 +253,12 @@ Knowledge Graph, Code Analysis, Code Visualization, Dead Code Analysis, Graph Da
 Fetch graph entities from a repository:
 
 ```bash
-curl -X GET "http://127.0.0.1:5000/graph_entities?repo=<REPO_NAME>" -H "Authorization: ${SECRET_TOKEN}"
+curl -X GET "http://127.0.0.1:5000/api/graph_entities?repo=<REPO_NAME>" -H "Authorization: Bearer ${SECRET_TOKEN}"
 ```
 
 Example:
 ```bash
-curl -X GET "http://127.0.0.1:5000/graph_entities?repo=GraphRAG-SDK" -H "Authorization: ${SECRET_TOKEN}"
+curl -X GET "http://127.0.0.1:5000/api/graph_entities?repo=GraphRAG-SDK" -H "Authorization: Bearer ${SECRET_TOKEN}"
 ```
 
 ### Send Query
@@ -268,19 +266,19 @@ curl -X GET "http://127.0.0.1:5000/graph_entities?repo=GraphRAG-SDK" -H "Authori
 Query your code graph using natural language:
 
 ```bash
-curl -X POST http://127.0.0.1:5000/chat -H "Content-Type: application/json" -d '{"repo": "<REPO_NAME>", "msg": "<YOUR_QUESTION>"}' -H "Authorization: ${SECRET_TOKEN}"
+curl -X POST http://127.0.0.1:5000/api/chat -H "Content-Type: application/json" -d '{"repo": "<REPO_NAME>", "msg": "<YOUR_QUESTION>"}' -H "Authorization: Bearer ${SECRET_TOKEN}"
 ```
 
-### History change
+### Commit history
 
 List all commits:
 ```bash
-curl -X POST http://127.0.0.1:5000/list_commits -H "Content-Type: application/json" -d '{"repo": "<REPO_NAME>"}' -H "Authorization: ${SECRET_TOKEN}"
+curl -X POST http://127.0.0.1:5000/api/list_commits -H "Content-Type: application/json" -d '{"repo": "<REPO_NAME>"}' -H "Authorization: Bearer ${SECRET_TOKEN}"
 ```
 
 Switch to a specific commit:
 ```bash
-curl -X POST http://127.0.0.1:5000/switch_commit -H "Content-Type: application/json" -d '{"repo": "<REPO_NAME>", "commit": "<COMMIT_HASH>"}' -H "Authorization: ${SECRET_TOKEN}"
+curl -X POST http://127.0.0.1:5000/api/switch_commit -H "Content-Type: application/json" -d '{"repo": "<REPO_NAME>", "commit": "<COMMIT_HASH>"}' -H "Authorization: Bearer ${SECRET_TOKEN}"
 ```
 
 Copyright FalkorDB Ltd. 2025
