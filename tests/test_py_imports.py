@@ -1,8 +1,7 @@
 import os
 import unittest
-from pathlib import Path
 
-from api import SourceAnalyzer, File, Graph
+from api import SourceAnalyzer, Graph
 
 
 class Test_PY_Imports(unittest.TestCase):

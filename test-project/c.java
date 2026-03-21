@@ -1,4 +1,4 @@
-package test-project;
+package test_project;
 
 public class c {
     

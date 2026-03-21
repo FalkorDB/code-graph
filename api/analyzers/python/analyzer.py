@@ -96,9 +96,11 @@ class PythonAnalyzer(AbstractAnalyzer):
         if node.type == 'attribute':
             node = node.child_by_field_name('attribute')
         for file, resolved_node in self.resolve(files, lsp, file_path, path, node):
-            type_dec = self.find_parent(resolved_node, ['class_definition'])
-            if type_dec in file.entities:
-                res.append(file.entities[type_dec])
+            decl = resolved_node
+            if decl.type not in ['class_definition', 'function_definition']:
+                decl = self.find_parent(resolved_node, ['class_definition', 'function_definition'])
+            if decl in file.entities:
+                res.append(file.entities[decl])
         return res
 
     def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
@@ -157,6 +159,13 @@ class PythonAnalyzer(AbstractAnalyzer):
         except Exception as e:
             logger.debug(f"Failed to extract imports from {file.path}: {e}")
 
+    def _resolve_import_name(self, files, lsp, file_path, path, identifier):
+        """Try to resolve an imported name as both a type and a function."""
+        resolved = self.resolve_type(files, lsp, file_path, path, identifier)
+        if not resolved:
+            resolved = self.resolve_method(files, lsp, file_path, path, identifier)
+        return resolved
+
     def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
         """
         Resolve an import statement to the entities it imports.
@@ -171,8 +180,7 @@ class PythonAnalyzer(AbstractAnalyzer):
                     if child.type == 'dotted_name':
                         # Try to resolve the module/name
                         identifier = child.children[0] if child.child_count > 0 else child
-                        resolved = self.resolve_type(files, lsp, file_path, path, identifier)
-                        res.extend(resolved)
+                        res.extend(self._resolve_import_name(files, lsp, file_path, path, identifier))
                     elif child.type == 'aliased_import':
                         # Get the actual name from aliased import (before 'as')
                         if child.child_count > 0:
@@ -181,8 +189,7 @@ class PythonAnalyzer(AbstractAnalyzer):
                                 identifier = actual_name.children[0]
                             else:
                                 identifier = actual_name
-                            resolved = self.resolve_type(files, lsp, file_path, path, identifier)
-                            res.extend(resolved)
+                            res.extend(self._resolve_import_name(files, lsp, file_path, path, identifier))
             
             elif import_node.type == 'import_from_statement':
                 # Handle "from module import name1, name2"
@@ -197,8 +204,7 @@ class PythonAnalyzer(AbstractAnalyzer):
                     if import_keyword_found and child.type == 'dotted_name':
                         # Try to resolve the imported name
                         identifier = child.children[0] if child.child_count > 0 else child
-                        resolved = self.resolve_type(files, lsp, file_path, path, identifier)
-                        res.extend(resolved)
+                        res.extend(self._resolve_import_name(files, lsp, file_path, path, identifier))
                     elif import_keyword_found and child.type == 'aliased_import':
                         # Handle "from module import name as alias"
                         if child.child_count > 0:
@@ -207,8 +213,7 @@ class PythonAnalyzer(AbstractAnalyzer):
                                 identifier = actual_name.children[0]
                             else:
                                 identifier = actual_name
-                            resolved = self.resolve_type(files, lsp, file_path, path, identifier)
-                            res.extend(resolved)
+                            res.extend(self._resolve_import_name(files, lsp, file_path, path, identifier))
         
         except Exception as e:
             logger.debug(f"Failed to resolve import: {e}")

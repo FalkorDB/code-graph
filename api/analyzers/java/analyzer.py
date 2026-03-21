@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 import subprocess
 from ...entities import *
+from ...entities.entity import Entity
+from ...entities.file import File
 from typing import Optional
 from ..analyzer import AbstractAnalyzer
 
