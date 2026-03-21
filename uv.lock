@@ -263,6 +263,7 @@ dependencies = [
     { name = "tree-sitter-c" },
     { name = "tree-sitter-c-sharp" },
     { name = "tree-sitter-java" },
+    { name = "tree-sitter-javascript" },
     { name = "tree-sitter-python" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "validators" },
@@ -291,6 +292,7 @@ requires-dist = [
     { name = "tree-sitter-c", specifier = ">=0.24.1,<0.25.0" },
     { name = "tree-sitter-c-sharp", specifier = ">=0.23.1,<0.24.0" },
     { name = "tree-sitter-java", specifier = ">=0.23.5,<0.24.0" },
+    { name = "tree-sitter-javascript", specifier = ">=0.23.0,<0.24.0" },
     { name = "tree-sitter-python", specifier = ">=0.25.0,<0.26.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0,<1.0.0" },
     { name = "validators", specifier = ">=0.35.0,<0.36.0" },
@@ -1625,6 +1627,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/43/56/7d06b23ddd09bde816a131aa504ee11a1bbe87c6b62ab9b2ed23849a3382/tree_sitter_java-0.23.5-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:aae84449e330363b55b14a2af0585e4e0dae75eb64ea509b7e5b0e1de536846a", size = 82564, upload-time = "2024-12-21T18:24:20.493Z" },
     { url = "https://files.pythonhosted.org/packages/da/d6/0528c7e1e88a18221dbd8ccee3825bf274b1fa300f745fd74eb343878043/tree_sitter_java-0.23.5-cp39-abi3-win_amd64.whl", hash = "sha256:1ee45e790f8d31d416bc84a09dac2e2c6bc343e89b8a2e1d550513498eedfde7", size = 60650, upload-time = "2024-12-21T18:24:22.902Z" },
     { url = "https://files.pythonhosted.org/packages/72/57/5bab54d23179350356515526fff3cc0f3ac23bfbc1a1d518a15978d4880e/tree_sitter_java-0.23.5-cp39-abi3-win_arm64.whl", hash = "sha256:402efe136104c5603b429dc26c7e75ae14faaca54cfd319ecc41c8f2534750f4", size = 59059, upload-time = "2024-12-21T18:24:24.934Z" },
+]
+
+[[package]]
+name = "tree-sitter-javascript"
+version = "0.23.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/dc/1c55c33cc6bbe754359b330534cf9f261c1b9b2c26ddf23aef3c5fa67759/tree_sitter_javascript-0.23.1.tar.gz", hash = "sha256:b2059ce8b150162cda05a457ca3920450adbf915119c04b8c67b5241cd7fcfed", size = 110058, upload-time = "2024-11-10T05:40:42.357Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/20/d3/c67d7d49967344b51208ad19f105233be1afdf07d3dcb35b471900265227/tree_sitter_javascript-0.23.1-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:6ca583dad4bd79d3053c310b9f7208cd597fd85f9947e4ab2294658bb5c11e35", size = 59333, upload-time = "2024-11-10T05:40:31.988Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/db/ea0ee1547679d1750e80a0c4bc60b3520b166eeaf048764cfdd1ba3fd5e5/tree_sitter_javascript-0.23.1-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:94100e491a6a247aa4d14caf61230c171b6376c863039b6d9cd71255c2d815ec", size = 61071, upload-time = "2024-11-10T05:40:33.458Z" },
+    { url = "https://files.pythonhosted.org/packages/67/6e/07c4857e08be37bfb55bfb269863df8ec908b2f6a3f1893cd852b893ecab/tree_sitter_javascript-0.23.1-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5a6bc1055b061c5055ec58f39ee9b2e9efb8e6e0ae970838af74da0afb811f0a", size = 96999, upload-time = "2024-11-10T05:40:34.869Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/f5/4de730afe8b9422845bc2064020a8a8f49ebd1695c04261c38d1b3e3edec/tree_sitter_javascript-0.23.1-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:056dc04fb6b24293f8c5fec43c14e7e16ba2075b3009c643abf8c85edc4c7c3c", size = 94020, upload-time = "2024-11-10T05:40:35.735Z" },
+    { url = "https://files.pythonhosted.org/packages/77/0a/f980520da86c4eff8392867840a945578ef43372c9d4a37922baa6b121fe/tree_sitter_javascript-0.23.1-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:a11ca1c0f736da42967586b568dff8a465ee148a986c15ebdc9382806e0ce871", size = 92927, upload-time = "2024-11-10T05:40:37.92Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/5c/36a98d512aa1d1082409d6b7eda5d26b820bd4477a54100ad9f62212bc55/tree_sitter_javascript-0.23.1-cp39-abi3-win_amd64.whl", hash = "sha256:041fa22b34250ea6eb313d33104d5303f79504cb259d374d691e38bbdc49145b", size = 58824, upload-time = "2024-11-10T05:40:39.903Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/79/ceb21988e6de615355a63eebcf806cd2a0fe875bec27b429d58b63e7fb5f/tree_sitter_javascript-0.23.1-cp39-abi3-win_arm64.whl", hash = "sha256:eb28130cd2fb30d702d614cbf61ef44d1c7f6869e7d864a9cc17111e370be8f7", size = 57027, upload-time = "2024-11-10T05:40:40.841Z" },
 ]
 
 [[package]]

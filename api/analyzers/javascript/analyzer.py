@@ -49,10 +49,6 @@ class JavaScriptAnalyzer(AbstractAnalyzer):
 
     def add_symbols(self, entity: Entity) -> None:
         if entity.node.type == 'class_declaration':
-            heritage = entity.node.child_by_field_name('body')
-            if heritage is None:
-                return
-            superclass_node = entity.node.child_by_field_name('name')
             # Check for `extends` clause via class_heritage
             for child in entity.node.children:
                 if child.type == 'class_heritage':
@@ -60,13 +56,11 @@ class JavaScriptAnalyzer(AbstractAnalyzer):
                         if heritage_child.type == 'identifier':
                             entity.add_symbol("base_class", heritage_child)
         elif entity.node.type in ['function_declaration', 'method_definition']:
-            query = self.language.query("(call_expression) @reference.call")
-            captures = query.captures(entity.node)
+            captures = self._captures("(call_expression) @reference.call", entity.node)
             if 'reference.call' in captures:
                 for caller in captures['reference.call']:
                     entity.add_symbol("call", caller)
-            query = self.language.query("(formal_parameters (identifier) @parameter)")
-            captures = query.captures(entity.node)
+            captures = self._captures("(formal_parameters (identifier) @parameter)", entity.node)
             if 'parameter' in captures:
                 for parameter in captures['parameter']:
                     entity.add_symbol("parameters", parameter)

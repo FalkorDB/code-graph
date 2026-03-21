@@ -177,7 +177,7 @@ class SourceAnalyzer():
 
     def analyze_sources(self, path: Path, ignore: list[str], graph: Graph) -> None:
         path = path.resolve()
-        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + list(path.rglob("*.js"))
+        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + [f for f in path.rglob("*.js") if "node_modules" not in f.parts]
         # First pass analysis of the source code
         self.first_pass(path, files, ignore, graph)
 
