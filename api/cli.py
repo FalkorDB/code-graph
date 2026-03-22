@@ -67,6 +67,8 @@ def ensure_db() -> None:
         port = int(os.getenv("FALKORDB_PORT", "6379"))
     except ValueError:
         _json_error(f"Invalid FALKORDB_PORT: {os.getenv('FALKORDB_PORT')!r} — must be an integer")
+    if not 1 <= port <= 65535:
+        _json_error(f"FALKORDB_PORT must be between 1 and 65535, got {port}")
 
     if _check_connection(host, port):
         _stderr(f"FalkorDB already running on {host}:{port}")
