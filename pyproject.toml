@@ -33,3 +33,8 @@ test = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.uv]
+override-dependencies = [
+    "requests>=2.32.3",
+]
