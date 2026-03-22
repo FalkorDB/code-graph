@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "/src/ff.h"
+#include "src/ff.h"
 
 
 /* Create an empty intset. */
