@@ -5,6 +5,8 @@ from pathlib import Path
 
 import tomllib
 from ...entities import *
+from ...entities.entity import Entity
+from ...entities.file import File
 from typing import Optional
 from ..analyzer import AbstractAnalyzer
 
