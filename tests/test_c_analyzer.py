@@ -88,6 +88,43 @@ class TestCAnalyzer(unittest.TestCase):
         """is_dependency should return False for C files."""
         self.assertFalse(self.analyzer.is_dependency("src/main.c"))
 
+    def test_docstring_extraction(self):
+        """Docstring (comment above entity) should be extracted."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "add":
+                doc = self.analyzer.get_entity_docstring(entity.node)
+                self.assertIsNotNone(doc)
+                self.assertIn("Adds two integers", doc)
+                return
+        self.fail("Function 'add' not found")
+
+    def test_no_docstring(self):
+        """Entities without a preceding comment should return None."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "main":
+                doc = self.analyzer.get_entity_docstring(entity.node)
+                self.assertIsNone(doc)
+                return
+        self.fail("Function 'main' not found")
+
+    def test_unknown_entity_label_raises(self):
+        """get_entity_label should raise for unknown node types."""
+        # Use the tree root node which is 'translation_unit', not a known entity
+        with self.assertRaises(ValueError):
+            self.analyzer.get_entity_label(self.file.tree.root_node)
+
+    def test_unknown_entity_name_raises(self):
+        """get_entity_name should raise for unknown node types."""
+        with self.assertRaises(ValueError):
+            self.analyzer.get_entity_name(self.file.tree.root_node)
+
+    def test_resolve_path(self):
+        """resolve_path should return the file path unchanged."""
+        self.assertEqual(
+            self.analyzer.resolve_path("/foo/bar.c", Path("/root")),
+            "/foo/bar.c",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
