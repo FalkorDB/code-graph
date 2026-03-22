@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from api.analyzers.javascript.analyzer import JavaScriptAnalyzer
+from api.analyzers.source_analyzer import SourceAnalyzer, analyzers
 from api.entities.entity import Entity
 from api.entities.file import File
 
@@ -14,8 +15,11 @@ def _entity_name(analyzer, entity):
 
 
 class TestJavaScriptAnalyzer(unittest.TestCase):
+    """Unit tests for JavaScriptAnalyzer entity extraction and classification."""
+
     @classmethod
     def setUpClass(cls):
+        """Parse sample.js and populate entities for all tests."""
         cls.analyzer = JavaScriptAnalyzer()
         source_dir = Path(__file__).parent / "source_files" / "javascript"
         cls.sample_path = source_dir / "sample.js"
@@ -32,13 +36,20 @@ class TestJavaScriptAnalyzer(unittest.TestCase):
                 entity = Entity(node)
                 cls.analyzer.add_symbols(entity)
                 cls.file.add_entity(entity)
-                # Also recurse into entity children (e.g., class body methods)
                 stack.extend(node.children)
             else:
                 stack.extend(node.children)
 
     def _entity_names(self):
+        """Return all entity names discovered in the sample file."""
         return [_entity_name(self.analyzer, e) for e in self.file.entities.values()]
+
+    # -- Registration ----------------------------------------------------------
+
+    def test_js_extension_registered(self):
+        """The .js extension should be registered in the analyzers map."""
+        self.assertIn(".js", analyzers)
+        self.assertIsInstance(analyzers[".js"], JavaScriptAnalyzer)
 
     def test_discovers_js_files(self):
         """SourceAnalyzer should enumerate .js files."""
@@ -46,12 +57,16 @@ class TestJavaScriptAnalyzer(unittest.TestCase):
         js_files = list(source_dir.rglob("*.js"))
         self.assertTrue(len(js_files) > 0, "Should find .js files")
 
+    # -- Entity types ----------------------------------------------------------
+
     def test_entity_types(self):
         """Analyzer should recognise JS entity types."""
         self.assertEqual(
             self.analyzer.get_entity_types(),
             ['function_declaration', 'class_declaration', 'method_definition'],
         )
+
+    # -- Entity extraction -----------------------------------------------------
 
     def test_class_extraction(self):
         """Classes should be extracted from sample.js."""
@@ -70,6 +85,8 @@ class TestJavaScriptAnalyzer(unittest.TestCase):
         self.assertIn("area", names)
         self.assertIn("constructor", names)
 
+    # -- Labels ----------------------------------------------------------------
+
     def test_class_labels(self):
         """Classes should get the 'Class' label."""
         for entity in self.file.entities.values():
@@ -82,6 +99,58 @@ class TestJavaScriptAnalyzer(unittest.TestCase):
             if _entity_name(self.analyzer, entity) == "calculateTotal":
                 self.assertEqual(self.analyzer.get_entity_label(entity.node), "Function")
 
+    def test_method_label(self):
+        """Methods should get the 'Method' label."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "area":
+                self.assertEqual(self.analyzer.get_entity_label(entity.node), "Method")
+                break
+
+    def test_unknown_entity_label_raises(self):
+        """get_entity_label should raise ValueError for unknown node types."""
+        source = b"let x = 1;"
+        tree = self.analyzer.parser.parse(source)
+        node = tree.root_node
+        with self.assertRaises(ValueError):
+            self.analyzer.get_entity_label(node)
+
+    def test_unknown_entity_name_raises(self):
+        """get_entity_name should raise ValueError for unknown node types."""
+        source = b"let x = 1;"
+        tree = self.analyzer.parser.parse(source)
+        node = tree.root_node
+        with self.assertRaises(ValueError):
+            self.analyzer.get_entity_name(node)
+
+    # -- Docstrings ------------------------------------------------------------
+
+    def test_class_docstring(self):
+        """Shape class should have a leading comment as docstring."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "Shape":
+                doc = self.analyzer.get_entity_docstring(entity.node)
+                self.assertIsNotNone(doc)
+                self.assertIn("Base class for shapes", doc)
+                break
+
+    def test_no_docstring(self):
+        """Entities without a leading comment should return None."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "Circle":
+                doc = self.analyzer.get_entity_docstring(entity.node)
+                self.assertIsNone(doc)
+                break
+
+    def test_unknown_entity_docstring_raises(self):
+        """get_entity_docstring should raise ValueError for unknown node types."""
+        source = b"let x = 1;"
+        tree = self.analyzer.parser.parse(source)
+        node = tree.root_node
+        with self.assertRaises(ValueError):
+            self.analyzer.get_entity_docstring(node)
+
+    # -- Symbols ---------------------------------------------------------------
+
     def test_base_class_symbol(self):
         """Circle should have Shape as a base_class symbol."""
         for entity in self.file.entities.values():
@@ -92,10 +161,65 @@ class TestJavaScriptAnalyzer(unittest.TestCase):
                 ]
                 self.assertIn("Shape", base_names)
 
+    def test_no_parameters_symbol(self):
+        """JS functions should NOT capture untyped parameters as symbols.
+
+        Unlike typed languages (Java, Python), plain JS parameter names are
+        not meaningful type references and should not be extracted.
+        """
+        for entity in self.file.entities.values():
+            self.assertNotIn(
+                "parameters", entity.symbols,
+                f"Entity '{_entity_name(self.analyzer, entity)}' should not have "
+                f"parameter symbols — JS params are untyped",
+            )
+
+    def test_call_symbols_extracted(self):
+        """Functions with call expressions should have 'call' symbols."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "calculateTotal":
+                self.assertIn("call", entity.symbols)
+                break
+
+    def test_class_without_extends_has_no_base_class(self):
+        """Shape (no extends) should have no base_class symbols."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "Shape":
+                self.assertEqual(len(entity.symbols.get("base_class", [])), 0)
+
+    # -- resolve_symbol dispatch -----------------------------------------------
+
+    def test_resolve_symbol_unknown_key_raises(self):
+        """resolve_symbol should raise ValueError for unknown symbol keys."""
+        with self.assertRaises(ValueError):
+            self.analyzer.resolve_symbol({}, None, Path("f.js"), Path("."), "unknown_key", None)
+
+    # -- Dependency detection --------------------------------------------------
+
     def test_is_dependency(self):
         """node_modules paths should be flagged as dependencies."""
         self.assertTrue(self.analyzer.is_dependency("foo/node_modules/bar/index.js"))
         self.assertFalse(self.analyzer.is_dependency("src/utils.js"))
+
+    def test_is_dependency_path_segment_matching(self):
+        """is_dependency should use path-segment matching, not substring.
+
+        A directory named 'node_modules_utils' should NOT be treated as a
+        dependency — only actual 'node_modules' path segments count.
+        """
+        self.assertFalse(
+            self.analyzer.is_dependency("src/node_modules_utils/helper.js")
+        )
+        self.assertTrue(
+            self.analyzer.is_dependency("lib/node_modules/lodash/index.js")
+        )
+
+    # -- SourceAnalyzer integration --------------------------------------------
+
+    def test_source_analyzer_supported_types_includes_js(self):
+        """SourceAnalyzer.supported_types() should include '.js'."""
+        sa = SourceAnalyzer()
+        self.assertIn(".js", sa.supported_types())
 
 
 if __name__ == "__main__":
