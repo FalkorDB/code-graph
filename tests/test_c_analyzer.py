@@ -125,6 +125,17 @@ class TestCAnalyzer(unittest.TestCase):
             "/foo/bar.c",
         )
 
+    def test_include_extraction_empty(self):
+        """A file with no #include directives should return an empty list."""
+        source = b"int main() { return 0; }"
+        tree = self.analyzer.parser.parse(source)
+        self.assertEqual(self.analyzer.get_include_paths(tree), [])
+
+    def test_resolve_symbol_unknown_key_raises(self):
+        """resolve_symbol should raise ValueError for unknown keys."""
+        with self.assertRaises(ValueError):
+            self.analyzer.resolve_symbol({}, None, Path("x.c"), Path("."), "unknown_key", None)
+
 
 if __name__ == "__main__":
     unittest.main()
