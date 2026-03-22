@@ -59,8 +59,12 @@ class KotlinAnalyzer(AbstractAnalyzer):
     def get_entity_types(self) -> list[str]:
         return ['class_declaration', 'object_declaration', 'function_declaration']
     
-    def _get_delegation_types(self, entity: Entity) -> list:
-        """Extract type identifiers from delegation specifiers in order."""
+    def _get_delegation_types(self, entity: Entity) -> list[tuple]:
+        """Extract type identifiers from delegation specifiers in order.
+        
+        Returns list of (node, is_constructor_invocation) tuples.
+        constructor_invocation indicates a superclass; plain user_type indicates an interface.
+        """
         types = []
         for child in entity.node.children:
             if child.type == 'delegation_specifiers':
@@ -72,27 +76,26 @@ class KotlinAnalyzer(AbstractAnalyzer):
                                     if s.type == 'user_type':
                                         for id_node in s.children:
                                             if id_node.type == 'identifier':
-                                                types.append(id_node)
+                                                types.append((id_node, True))
                             elif sub.type == 'user_type':
                                 for id_node in sub.children:
                                     if id_node.type == 'identifier':
-                                        types.append(id_node)
+                                        types.append((id_node, False))
         return types
 
     def add_symbols(self, entity: Entity) -> None:
         if entity.node.type == 'class_declaration':
             types = self._get_delegation_types(entity)
-            if types:
-                # First one is the superclass (base_class)
-                entity.add_symbol("base_class", types[0])
-                # Remaining are interfaces
-                for iface in types[1:]:
-                    entity.add_symbol("implement_interface", iface)
+            for node, is_class in types:
+                if is_class:
+                    entity.add_symbol("base_class", node)
+                else:
+                    entity.add_symbol("implement_interface", node)
                     
         elif entity.node.type == 'object_declaration':
             types = self._get_delegation_types(entity)
-            for t in types:
-                entity.add_symbol("implement_interface", t)
+            for node, _ in types:
+                entity.add_symbol("implement_interface", node)
                     
         elif entity.node.type == 'function_declaration':
             # Find function calls

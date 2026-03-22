@@ -8,11 +8,11 @@ from api.entities.file import File
 from ..graph import Graph
 from .analyzer import AbstractAnalyzer
 # from .c.analyzer import CAnalyzer
+from .csharp.analyzer import CSharpAnalyzer
 from .java.analyzer import JavaAnalyzer
+from .javascript.analyzer import JavaScriptAnalyzer
 from .kotlin.analyzer import KotlinAnalyzer
 from .python.analyzer import PythonAnalyzer
-from .csharp.analyzer import CSharpAnalyzer
-from .javascript.analyzer import JavaScriptAnalyzer
 
 from multilspy import SyncLanguageServer
 from multilspy.multilspy_config import MultilspyConfig
@@ -143,18 +143,14 @@ class SourceAnalyzer():
             lsps[".py"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".py"] = NullLanguageServer()
-        if any(path.rglob('*.kt')) or any(path.rglob('*.kts')):
-            # For now, use NullLanguageServer for Kotlin as we need to set up kotlin-language-server
-            lsps[".kt"] = NullLanguageServer()
-            lsps[".kts"] = NullLanguageServer()
-        else:
-            lsps[".kt"] = NullLanguageServer()
-            lsps[".kts"] = NullLanguageServer()
         if any(path.rglob('*.cs')):
             config = MultilspyConfig.from_dict({"code_language": "csharp"})
             lsps[".cs"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".cs"] = NullLanguageServer()
+        # For now, use NullLanguageServer for Kotlin as kotlin-language-server setup is not yet integrated
+        lsps[".kt"] = NullLanguageServer()
+        lsps[".kts"] = NullLanguageServer()
         lsps[".js"] = NullLanguageServer()
         with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server(), lsps[".kt"].start_server(), lsps[".kts"].start_server():
             files_len = len(self.files)
