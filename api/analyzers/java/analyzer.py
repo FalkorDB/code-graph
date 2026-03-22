@@ -120,7 +120,7 @@ class JavaAnalyzer(AbstractAnalyzer):
                 res.append(file.entities[method_dec])
         return res
     
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> Entity:
+    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
         if key in ["implement_interface", "base_class", "extend_interface", "parameters", "return_type"]:
             return self.resolve_type(files, lsp, file_path, path, symbol)
         elif key in ["call"]:
