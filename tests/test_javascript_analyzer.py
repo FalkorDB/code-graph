@@ -221,6 +221,50 @@ class TestJavaScriptAnalyzer(unittest.TestCase):
         sa = SourceAnalyzer()
         self.assertIn(".js", sa.supported_types())
 
+    def test_source_analyzer_create_hierarchy(self):
+        """SourceAnalyzer.create_hierarchy() should process JS files correctly.
+
+        Uses a lightweight mock Graph to verify the production code path
+        without requiring a database connection.
+        """
+        class MockGraph:
+            def __init__(self):
+                self._next_id = 1
+                self.entities = {}
+                self.edges = []
+
+            def add_file(self, file):
+                file.id = self._next_id
+                self._next_id += 1
+
+            def add_entity(self, label, name, doc, path, src_start, src_end, props):
+                eid = self._next_id
+                self._next_id += 1
+                self.entities[eid] = {"label": label, "name": name, "doc": doc}
+                return eid
+
+            def connect_entities(self, rel, src, dest, props=None):
+                self.edges.append((rel, src, dest))
+
+        sa = SourceAnalyzer()
+        source = self.sample_path.read_bytes()
+        tree = self.analyzer.parser.parse(source)
+        file = File(self.sample_path, tree)
+        graph = MockGraph()
+        graph.add_file(file)
+        sa.create_hierarchy(file, self.analyzer, graph)
+
+        entity_names = [e["name"] for e in graph.entities.values()]
+        self.assertIn("Shape", entity_names)
+        self.assertIn("Circle", entity_names)
+        self.assertIn("calculateTotal", entity_names)
+        self.assertIn("area", entity_names)
+        self.assertIn("constructor", entity_names)
+
+        # Verify DEFINES edges were created (file → entities)
+        defines_edges = [e for e in graph.edges if e[0] == "DEFINES"]
+        self.assertTrue(len(defines_edges) > 0, "Should create DEFINES edges")
+
 
 if __name__ == "__main__":
     unittest.main()
