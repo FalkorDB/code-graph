@@ -11,6 +11,7 @@ from .analyzer import AbstractAnalyzer
 from .java.analyzer import JavaAnalyzer
 from .python.analyzer import PythonAnalyzer
 from .csharp.analyzer import CSharpAnalyzer
+from .javascript.analyzer import JavaScriptAnalyzer
 
 from multilspy import SyncLanguageServer
 from multilspy.multilspy_config import MultilspyConfig
@@ -26,7 +27,8 @@ analyzers: dict[str, AbstractAnalyzer] = {
     # '.h': CAnalyzer(),
     '.py': PythonAnalyzer(),
     '.java': JavaAnalyzer(),
-    '.cs': CSharpAnalyzer()}
+    '.cs': CSharpAnalyzer(),
+    '.js': JavaScriptAnalyzer()}
 
 class NullLanguageServer:
     def start_server(self):
@@ -143,9 +145,15 @@ class SourceAnalyzer():
             lsps[".cs"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".cs"] = NullLanguageServer()
-        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server():
+        lsps[".js"] = NullLanguageServer()
+        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
+                if file_path not in self.files:
+                    continue
+                # Skip symbol resolution when no real LSP is available
+                if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
+                    continue
                 file = self.files[file_path]
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
                 for _, entity in file.entities.items():
@@ -174,7 +182,7 @@ class SourceAnalyzer():
 
     def analyze_sources(self, path: Path, ignore: list[str], graph: Graph) -> None:
         path = path.resolve()
-        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs"))
+        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + [f for f in path.rglob("*.js") if "node_modules" not in f.parts]
         # First pass analysis of the source code
         self.first_pass(path, files, ignore, graph)
 
