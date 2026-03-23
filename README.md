@@ -167,6 +167,16 @@ CodeGraph includes a CLI tool for indexing codebases and querying the knowledge 
 ### Install
 
 ```bash
+# Install from PyPI (recommended for end users)
+pipx install code-graph
+
+# Or with pip
+pip install code-graph
+```
+
+For development (from a local clone):
+
+```bash
 make install-cli
 # or
 uv pip install -e .
