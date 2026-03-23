@@ -2,6 +2,9 @@ version = 1
 revision = 3
 requires-python = ">=3.12, <3.14"
 
+[manifest]
+overrides = [{ name = "requests", specifier = ">=2.32.3" }]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
