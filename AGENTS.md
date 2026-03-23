@@ -138,7 +138,9 @@ Key variables (see `.env.template` for full list):
 
 Typer-based CLI wrapping the sync `Graph` and `Project` classes. Outputs JSON to stdout, status to stderr. Entry point: `api/cli.py`.
 
-Install: `make install-cli` or `uv pip install -e .`
+Install: `pipx install code-graph` or `pip install code-graph`
+
+For development: `make install-cli` or `uv pip install -e .`
 
 ```bash
 cgraph ensure-db                          # Start FalkorDB if not running

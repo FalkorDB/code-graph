@@ -16,18 +16,18 @@ npx skills add FalkorDB/code-graph
 
 ### Install the cgraph CLI
 
-From the code-graph repository:
+```bash
+pipx install code-graph
+# or
+pip install code-graph
+```
+
+For development (from a local clone):
 
 ```bash
 cd /path/to/code-graph
 uv sync --all-extras
 uv pip install -e .
-```
-
-Or standalone via pipx:
-
-```bash
-pipx install code-graph
 ```
 
 After installation, verify:
@@ -71,9 +71,15 @@ This will:
 Ensure the package is installed and the entry point is on your PATH:
 
 ```bash
-uv pip install -e .   # from the code-graph repo
-# or
 pipx install code-graph
+# or
+pip install code-graph
+```
+
+For development:
+
+```bash
+uv pip install -e .   # from the code-graph repo
 ```
 
 ### Connection refused
