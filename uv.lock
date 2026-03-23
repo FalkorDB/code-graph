@@ -284,7 +284,7 @@ requires-dist = [
     { name = "graphrag-sdk", specifier = ">=0.8.1,<0.9.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.28.0,<1.0.0" },
     { name = "javatools", specifier = ">=1.6.0,<2.0.0" },
-    { name = "multilspy", git = "https://github.com/AviAvni/multilspy.git?rev=python-init-params" },
+    { name = "multilspy", git = "https://github.com/FalkorDB/multilspy.git?rev=python-init-params" },
     { name = "pygit2", specifier = ">=1.17.0,<2.0.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=9.0.2,<10.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.1,<2.0.0" },
@@ -293,7 +293,7 @@ requires-dist = [
     { name = "tree-sitter-c", specifier = ">=0.24.1,<0.25.0" },
     { name = "tree-sitter-c-sharp", specifier = ">=0.23.1,<0.24.0" },
     { name = "tree-sitter-java", specifier = ">=0.23.5,<0.24.0" },
-    { name = "tree-sitter-javascript", specifier = ">=0.23.0,<0.24.0" },
+    { name = "tree-sitter-javascript", specifier = ">=0.23.0,<0.26.0" },
     { name = "tree-sitter-kotlin", specifier = ">=1.1.0,<2.0.0" },
     { name = "tree-sitter-python", specifier = ">=0.25.0,<0.26.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0,<1.0.0" },
@@ -933,7 +933,7 @@ wheels = [
 [[package]]
 name = "multilspy"
 version = "0.0.11"
-source = { git = "https://github.com/AviAvni/multilspy.git?rev=python-init-params#4e8c6601c55173cddf862b9eb6cf1e9343394b83" }
+source = { git = "https://github.com/FalkorDB/multilspy.git?rev=python-init-params#c0807fb28788de112bf0a8df7fe9beb45175723b" }
 dependencies = [
     { name = "jedi-language-server" },
     { name = "requests" },
