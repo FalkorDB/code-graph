@@ -45,7 +45,7 @@ jobs:
         version: "latest"
 
     - name: Install backend dependencies
-      run: uv sync
+      run: uv sync --all-extras
 
     - name: Install frontend dependencies
       working-directory: ./app
