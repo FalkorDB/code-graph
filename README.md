@@ -26,12 +26,16 @@ code-graph/
 │   ├── project.py        # Repository cloning and analysis orchestration
 │   ├── info.py           # Repository metadata stored in Redis/FalkorDB
 │   ├── prompts.py        # LLM system and prompt templates
-│   ├── cli.py            # cgraph CLI tool (typer)
+│   ├── cli.py            # cgraph CLI tool (full version, dev use)
 │   ├── auto_complete.py  # Prefix search helper
 │   ├── analyzers/        # Source analyzers (Python, Java, C#)
 │   ├── entities/         # Graph/entity models
 │   ├── git_utils/        # Git history graph utilities
 │   └── code_coverage/    # Coverage utilities
+├── cli/                  # Lightweight CLI package (falkordb-cgraph)
+│   ├── pyproject.toml    # Minimal deps: falkordb + typer only
+│   └── cgraph/
+│       └── main.py       # Standalone CLI (list, search, neighbors, paths, info, ensure-db)
 ├── app/                  # React frontend (Vite)
 │   ├── src/              # Frontend source code
 │   ├── public/           # Static assets
@@ -45,7 +49,7 @@ code-graph/
 ├── docker-compose.yml    # Local FalkorDB + app stack
 ├── Makefile              # Common dev/build/test commands
 ├── start.sh              # Container entrypoint
-├── pyproject.toml        # Python package and dependency config
+├── pyproject.toml        # Python server package (falkordb-code-graph) with all deps
 └── .env.template         # Example environment variables
 ```
 
@@ -162,23 +166,31 @@ make clean         # Remove build/test artifacts
 
 ## CLI Tool (`cgraph`)
 
-CodeGraph includes a CLI tool for indexing codebases and querying the knowledge graph directly from the terminal. All output is JSON (to stdout), with status messages on stderr.
+CodeGraph includes a CLI tool for querying the knowledge graph directly from the terminal. All output is JSON (to stdout), with status messages on stderr.
 
 ### Install
 
+**Lightweight CLI** (recommended for end users — fast install, only `falkordb` + `typer`):
+
 ```bash
-# Install from PyPI (recommended for end users)
-pipx install falkordb-code-graph
+# Install from PyPI (recommended)
+pipx install falkordb-cgraph
 
 # Or with pip
+pip install falkordb-cgraph
+```
+
+**Full server package** (includes indexing commands, web server, all heavy deps):
+
+```bash
 pip install falkordb-code-graph
 ```
 
 For development (from a local clone):
 
 ```bash
-make install-cli
-# or
+make install-cli   # installs falkordb-cgraph from cli/
+# or for full server package:
 uv pip install -e .
 ```
 
@@ -188,10 +200,10 @@ uv pip install -e .
 # Ensure FalkorDB is running (auto-starts a Docker container if needed)
 cgraph ensure-db
 
-# Index the current project
+# Index the current project (requires falkordb-code-graph)
 cgraph index . --ignore node_modules --ignore .git --ignore venv --ignore __pycache__
 
-# Index a remote repository
+# Index a remote repository (requires falkordb-code-graph)
 cgraph index-repo https://github.com/user/repo --ignore node_modules
 
 # List indexed repos
