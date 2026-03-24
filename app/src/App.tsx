@@ -71,7 +71,6 @@ export default function App() {
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [tipOpen, setTipOpen] = useState(false)
-  const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const desktopChartRef = useRef<GraphRef["current"]>(null)
@@ -141,7 +140,6 @@ export default function App() {
 
     const graphName = createURL.split('/').pop()!
 
-    setOptions(prev => [...prev, graphName])
     setSelectedValue(graphName)
     setCreateURL("")
     setCreateOpen(false)
@@ -528,8 +526,6 @@ export default function App() {
                   data={data}
                   setData={setData}
                   canvasRef={desktopChartRef}
-                  options={options}
-                  setOptions={setOptions}
                   onFetchGraph={onFetchGraph}
                   isFetchingGraph={isFetchingGraph}
                   onFetchNode={onFetchNode}
@@ -656,8 +652,6 @@ export default function App() {
                 data={data}
                 setData={setData}
                 canvasRef={mobileChartRef}
-                options={options}
-                setOptions={setOptions}
                 onFetchGraph={onFetchGraph}
                 isFetchingGraph={isFetchingGraph}
                 onFetchNode={onFetchNode}

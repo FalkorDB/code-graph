@@ -30,8 +30,6 @@ interface Props {
     onFetchGraph: (graphName: string) => Promise<void>,
     isFetchingGraph: boolean,
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
-    options: string[]
-    setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     canvasRef: GraphRef
