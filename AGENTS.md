@@ -21,6 +21,7 @@ Knowledge graph visualization tool for codebases. Python FastAPI backend + React
 
 ```text
 api/                  # Python backend
+  cli.py              # cgraph CLI tool (typer)
   index.py            # FastAPI app, routes, auth, SPA serving
   graph.py            # FalkorDB graph operations (sync + async)
   llm.py              # GraphRAG + LiteLLM chat
@@ -34,6 +35,7 @@ api/                  # Python backend
 app/                  # React frontend (Vite)
   src/components/     # React components (ForceGraph, chat, code-graph, etc.)
   src/lib/            # Utilities
+skills/code-graph/    # Claude Code skill for code graph indexing/querying
 tests/                # Pytest backend tests
   endpoints/          # API endpoint integration tests
 e2e/                  # Playwright E2E tests
@@ -44,6 +46,7 @@ e2e/                  # Playwright E2E tests
 
 ```bash
 make install         # Install all deps (uv sync + npm install)
+make install-cli     # Install cgraph CLI entry point
 make build-dev       # Build frontend (dev mode)
 make build-prod      # Build frontend (production)
 make run-dev         # Build dev frontend + run API with reload
@@ -130,3 +133,24 @@ Key variables (see `.env.template` for full list):
 - `POST /api/analyze_folder` — Analyze local folder
 - `POST /api/analyze_repo` — Clone and analyze repo
 - `POST /api/switch_commit` — Switch to specific commit
+
+## CLI (`cgraph`)
+
+Typer-based CLI wrapping the sync `Graph` and `Project` classes. Outputs JSON to stdout, status to stderr. Entry point: `api/cli.py`.
+
+Install: `pipx install code-graph` or `pip install code-graph`
+
+For development: `make install-cli` or `uv pip install -e .`
+
+```bash
+cgraph ensure-db                          # Start FalkorDB if not running
+cgraph index . --ignore node_modules      # Index local folder
+cgraph index-repo <url>                   # Clone + index a repo
+cgraph list                               # List indexed repos
+cgraph search <prefix> [--repo <name>]    # Full-text prefix search
+cgraph neighbors <id>... [--repo <name>] [--rel <type>] [--label <label>]  # Connected entities
+cgraph paths <src-id> <dest-id> [--repo <name>]  # Call-chain paths
+cgraph info [--repo <name>]              # Repo stats + metadata
+```
+
+`--repo` defaults to the current directory name. Claude Code skill in `skills/code-graph/`.
