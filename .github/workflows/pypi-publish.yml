@@ -5,7 +5,8 @@ on:
     tags: ["v*.*.*"]
 
 jobs:
-  publish:
+  publish-server:
+    name: Publish falkordb-code-graph
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -22,3 +23,24 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-cli:
+    name: Publish falkordb-cgraph
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build CLI package
+        run: cd cli && uv build
+
+      - name: Publish CLI to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: cli/dist/
