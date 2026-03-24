@@ -59,7 +59,7 @@ jobs:
           ${{ runner.os }}-seed-repos-${{ hashFiles('e2e/seed_test_data.py') }}-
 
     - name: Install backend dependencies
-      run: uv sync
+      run: uv sync --all-extras
 
     - name: Install frontend dependencies
       working-directory: ./app
