@@ -1,5 +1,5 @@
 [project]
-name = "code-graph-backend"
+name = "falkordb-code-graph"
 version = "0.4.2"
 description = "code_graph is designed to help developers visualize and analyze the structure of their source code. It takes source code as input and generates a graph representation, making it easier to understand relationships and dependencies within the codebase."
 authors = [{name = "Roi Lipman", email = "roilipman@gmail.com"}]
@@ -13,14 +13,20 @@ dependencies = [
     "tree-sitter-c>=0.24.1,<0.25.0",
     "tree-sitter-python>=0.25.0,<0.26.0",
     "tree-sitter-java>=0.23.5,<0.24.0",
+    "tree-sitter-javascript>=0.23.0,<0.26.0",
+    "tree-sitter-kotlin>=1.1.0,<2.0.0",
     "tree-sitter-c-sharp>=0.23.1,<0.24.0",
     "fastapi>=0.115.0,<1.0.0",
     "uvicorn[standard]>=0.34.0,<1.0.0",
     "python-dotenv>=1.0.1,<2.0.0",
-    "multilspy @ git+https://github.com/AviAvni/multilspy.git@python-init-params",
+    "falkordb-multilspy>=0.1.0,<1.0.0",
     "javatools>=1.6.0,<2.0.0",
     "pygit2>=1.17.0,<2.0.0",
+    "typer>=0.24.0,<1.0.0",
 ]
+
+[project.scripts]
+cgraph = "api.cli:app"
 
 [project.optional-dependencies]
 test = [
@@ -28,6 +34,10 @@ test = [
     "ruff>=0.11.0,<1.0.0",
     "httpx>=0.28.0,<1.0.0",
 ]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
