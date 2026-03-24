@@ -10,8 +10,8 @@ install: ## Install all dependencies (backend + frontend)
 	uv sync --all-extras
 	npm install --prefix ./app
 
-install-cli: ## Install cgraph CLI entry point
-	uv pip install -e .
+install-cli: ## Install lightweight cgraph CLI (falkordb-cgraph) entry point
+	pip install -e ./cli
 
 build-dev: ## Build frontend for development
 	npm --prefix ./app run build:dev

@@ -21,7 +21,7 @@ Knowledge graph visualization tool for codebases. Python FastAPI backend + React
 
 ```text
 api/                  # Python backend
-  cli.py              # cgraph CLI tool (typer)
+  cli.py              # cgraph CLI tool (typer) — full version used during dev
   index.py            # FastAPI app, routes, auth, SPA serving
   graph.py            # FalkorDB graph operations (sync + async)
   llm.py              # GraphRAG + LiteLLM chat
@@ -32,6 +32,10 @@ api/                  # Python backend
   analyzers/          # Language-specific code analyzers
   entities/           # Graph entity models
   git_utils/          # Git history graph construction
+cli/                  # Lightweight CLI package (falkordb-cgraph)
+  pyproject.toml      # Minimal deps: falkordb + typer only
+  cgraph/
+    main.py           # Standalone CLI commands (list, search, neighbors, paths, info, ensure-db)
 app/                  # React frontend (Vite)
   src/components/     # React components (ForceGraph, chat, code-graph, etc.)
   src/lib/            # Utilities
@@ -136,16 +140,26 @@ Key variables (see `.env.template` for full list):
 
 ## CLI (`cgraph`)
 
-Typer-based CLI wrapping the sync `Graph` and `Project` classes. Outputs JSON to stdout, status to stderr. Entry point: `api/cli.py`.
+Two packages provide the `cgraph` command:
 
-Install: `pipx install falkordb-code-graph` or `pip install falkordb-code-graph`
+**Lightweight CLI** (`falkordb-cgraph` — the recommended install for end users):
 
-For development: `make install-cli` or `uv pip install -e .`
+Install: `pipx install falkordb-cgraph`
+
+For development: `make install-cli` (installs from `cli/`)
+
+Provides query commands only (`list`, `search`, `neighbors`, `paths`, `info`, `ensure-db`). The `index` and `index-repo` commands print a helpful message directing users to install `falkordb-code-graph`.
+
+**Full server package** (`falkordb-code-graph` — for development/Docker):
+
+Install: `pip install falkordb-code-graph` or `uv sync`
+
+Also provides `cgraph` via `api/cli.py` and includes all indexing commands.
 
 ```bash
 cgraph ensure-db                          # Start FalkorDB if not running
-cgraph index . --ignore node_modules      # Index local folder
-cgraph index-repo <url>                   # Clone + index a repo
+cgraph index . --ignore node_modules      # Index local folder (full package only)
+cgraph index-repo <url>                   # Clone + index a repo (full package only)
 cgraph list                               # List indexed repos
 cgraph search <prefix> [--repo <name>]    # Full-text prefix search
 cgraph neighbors <id>... [--repo <name>] [--rel <type>] [--label <label>]  # Connected entities

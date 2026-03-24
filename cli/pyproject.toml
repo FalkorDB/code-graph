@@ -1,0 +1,25 @@
+[project]
+name = "falkordb-cgraph"
+version = "0.4.2"
+description = "Lightweight CLI for querying FalkorDB code-graph knowledge graphs."
+authors = [{name = "Roi Lipman", email = "roilipman@gmail.com"}]
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "falkordb>=1.1.3,<2.0.0",
+    "typer>=0.24.0,<1.0.0",
+    "python-dotenv>=1.0.1,<2.0.0",
+]
+
+[project.scripts]
+cgraph = "cgraph.main:app"
+
+[project.urls]
+Homepage = "https://github.com/FalkorDB/code-graph"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
