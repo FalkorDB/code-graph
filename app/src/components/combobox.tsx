@@ -43,6 +43,13 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
 
             const json = await result.json()
             setOptions(json.repositories)
+            setLastFetch(Date.now())
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Uh oh! Something went wrong.",
+                description: error instanceof Error ? error.message : "Failed to fetch repositories.",
+            })
         } finally {
             setIsFetchingOptions(false)
         }
@@ -60,16 +67,14 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
 
         //check if last fetch was less than 30 seconds ago
         if (lastFetch && now - lastFetch < 30000) return;
-        
-        setLastFetch(now);
-        
+
         fetchOptions()
     }, [open])
 
     return (
-        <Select open={open} onOpenChange={setOpen} disabled={options.length === 0 && !isFetchingOptions} value={isFetchingOptions ? "Fetching options..." : options.length !== 0 ? selectedValue : "No options found"} onValueChange={onSelectedValue}>
+        <Select open={open} onOpenChange={setOpen} disabled={isFetchingOptions || (options.length === 0)} value={selectedValue} onValueChange={onSelectedValue}>
             <SelectTrigger className="z-10 md:z-0 rounded-md border border-border focus:ring-1 focus:ring-primary">
-                <SelectValue placeholder="Select a repo" />
+                <SelectValue placeholder={isFetchingOptions ? "Fetching options..." : "Select a repo"} />
             </SelectTrigger>
             <SelectContent>
                 {
