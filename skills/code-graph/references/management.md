@@ -17,9 +17,9 @@ npx skills add FalkorDB/code-graph
 ### Install the cgraph CLI
 
 ```bash
-pipx install code-graph
+pipx install falkordb-code-graph
 # or
-pip install code-graph
+pip install falkordb-code-graph
 ```
 
 For development (from a local clone):
@@ -71,9 +71,9 @@ This will:
 Ensure the package is installed and the entry point is on your PATH:
 
 ```bash
-pipx install code-graph
+pipx install falkordb-code-graph
 # or
-pip install code-graph
+pip install falkordb-code-graph
 ```
 
 For development:

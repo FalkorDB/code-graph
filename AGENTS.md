@@ -138,7 +138,7 @@ Key variables (see `.env.template` for full list):
 
 Typer-based CLI wrapping the sync `Graph` and `Project` classes. Outputs JSON to stdout, status to stderr. Entry point: `api/cli.py`.
 
-Install: `pipx install code-graph` or `pip install code-graph`
+Install: `pipx install falkordb-code-graph` or `pip install falkordb-code-graph`
 
 For development: `make install-cli` or `uv pip install -e .`
 

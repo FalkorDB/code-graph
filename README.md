@@ -168,10 +168,10 @@ CodeGraph includes a CLI tool for indexing codebases and querying the knowledge 
 
 ```bash
 # Install from PyPI (recommended for end users)
-pipx install code-graph
+pipx install falkordb-code-graph
 
 # Or with pip
-pip install code-graph
+pip install falkordb-code-graph
 ```
 
 For development (from a local clone):
