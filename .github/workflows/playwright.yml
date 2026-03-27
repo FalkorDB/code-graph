@@ -25,9 +25,9 @@ jobs:
         ports:
           - 6379:6379
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
       with:
         node-version: 24
         cache: 'npm'
@@ -35,12 +35,12 @@ jobs:
           package-lock.json
           app/package-lock.json
 
-    - uses: actions/setup-python@v6
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
       with:
         python-version: '3.12'
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v7
+      uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
       with:
         version: "latest"
 
@@ -66,7 +66,7 @@ jobs:
 
     - name: Cache Playwright browsers
       id: playwright-cache
-      uses: actions/cache@v5
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
@@ -112,7 +112,7 @@ jobs:
         mkdir -p playwright-report
         mkdir -p playwright-report/artifacts
 
-    - uses: actions/upload-artifact@v7
+    - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
       if: always()
       with:
         name: playwright-report-shard-${{ matrix.shard }}
@@ -121,7 +121,7 @@ jobs:
 
     - name: Upload failed test screenshots
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
       with:
         name: failed-test-screenshots-shard-${{ matrix.shard }}
         path: playwright-report/artifacts/
