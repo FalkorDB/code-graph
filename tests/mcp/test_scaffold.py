@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import shutil
 
+import anyio
 import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+STDIO_TIMEOUT = 30  # seconds — prevents CI from hanging if the server fails to start
 
 
 def test_app_is_importable() -> None:
@@ -48,8 +51,9 @@ async def test_stdio_server_lists_zero_tools() -> None:
     )
 
     params = StdioServerParameters(command=cgraph_mcp, args=[])
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.list_tools()
-            assert result.tools == []
+    with anyio.fail_after(STDIO_TIMEOUT):
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.list_tools()
+                assert result.tools == []

@@ -15,13 +15,13 @@ Phase 1 also bundles three foundational improvements to `api/` that the MCP serv
 ## Key Decisions Made
 
 - **Mono-repo**: Build inside `code-graph/api/mcp/`, not a separate project. One pip package, one repo.
-- **Module path is `api/mcp/`, NOT top-level `mcp/`**: A top-level `mcp/` directory would shadow the installed `mcp` PyPI SDK and break `from mcp.server.fastmcp import FastMCP`. Entry point: `cgraph-mcp = "api.mcp.server:app"`.
+- **Module path is `api/mcp/`, NOT top-level `mcp/`**: A top-level `mcp/` directory would shadow the installed `mcp` PyPI SDK and break `from mcp.server.fastmcp import FastMCP`. Entry point: `cgraph-mcp = "api.mcp.server:main"`.
 - **Python MCP server**: Use the official `mcp` Python SDK (`from mcp.server.fastmcp import FastMCP`), NOT standalone `fastmcp` or Node.js. Avoids language bridge.
 - **Reuse everything**: Most code already exists. The MCP tools are thin wrappers around `api/graph.py`, `api/project.py`, `api/cli.py`, and `api/llm.py`.
 - **GraphRAG SDK powers the ask tool**: `kg.ask()` does NL-to-Cypher. Code-graph's `api/llm.py` already integrates this — repackage for MCP.
 - **Reuse the existing hand-coded ontology** from `api/llm.py:_define_ontology()` (lines 26–233) rather than auto-extracting via `Ontology.from_kg_graph()`. The hand-coded version has richer entity attributes and descriptions tuned for code. Refactor: rename `_define_ontology` → `define_ontology` so the MCP module can import it.
-- **Ship with 3 languages** (Python/Java/C#), add tree-sitter for broad coverage in Phase 2.
-- **No incremental indexing in v1**: Full re-indexing is sufficient. Deferred to Phase 3.
+- **11 languages in Phase 1**: Python/JS/Kotlin via tree-sitter (refactored onto a shared base class in T15), Go/Rust/TypeScript/Ruby/C/C++ added in T16, Java/C# stay on multilspy.
+- **Incremental indexing in Phase 1**: file-hash-based skip-unchanged, default-on once a `(project, branch)` graph exists (T18). Full re-index via `--full` (CLI) or `incremental=False` (MCP).
 - **No Graphiti/memory or raw FalkorDB MCP in v1**: Out of scope. Available as separate servers. Architecture supports merging later.
 - **Auto-init for zero config**: ensure-db auto-starts FalkorDB Docker, auto-index on first tool call, auto-GraphRAG init.
 - **Expose Cypher in ask responses**: Transparency for the agent + learning patterns.
@@ -34,7 +34,7 @@ Phase 1 also bundles three foundational improvements to `api/` that the MCP serv
 
 ## Directory Structure
 
-```
+```text
 code-graph/
 ├── api/                          # Existing Python backend (FastAPI, analyzers, graph, llm, cli)
 │   └── mcp/                      # NEW — MCP server module (under api/ to avoid shadowing the installed `mcp` SDK)
@@ -69,7 +69,7 @@ code-graph/
 │       ├── test_ask.py           # T11 — mocked LLM, real Cypher against fixture
 │       ├── test_auto_init.py     # T12
 │       └── test_init_agent.py    # T13
-└── pyproject.toml                # Adds `cgraph-mcp = "api.mcp.server:app"` and `mcp>=1.0,<2.0`
+└── pyproject.toml                # Adds `cgraph-mcp = "api.mcp.server:main"` and `mcp>=1.0,<2.0`
 ```
 
 **Note on test layout:** Each tool ticket ships its own integration + MCP-protocol round-trip tests in the same PR — there is no separate "integration tests" or "protocol tests" milestone. The previous `integration/` and `e2e/` subdirectories are removed in favor of per-tool test files. Real-LLM E2E is deferred to Phase 1.5.
@@ -276,7 +276,7 @@ Each tool ticket ships impl + unit + integration + protocol round-trip in a sing
 - Real-LLM nightly E2E with API-key secrets (was a row in the CI table)
 
 ### Dependency graph
-```
+```text
 T1 ──┬─> T2 ──> T3 ──> T17 ──> T4 ──┬─> T5
      │                                ├─> T6
      │                                ├─> T7
@@ -304,7 +304,7 @@ After T17 lands, multiple streams parallelize: structural tools (T4 → T5/T6/T7
 | MCP_PORT | HTTP transport port | 3000 |
 
 Quick start (Claude Code):
-```
+```bash
 claude mcp add-json "code-graph" '{"command":"cgraph-mcp","env":{"FALKORDB_HOST":"localhost","LLM_API_KEY":"sk-..."}}'
 ```
 
