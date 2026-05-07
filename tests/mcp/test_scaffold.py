@@ -20,7 +20,13 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-STDIO_TIMEOUT = 30  # seconds — prevents CI from hanging if the server fails to start
+STDIO_TIMEOUT = 10  # seconds — prevents CI from hanging if the server fails to start
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    """Pin the anyio backend to asyncio so transitive trio installs don't double-run tests."""
+    return "asyncio"
 
 
 def test_app_is_importable() -> None:

@@ -19,7 +19,7 @@ def main() -> None:
 
     Console-script entry point for ``cgraph-mcp``.
     """
-    app.run()
+    app.run(transport="stdio")
 
 
 if __name__ == "__main__":
