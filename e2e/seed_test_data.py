@@ -4,6 +4,9 @@
 import os
 import sys
 import logging
+from pathlib import Path
+
+import graphrag_sdk
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,8 +17,11 @@ logger = logging.getLogger(__name__)
 from falkordb import FalkorDB
 from api.project import Project
 
+# Use the installed graphrag-sdk (pinned to 0.8.2 via uv.lock) as the e2e
+# fixture. Upstream HEAD has the new v1.0 API which the tests aren't built for.
+GRAPHRAG_SDK_PATH = Path(graphrag_sdk.__file__).parent
+
 REPOS = [
-    "https://github.com/FalkorDB/GraphRAG-SDK",
     "https://github.com/pallets/flask",
 ]
 
@@ -61,6 +67,13 @@ def ensure_calls_edges(graph_name: str) -> None:
 
 
 def main():
+    logger.info(
+        "Seeding graphrag-sdk %s from %s",
+        getattr(graphrag_sdk, "__version__", "?"),
+        GRAPHRAG_SDK_PATH,
+    )
+    Project(name="GraphRAG-SDK", path=GRAPHRAG_SDK_PATH, url=None).analyze_sources()
+
     for url in REPOS:
         logger.info("Seeding %s ...", url)
         proj = Project.from_git_repository(url)
