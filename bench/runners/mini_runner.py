@@ -1,0 +1,433 @@
+"""Benchmark runner wired to mini-swe-agent.
+
+The runner is the glue between:
+
+- the **benchmark dataset** (SWE-bench Verified, or a tiny synthetic
+  dataset in `--dry-run` mode so the harness is testable without an
+  LLM API key),
+- the **agent harness** (`mini-swe-agent`, which uses bash as its sole
+  tool surface),
+- and the **per-config tool bundle** (baseline / lsp / code-graph),
+  exposed to the agent as a `PATH` prefix containing `bench/cli/`
+  scripts plus the relevant env vars.
+
+For each (task, config) pair the runner:
+
+1. Materializes the target repo at the task's base commit.
+2. Builds the agent: LitellmModel + LocalEnvironment (cwd = repo, env =
+   config-specific tool env vars) + system/instance templates assembled
+   from `bench/tools/<config>/system_preamble.md` and the task body.
+3. Runs the agent with the locked-in step/cost/wall-time limits.
+4. Captures the trajectory (mini-swe-agent's `agent.serialize()` dict)
+   and `git diff` of the repo as the proposed patch.
+5. Hands the trajectory to `bench.metrics.task_metrics_from_trajectory`
+   and appends a row to `bench/cache/results.jsonl`.
+
+The `--dry-run` mode swaps the LLM model for a deterministic stub so
+the entire pipeline can run with no Anthropic key — this is the mode
+we exercise in CI and in `tests/test_bench_runner.py`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+# mini-swe-agent imports are slow (litellm pre-import). Defer to call time.
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BENCH_DIR = REPO_ROOT / "bench"
+CLI_DIR = BENCH_DIR / "cli"
+TOOLS_DIR = BENCH_DIR / "tools"
+DEFAULT_CACHE_DIR = BENCH_DIR / "cache"
+DEFAULT_RESULTS = DEFAULT_CACHE_DIR / "results.jsonl"
+
+VALID_CONFIGS = ("baseline", "lsp", "code_graph")
+
+
+# ---------------------------------------------------------------------------
+# Task model
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class Task:
+    """A single benchmark instance.
+
+    `repo_path` is an absolute path to the prepared working tree at the
+    correct base commit. `verify_cmd` is a shell command that must exit
+    0 if the patch resolves the task; in dry-run mode it's the cheap
+    synthetic check, in real SWE-bench mode it's the harness's test
+    selection.
+    """
+
+    task_id: str
+    repo_name: str
+    repo_path: Path
+    problem_statement: str
+    verify_cmd: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Preamble + instance prompt assembly
+# ---------------------------------------------------------------------------
+
+
+# The instance prompt is identical across configs — only `system_preamble.md`
+# changes. mini-swe-agent uses Jinja2 templating, so we pre-format with
+# explicit placeholders the agent will see.
+INSTANCE_TEMPLATE = """\
+You are working in the repository at {{cwd}}.
+
+The task to solve:
+
+{{task}}
+
+When you believe the task is complete, finish your turn with a final
+message that contains a unified diff of your changes inside a fenced
+``` block, then exit. Do not commit; the harness reads the diff via
+`git diff`.
+"""
+
+
+def load_preamble(config: str) -> str:
+    """Read the per-config system preamble; fall back to a generic stub."""
+    path = TOOLS_DIR / config / "system_preamble.md"
+    if path.exists():
+        return path.read_text()
+    # Fallback so dry-run tests can run before all preambles are authored.
+    return (
+        f"You are an autonomous coding agent. Configuration: {config}.\n"
+        "You have one tool: bash. Run commands to read files, search, and "
+        "edit. Available helpers depend on the configuration.\n"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-config environment
+# ---------------------------------------------------------------------------
+
+
+def config_env(config: str, repo_path: Path) -> dict[str, str]:
+    """Build the environment variables the agent's bash sees.
+
+    The key trick: each config prepends `bench/cli` to PATH only when
+    the helper scripts are part of the bundle. For the `baseline`
+    config we deliberately do NOT add the helpers — that's the whole
+    point of the baseline.
+    """
+    env = dict(os.environ)
+    # Don't leak the user's PATH editor / shell aliases into the agent.
+    env["PATH"] = (
+        f"{CLI_DIR}:{env.get('PATH', '/usr/bin:/bin')}"
+        if config != "baseline"
+        else env.get("PATH", "/usr/bin:/bin")
+    )
+    # Make `python -m bench.cli.cg ...` work too, regardless of cwd.
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    if config == "lsp":
+        env["LSP_REPO_ROOT"] = str(repo_path)
+        env.setdefault("LSP_LANGUAGE", "python")
+    elif config == "code_graph":
+        # The runner is responsible for ensuring the service is up.
+        env.setdefault("CODEGRAPH_URL", "http://127.0.0.1:5000")
+    return env
+
+
+# ---------------------------------------------------------------------------
+# Dry-run stub model
+# ---------------------------------------------------------------------------
+
+
+class _DryRunModel:
+    """A stand-in for a real LLM. Exercises mini-swe-agent's full loop
+    without making any network calls.
+
+    Returns a single fake "tool call" that submits the task immediately
+    using mini-swe-agent's `COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
+    bash protocol. The bash command itself echoes a tiny payload that
+    proves the per-config env is wired correctly (e.g. PATH for lsp /
+    code-graph configs contains `bench/cli/`).
+
+    This is the v2 tool-calls shape: `extra.actions` is a list of dicts
+    with a `"command"` key, which is what `LocalEnvironment.execute`
+    consumes.
+    """
+
+    def __init__(self, *, marker: str = "dry-run-ok") -> None:
+        self.n_calls = 0
+        self.cost = 0.0
+        self.config = type("cfg", (), {
+            "model_name": "dry-run-stub",
+            "model_dump": lambda self_, **_: {"model_name": "dry-run-stub"},
+            "multimodal_regex": "",
+        })()
+        self._marker = marker
+
+    def query(self, messages: list[dict[str, Any]], **_: Any) -> dict[str, Any]:
+        self.n_calls += 1
+        usage = {"prompt_tokens": 10 * self.n_calls,
+                 "completion_tokens": 5,
+                 "total_tokens": 10 * self.n_calls + 5}
+        # Bash payload: first line of stdout = sentinel; subsequent lines
+        # = final answer. The sentinel makes LocalEnvironment raise
+        # Submitted, which the agent treats as a clean exit.
+        cmd = (
+            "printf 'COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\\n%s\\n' "
+            f"'{self._marker}: PATH=$PATH'"
+        )
+        return {
+            "role": "assistant",
+            "content": f"Submitting ({self._marker}).",
+            "extra": {
+                "actions": [{"command": cmd}],
+                "cost": 0.0,
+                "response": {"usage": usage},
+            },
+        }
+
+    # The agent calls these helpers on the model; provide minimal stubs.
+    def format_message(self, **kwargs: Any) -> dict[str, Any]:
+        return dict(kwargs)
+
+    def format_observation_messages(
+        self, message: dict[str, Any], outputs: list[dict[str, Any]],
+        template_vars: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        return [{"role": "user", "content": str(o.get("output", ""))} for o in outputs]
+
+    def get_template_vars(self, **_: Any) -> dict[str, Any]:
+        return {"model_name": "dry-run-stub"}
+
+    def serialize(self) -> dict[str, Any]:
+        return {"info": {"config": {"model": {"model_name": "dry-run-stub"},
+                                    "model_type": "dry-run-stub"}}}
+
+
+# ---------------------------------------------------------------------------
+# Single-task execution
+# ---------------------------------------------------------------------------
+
+
+def _capture_diff(repo_path: Path) -> str:
+    try:
+        out = subprocess.run(
+            ["git", "diff"], cwd=repo_path, capture_output=True, text=True, check=False,
+        )
+        return out.stdout
+    except FileNotFoundError:
+        return ""
+
+
+def run_task(
+    task: Task,
+    config: str,
+    *,
+    benchmark: str = "dry_run",
+    run_idx: int = 0,
+    model_name: str = "anthropic/claude-sonnet-4-5",
+    step_limit: int = 50,
+    cost_limit: float = 3.0,
+    wall_time_limit_seconds: int = 1200,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Execute a single (task, config) pair.
+
+    Returns a dict with keys:
+      metrics       — a `bench.metrics.TaskMetrics` instance.
+      trajectory    — the full mini-swe-agent `agent.serialize()` dict.
+      exit_status   — "ok" | "error".
+      exit_reason   — exception detail if exit_status == "error".
+      diff          — `git diff` of the working tree after the run.
+    """
+    if config not in VALID_CONFIGS:
+        raise ValueError(f"unknown config {config!r}; expected one of {VALID_CONFIGS}")
+
+    # Late imports — they trigger litellm side effects.
+    from minisweagent.agents.default import DefaultAgent
+    from minisweagent.environments.local import LocalEnvironment
+
+    env_vars = config_env(config, task.repo_path)
+    env = LocalEnvironment(cwd=str(task.repo_path), env=env_vars, timeout=120)
+    preamble = load_preamble(config)
+
+    if dry_run:
+        model: Any = _DryRunModel()
+    else:
+        from minisweagent.models.litellm_model import LitellmModel
+
+        model = LitellmModel(model_name=model_name)
+
+    agent = DefaultAgent(
+        model,
+        env,
+        system_template=preamble,
+        instance_template=INSTANCE_TEMPLATE,
+        step_limit=step_limit,
+        cost_limit=cost_limit,
+        wall_time_limit_seconds=wall_time_limit_seconds,
+    )
+
+    started = time.time()
+    exit_status = "ok"
+    exit_reason = ""
+    try:
+        agent.run(task=task.problem_statement)
+    except Exception as exc:  # noqa: BLE001 — runner classifies all failures
+        exit_status = "error"
+        exit_reason = f"{type(exc).__name__}: {exc}"
+    wall = time.time() - started
+
+    diff = _capture_diff(task.repo_path)
+    trajectory = agent.serialize()
+    # Ensure the diff is part of the trajectory so the metrics module's
+    # patch extractor can find it even if the agent's final message
+    # didn't embed it.
+    trajectory.setdefault("info", {})["submission"] = diff
+
+    from bench.metrics import TaskMetrics, task_metrics_from_trajectory
+
+    metrics: TaskMetrics = task_metrics_from_trajectory(
+        trajectory,
+        benchmark=benchmark,
+        task_id=task.task_id,
+        config=config,
+        run_idx=run_idx,
+        wall_clock_sec=round(wall, 3),
+    )
+    if exit_status == "error":
+        metrics.outcome = "error"
+
+    return {
+        "metrics": metrics,
+        "trajectory": trajectory,
+        "exit_status": exit_status,
+        "exit_reason": exit_reason,
+        "diff": diff,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Batch driver
+# ---------------------------------------------------------------------------
+
+
+def _write_trajectory(task_id: str, config: str, trajectory: dict[str, Any],
+                      traj_dir: Path) -> Path:
+    traj_dir.mkdir(parents=True, exist_ok=True)
+    path = traj_dir / f"{task_id}__{config}.json"
+    path.write_text(json.dumps(trajectory, indent=2, sort_keys=True, default=str))
+    return path
+
+
+def run_batch(
+    tasks: list[Task],
+    configs: list[str],
+    *,
+    benchmark: str = "dry_run",
+    results_path: Path = DEFAULT_RESULTS,
+    trajectories_dir: Path = DEFAULT_CACHE_DIR / "trajectories",
+    **run_kwargs: Any,
+) -> list[dict[str, Any]]:
+    """Run every (task, config) combination and append rows to a JSONL file."""
+    from bench.metrics import append_jsonl
+
+    results_path.parent.mkdir(parents=True, exist_ok=True)
+    rows: list[dict[str, Any]] = []
+    for task in tasks:
+        for cfg in configs:
+            res = run_task(task, cfg, benchmark=benchmark, **run_kwargs)
+            _write_trajectory(task.task_id, cfg, res["trajectory"], trajectories_dir)
+            append_jsonl(results_path, res["metrics"])
+            rows.append(res)
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Dry-run dataset
+# ---------------------------------------------------------------------------
+
+
+def _make_dry_run_task(tmp: Path) -> Task:
+    """A trivially tiny synthetic repo used by --dry-run."""
+    tmp.mkdir(parents=True, exist_ok=True)
+    (tmp / "hello.py").write_text("print('hi')\n")
+    subprocess.run(["git", "init", "-q"], cwd=tmp, check=False)
+    subprocess.run(["git", "add", "."], cwd=tmp, check=False)
+    subprocess.run(
+        ["git", "-c", "user.email=b@b", "-c", "user.name=b", "commit", "-q", "-m", "init"],
+        cwd=tmp, check=False,
+    )
+    return Task(
+        task_id="dry-run-1",
+        repo_name="dry-run",
+        repo_path=tmp,
+        problem_statement="No-op task: just confirm the harness works end to end.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description="code-graph benchmark runner")
+    p.add_argument("--config", choices=VALID_CONFIGS, action="append",
+                   help="one of baseline / lsp / code_graph; repeatable. "
+                        "Default: all three.")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Use the stub LLM and a synthetic 1-task dataset; no API key needed.")
+    p.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
+    p.add_argument("--trajectories", type=Path, default=DEFAULT_CACHE_DIR / "trajectories")
+    p.add_argument("--model", default="anthropic/claude-sonnet-4-5")
+    p.add_argument("--step-limit", type=int, default=50)
+    p.add_argument("--cost-limit", type=float, default=3.0)
+    p.add_argument("--wall-time", type=int, default=1200)
+    args = p.parse_args(argv)
+
+    configs = args.config or list(VALID_CONFIGS)
+
+    if not args.dry_run:
+        sys.stderr.write(
+            "Non-dry-run mode is not wired to SWE-bench yet — that lands when "
+            "the Anthropic key is available. Use --dry-run for now.\n"
+        )
+        return 2
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        task = _make_dry_run_task(Path(td) / "repo")
+        rows = run_batch(
+            [task],
+            configs,
+            results_path=args.results,
+            trajectories_dir=args.trajectories,
+            model_name=args.model,
+            step_limit=args.step_limit,
+            cost_limit=args.cost_limit,
+            wall_time_limit_seconds=args.wall_time,
+            dry_run=True,
+        )
+
+    for row in rows:
+        m = row["metrics"]
+        print(
+            f"[{m.config:>10}] {m.task_id} "
+            f"exit={row['exit_status']} "
+            f"in={m.input_tokens} out={m.output_tokens} "
+            f"tool_calls={m.tool_calls_total} wall={m.wall_clock_sec}s"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

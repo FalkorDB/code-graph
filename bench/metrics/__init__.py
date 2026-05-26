@@ -63,13 +63,36 @@ def _first_int(d: dict[str, Any], keys: tuple[str, ...]) -> int:
 
 def _iter_history_steps(traj: dict[str, Any]) -> list[dict[str, Any]]:
     """SWE-agent has flipped between top-level `history`, `trajectory`, and
-    `steps`. Return whichever list is present, else [].
+    `steps`. mini-swe-agent uses `messages`. Return whichever list is
+    present, else [].
     """
-    for key in ("history", "trajectory", "steps"):
+    for key in ("history", "trajectory", "steps", "messages"):
         v = traj.get(key)
         if isinstance(v, list):
             return v
     return []
+
+
+def _step_usage(step: dict[str, Any]) -> dict[str, Any] | None:
+    """Find an OpenAI/Anthropic-style usage dict on a step, across schemas."""
+    if not isinstance(step, dict):
+        return None
+    # SWE-agent: step.usage
+    usage = step.get("usage")
+    if isinstance(usage, dict):
+        return usage
+    # mini-swe-agent: step.extra.response.usage
+    extra = step.get("extra")
+    if isinstance(extra, dict):
+        resp = extra.get("response")
+        if isinstance(resp, dict):
+            u = resp.get("usage")
+            if isinstance(u, dict):
+                return u
+        u = extra.get("usage")
+        if isinstance(u, dict):
+            return u
+    return None
 
 
 def extract_token_usage(traj: dict[str, Any]) -> tuple[int, int]:
@@ -81,16 +104,32 @@ def extract_token_usage(traj: dict[str, Any]) -> tuple[int, int]:
     total_in = 0
     total_out = 0
     for step in _iter_history_steps(traj):
-        usage = step.get("usage") if isinstance(step, dict) else None
+        usage = _step_usage(step)
         if isinstance(usage, dict):
             total_in += _first_int(usage, _TOKEN_KEYS_IN)
             total_out += _first_int(usage, _TOKEN_KEYS_OUT)
-    # Fall back to a top-level summary if present.
     summary = traj.get("total_usage") or traj.get("usage")
     if (total_in == 0 and total_out == 0) and isinstance(summary, dict):
         total_in = _first_int(summary, _TOKEN_KEYS_IN)
         total_out = _first_int(summary, _TOKEN_KEYS_OUT)
     return total_in, total_out
+
+
+def _action_name(cmd: str) -> str:
+    """Bucket a bash command line into a friendly tool-call name.
+
+    The first non-redirection token is good enough — `cg`, `lsp`, `git`,
+    `grep`, `sed`, etc. Falls back to `bash` for empty or odd shapes.
+    """
+    if not isinstance(cmd, str):
+        return "bash"
+    tokens = cmd.strip().split()
+    if not tokens:
+        return "bash"
+    head = tokens[0]
+    if head in ("printf", "echo") and "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT" in cmd:
+        return "submit"
+    return head
 
 
 def extract_tool_calls(traj: dict[str, Any]) -> tuple[int, dict[str, int]]:
@@ -99,6 +138,15 @@ def extract_tool_calls(traj: dict[str, Any]) -> tuple[int, dict[str, int]]:
     total = 0
     for step in _iter_history_steps(traj):
         if not isinstance(step, dict):
+            continue
+        # mini-swe-agent: step.extra.actions[*].command (bash-only).
+        extra = step.get("extra") if isinstance(step.get("extra"), dict) else None
+        if extra and isinstance(extra.get("actions"), list):
+            for act in extra["actions"]:
+                if isinstance(act, dict):
+                    by_name_key = _action_name(act.get("command", ""))
+                    by_name[by_name_key] = by_name.get(by_name_key, 0) + 1
+                    total += 1
             continue
         # SWE-agent shapes: action.command, tool_calls[*].function.name, action.name
         name = None

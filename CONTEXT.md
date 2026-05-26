@@ -7,34 +7,42 @@ changes). Not a project-wide glossary for code-graph.
 
 ### Agent
 The autonomous loop that reads a task, calls tools, edits code, and
-submits a result. We adopt **SWE-agent** (Princeton) as the harness; we
-do not write our own. The agent loop is fixed across all configs.
+submits a result. We adopt **mini-swe-agent** (SWE-agent project's
+recommended minimal harness) as the agent. The original SWE-agent
+is **not** used: upstream now points users at mini- instead, and its
+bash-only tool surface is a much smaller, more transparent
+integration. The agent loop is fixed across all configs.
 
 ### Config
 One of `baseline`, `lsp`, `code-graph`. A config is **fully defined by
-its `tools.yaml` plus a one-paragraph preamble**. Same model, same
-scaffolding prompt, same iteration cap across all three.
+its `system_preamble.md` plus the `PATH` it exposes to the agent's
+bash**. Same model, same scaffolding template, same step/cost limits
+across all three. (mini-swe-agent has no per-config `tools.yaml`
+because bash is the only tool; the per-config `tools.yaml` files in
+the repo are kept as design documentation.)
 
 ### baseline (config)
-SWE-agent's default file-edit/bash tools (`read_file`, `write_file`,
-`edit`, `bash`, `submit`). **Not "zero tools"** — an LLM with no
-filesystem access is not a useful comparison.
+mini-swe-agent's stock bash environment — `cat`, `grep`, `find`,
+`sed`, `git`, the agent's own implicit submit protocol. **Not
+"zero tools"** — an LLM with no filesystem access is not a useful
+comparison.
 
 ### lsp (config)
-`baseline` + multilspy-driven LSP tools (`goto_definition`,
-`find_references`, `hover`, `document_symbols`), each wrapped by the LSP
-response shim (see below). The plan originally specified pyright +
-`workspace_symbols`; we run **jedi-language-server** (what the pinned
-multilspy fork ships) and drop `workspace_symbols` (the fork doesn't
-implement `request_workspace_symbol`). The shim normalizes responses
-so jedi-vs-pyright does not affect the validity comparison; agent falls
-back to bash+grep for workspace-wide symbol search.
+`baseline` + an `lsp` command on PATH that wraps multilspy/jedi
+(`goto-definition`, `find-references`, `hover`, `document-symbols`),
+each shaped by the LSP response shim (see below). The plan originally
+specified pyright + `workspace_symbols`; we run **jedi-language-server**
+(what the pinned multilspy fork ships) and drop `workspace_symbols`
+(the fork doesn't implement `request_workspace_symbol`). The shim
+normalizes responses so jedi-vs-pyright does not affect the validity
+comparison; agent falls back to bash+grep for workspace-wide symbol
+search.
 
 ### code-graph (config)
-`baseline` + primitive graph tools: `graph_entities`, `get_neighbors`,
-`find_paths`, `auto_complete`, `find_symbol`, plus `note_edit`. The
-GraphRAG `chat` endpoint is **excluded** to avoid nested-agent token
-double-counting.
+`baseline` + a `cg` command on PATH that talks to the code-graph
+HTTP service: `graph-entities`, `get-neighbors`, `find-paths`,
+`auto-complete`, `find-symbol`, plus `note-edit`. The GraphRAG `chat`
+endpoint is **excluded** to avoid nested-agent token double-counting.
 
 ### Accuracy
 The SWE-bench end-to-end metric: did the agent's patch pass the repo's
@@ -65,15 +73,17 @@ A `<repo>@<commit>` for which a FalkorDB graph has been built. Cache
 key. No incremental indexing across commits.
 
 ### Tool service architecture
-SWE-agent runs in a Docker container per task. **Tools live in that
-container** (Option C from the grill): multilspy/pyright runs
-in-process there; code-graph is reached via an HTTP client to a
-host-side FastAPI + FalkorDB. The repo is bind-mounted; the agent's
-edits are visible to pyright immediately. code-graph's graph is built
-once per `<repo>@<commit>` and would otherwise go stale on agent edits,
-so the code-graph bundle includes a `note_edit(path)` tool that
-triggers a **single-file incremental re-index** of the touched file.
-This keeps fairness with the live-by-default LSP.
+mini-swe-agent runs each step as `subprocess.run` in a configured cwd
+(the prepared repo working tree). **Tools live on the host** (local
+process model): multilspy/jedi runs in-process via the `lsp` CLI
+wrapper; code-graph is reached via an HTTP client (`cg` CLI wrapper)
+to the FastAPI + FalkorDB service. The runner sets `PATH` so the
+agent sees `bench/cli/` only for configs that include those tools
+(baseline gets the unmodified host `PATH`). code-graph's graph is
+built once per `<repo>@<commit>` and would otherwise go stale on agent
+edits, so the code-graph bundle includes a `cg note-edit PATH` tool
+that triggers a **single-file incremental re-index** of the touched
+file. This keeps fairness with the live-by-default LSP.
 
 ### LSP response shim
 Raw LSP responses are too verbose for a fair token-cost comparison
@@ -120,6 +130,7 @@ before publishing — the 50-task sample's confidence interval is roughly
 
 - `bench/` is the top-level directory for the workstream.
 - Results are JSONL, one row per `(task_id, config, run_idx)`, with
-  token counts pulled from the SWE-agent trajectory JSON.
+  token counts pulled from the mini-swe-agent trajectory JSON
+  (`agent.serialize()` — `messages[*].extra.response.usage`).
 - The opencode track and RepoBench track are **not** part of this
   workstream (dropped during the grill).
