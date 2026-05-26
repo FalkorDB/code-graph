@@ -29,6 +29,7 @@ test = [
     "httpx>=0.28.0,<1.0.0",
 ]
 bench = [
+    "datasets>=4.8.5",
     "mini-swe-agent>=1.0.0",
 ]
 

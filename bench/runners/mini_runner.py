@@ -460,6 +460,15 @@ def main(argv: list[str] | None = None) -> int:
                            "Validates real token accounting and the actual "
                            "model loop without paying for SWE-bench. "
                            "Requires an LLM API key for the chosen --model.")
+    mode.add_argument("--swe-bench", action="store_true",
+                      help="Real LLM + SWE-bench Verified instances. "
+                           "Use --stage smoke|calibration|headline to pick the "
+                           "sample size. Each instance: real clone + checkout "
+                           "+ test_patch apply + agent run + FAIL_TO_PASS/"
+                           "PASS_TO_PASS pytest verification.")
+    p.add_argument("--stage", choices=("smoke", "calibration", "headline"),
+                   default="smoke",
+                   help="SWE-bench stage (sample size). Only used with --swe-bench.")
     p.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     p.add_argument("--trajectories", type=Path, default=DEFAULT_CACHE_DIR / "trajectories")
     p.add_argument("--model", default="anthropic/claude-sonnet-4-5",
@@ -478,44 +487,83 @@ def main(argv: list[str] | None = None) -> int:
 
     import tempfile
 
-    with tempfile.TemporaryDirectory() as td:
-        if args.dry_run:
-            task_fn = _make_dry_run_task
-            benchmark = "dry_run"
-            dry_run = True
-        else:
-            task_fn = _make_synthetic_smoke_task
-            benchmark = "synthetic_smoke"
-            dry_run = False
+    rows: list[dict[str, Any]] = []
 
-        # Re-prep the repo per config so configs don't pollute each other's
-        # working trees. Each config sees the original buggy code.
-        rows: list[dict[str, Any]] = []
-        verify_results: dict[str, bool] = {}
-        for cfg in configs:
-            repo_path = Path(td) / f"repo-{cfg}"
-            task = task_fn(repo_path)
-            cfg_rows = run_batch(
-                [task],
-                [cfg],
-                benchmark=benchmark,
-                results_path=args.results,
-                trajectories_dir=args.trajectories,
-                model_name=args.model,
-                step_limit=args.step_limit,
-                cost_limit=args.cost_limit,
-                wall_time_limit_seconds=args.wall_time,
-                dry_run=dry_run,
-                defer_jsonl=args.real_run,
-            )
-            rows.extend(cfg_rows)
-            if args.real_run:
-                from bench.metrics import append_jsonl
+    if args.swe_bench:
+        from bench.datasets.swe_bench import (
+            load_instances, sample_instances, prepare_worktree,
+            instance_to_task, verify_instance,
+        )
+        from bench.metrics import append_jsonl
 
-                ok, _ = _verify_smoke_task(repo_path)
-                verify_results[cfg] = ok
+        insts = sample_instances(load_instances(), stage=args.stage)
+        print(f"[swe-bench] stage={args.stage} sampling {len(insts)} instances")
+        for inst in insts:
+            for cfg in configs:
+                # Fresh worktree per (instance, config) to avoid cross-talk.
+                wt = prepare_worktree(inst)
+                # Rename so each cfg gets a distinct path.
+                cfg_wt = wt.parent / f"{inst.instance_id}__{cfg}"
+                if cfg_wt.exists():
+                    import shutil
+                    shutil.rmtree(cfg_wt)
+                wt.rename(cfg_wt)
+                task = instance_to_task(inst, cfg_wt)
+                cfg_rows = run_batch(
+                    [task],
+                    [cfg],
+                    benchmark="swe_bench_verified",
+                    results_path=args.results,
+                    trajectories_dir=args.trajectories,
+                    model_name=args.model,
+                    step_limit=args.step_limit,
+                    cost_limit=args.cost_limit,
+                    wall_time_limit_seconds=args.wall_time,
+                    dry_run=False,
+                    defer_jsonl=True,
+                )
+                rows.extend(cfg_rows)
+                ok, summary = verify_instance(inst, cfg_wt)
                 cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
+                if not ok:
+                    cfg_rows[-1]["verify_summary"] = summary[-200:]
                 append_jsonl(args.results, cfg_rows[-1]["metrics"])
+    else:
+        with tempfile.TemporaryDirectory() as td:
+            if args.dry_run:
+                task_fn = _make_dry_run_task
+                benchmark = "dry_run"
+                dry_run = True
+            else:
+                task_fn = _make_synthetic_smoke_task
+                benchmark = "synthetic_smoke"
+                dry_run = False
+
+            verify_results: dict[str, bool] = {}
+            for cfg in configs:
+                repo_path = Path(td) / f"repo-{cfg}"
+                task = task_fn(repo_path)
+                cfg_rows = run_batch(
+                    [task],
+                    [cfg],
+                    benchmark=benchmark,
+                    results_path=args.results,
+                    trajectories_dir=args.trajectories,
+                    model_name=args.model,
+                    step_limit=args.step_limit,
+                    cost_limit=args.cost_limit,
+                    wall_time_limit_seconds=args.wall_time,
+                    dry_run=dry_run,
+                    defer_jsonl=args.real_run,
+                )
+                rows.extend(cfg_rows)
+                if args.real_run:
+                    from bench.metrics import append_jsonl
+
+                    ok, _ = _verify_smoke_task(repo_path)
+                    verify_results[cfg] = ok
+                    cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
+                    append_jsonl(args.results, cfg_rows[-1]["metrics"])
 
     for row in rows:
         m = row["metrics"]
