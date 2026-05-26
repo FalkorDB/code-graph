@@ -1,273 +1,128 @@
-import os
-import asyncio
-import logging
+"""Text-to-Cypher chat over an existing FalkorDB code graph.
 
-from graphrag_sdk.models.litellm import LiteModel
-from graphrag_sdk import (
-    Ontology,
-    Entity,
-    Relation,
-    Attribute,
-    AttributeType,
-    KnowledgeGraph,
-    KnowledgeGraphModelConfig
+This module previously relied on `graphrag-sdk` 0.8.x's `KnowledgeGraph` class,
+which wrapped a pre-populated graph and provided a `chat_session()` Q&A flow
+with custom Cypher-generation and answer-synthesis prompts.
+
+graphrag-sdk 1.x is a ground-up rewrite around document ingestion: the
+`KnowledgeGraph` class is gone and the new `GraphRAG` facade expects to own
+the graph it serves (it ingests text/files and writes nodes with embeddings).
+There is no public primitive for "wrap an existing graph and chat over it".
+
+code-graph builds its graphs through dedicated language analyzers, not through
+ingestion. We therefore keep the text-to-Cypher pipeline in-house here:
+generate Cypher from the question + ontology, execute it against FalkorDB,
+then synthesize a natural-language answer. We use `graphrag-sdk`'s `LiteLLM`
+provider as a thin LiteLLM wrapper so we still benefit from its retry logic.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import re
+from typing import Any
+
+from falkordb.asyncio import FalkorDB as AsyncFalkorDB
+from graphrag_sdk import ChatMessage, LiteLLM
+
+from .prompts import (
+    CYPHER_GEN_PROMPT,
+    CYPHER_GEN_SYSTEM,
+    GRAPH_QA_PROMPT,
+    GRAPH_QA_SYSTEM,
 )
 
-from .prompts import (CYPHER_GEN_SYSTEM,
-                     CYPHER_GEN_PROMPT,
-                     GRAPH_QA_SYSTEM,
-                     GRAPH_QA_PROMPT,
-                    )
+logger = logging.getLogger(__name__)
 
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
+# The ontology is described to the LLM as plain text. Keeping this as a
+# static string (rather than the old `Ontology` object tree) avoids depending
+# on v0-only classes and makes the prompt easier to reason about.
+_ONTOLOGY_TEXT = """
+Entities:
+- File(name: string [required, unique], path: string, ext: string)
+- Class(name: string [required, unique], path: string, src_start: number, src_end: number, doc: string)
+- Function(name: string [required, unique], path: string, src_start: number, src_end: number, args: string, src: string)
+- Interface(name: string [required, unique], path: string, src_start: number, src_end: number, doc: string)
 
-def _define_ontology() -> Ontology:
-    # Build ontology:
-    ontology = Ontology()
+Relations (source -[TYPE]-> target):
+- File -[DEFINES]-> Class
+- File -[DEFINES]-> Function
+- Class -[DEFINES]-> Class
+- Class -[DEFINES]-> Function
+- Function -[DEFINES]-> Function
+- Class -[CALLS]-> Function
+- Function -[CALLS]-> Function
+- Class -[EXTENDS]-> Class
+- Class -[IMPLEMENTS]-> Interface
+""".strip()
 
-    # Entities:
-    # 1. File
-    # 2. Class
-    # 3. Function
-    # 4. Struct (TODO: Add struct)
 
-    # Relations:
-    # File     - DEFINES -> Class
-    # File     - DEFINES -> Function
-    # Class    - DEFINES -> Class
-    # Class    - DEFINES -> Function
-    # Function - DEFINES -> Function
-    # Class    - CALLS -> Function
-    # Function - CALLS -> Function
+_CYPHER_BLOCK_RE = re.compile(r"```(?:cypher)?\s*(.*?)\s*```", re.DOTALL)
 
-    # TODO: auto generate ontology
-    #"call db.labels()"
-    #"call db.relationshiptypes()"
-    #"match (n: File) return keys(n) limit 1"
-    #"match (n: File) return n limit 1"
-    #"match ()-[e: {}]->() return e limit 1
 
-    # Function:
-    #   name
-    #   path
-    #   src_start
-    #   src_end
-    #   args "[[cls, Unknown]]"
-    #   src
+def _extract_cypher(text: str) -> str:
+    """Pull the Cypher statement out of an LLM response."""
+    match = _CYPHER_BLOCK_RE.search(text)
+    if match:
+        return match.group(1).strip()
+    return text.strip()
 
-    function = Entity(
-            label="Function",
-            attributes=[
-                Attribute(
-                    name="name",
-                    attr_type=AttributeType.STRING,
-                    required=True,
-                    unique=True,
-                ),
-                Attribute(
-                    name="path",
-                    attr_type=AttributeType.STRING,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="src_start",
-                    attr_type=AttributeType.NUMBER,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="src_end",
-                    attr_type=AttributeType.NUMBER,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="args",
-                    attr_type=AttributeType.STRING,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="src",
-                    attr_type=AttributeType.STRING,
-                    required=False,
-                    unique=False,
-                ),
-            ]
-        )
 
-    # File:
-    #   name
-    #   ext
-    #   path
-    file = Entity(
-            label="File",
-            attributes=[
-                    Attribute(
-                    name="name",
-                    attr_type=AttributeType.STRING,
-                    required=True,
-                    unique=True,
-                ),
-                    Attribute(
-                        name="path",
-                        attr_type=AttributeType.STRING,
-                        required=False,
-                        unique=False,
-                    ),
-                    Attribute(
-                        name="ext",
-                        attr_type=AttributeType.STRING,
-                        required=False,
-                        unique=False,
-                    )
-            ]
-        )
+def _build_llm() -> LiteLLM:
+    model_name = os.getenv("MODEL_NAME", "gemini/gemini-flash-lite-latest")
+    return LiteLLM(model_name, temperature=0.0)
 
-    # Class:
-    #   name
-    #   path
-    #   src_start
-    #   src_end
-    #   doc
 
-    cls = Entity(
-            label="Class",
-            attributes=[
-                Attribute(
-                    name="name",
-                    attr_type=AttributeType.STRING,
-                    required=True,
-                    unique=True,
-                ),
-                Attribute(
-                    name="path",
-                    attr_type=AttributeType.STRING,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="src_start",
-                    attr_type=AttributeType.NUMBER,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="src_end",
-                    attr_type=AttributeType.NUMBER,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="doc",
-                    attr_type=AttributeType.STRING,
-                    required=False,
-                    unique=False,
-                ),
-            ]
-        )
-    
-    interface = Entity(
-            label="Interface",
-            attributes=[
-                Attribute(
-                    name="name",
-                    attr_type=AttributeType.STRING,
-                    required=True,
-                    unique=True,
-                ),
-                Attribute(
-                    name="path",
-                    attr_type=AttributeType.STRING,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="src_start",
-                    attr_type=AttributeType.NUMBER,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="src_end",
-                    attr_type=AttributeType.NUMBER,
-                    required=False,
-                    unique=False,
-                ),
-                Attribute(
-                    name="doc",
-                    attr_type=AttributeType.STRING,
-                    required=False,
-                    unique=False,
-                ),
-            ]
-        )
-
-    ontology.add_entity(cls)
-    ontology.add_entity(file)
-    ontology.add_entity(function)
-    ontology.add_entity(interface)
-
-    # Relations:
-    # File     - DEFINES -> Class
-    # File     - DEFINES -> Function
-    # Class    - DEFINES -> Class
-    # Class    - DEFINES -> Function
-    # Function - DEFINES -> Function
-    # Class    - CALLS -> Function
-    # Function - CALLS -> Function
-
-    ontology.add_relation(Relation("CALLS",   "Class",    "Function"))
-    ontology.add_relation(Relation("CALLS",   "Function", "Function"))
-    ontology.add_relation(Relation("DEFINES", "File",     "Class"))
-    ontology.add_relation(Relation("DEFINES", "File",     "Function"))
-    ontology.add_relation(Relation("DEFINES", "Class",    "Class"))
-    ontology.add_relation(Relation("EXTENDS", "Class",    "Class"))
-    ontology.add_relation(Relation("IMPLEMENTS", "Class",    "Interface"))
-    ontology.add_relation(Relation("DEFINES", "Class",    "Function"))
-    ontology.add_relation(Relation("DEFINES", "Function", "Function"))
-
-    return ontology
-
-# Global ontology
-ontology = _define_ontology()
-
-def _create_kg_agent(repo_name: str):
-    model_name = os.getenv('MODEL_NAME', 'gemini/gemini-flash-lite-latest')
-
-    model = LiteModel(model_name)
-
-    #ontology = _define_ontology()
-    code_graph_kg = KnowledgeGraph(
-        name=repo_name,
-        ontology=ontology,
-        model_config=KnowledgeGraphModelConfig.with_model(model),
-        host=os.getenv('FALKORDB_HOST', 'localhost'),
-        port=os.getenv('FALKORDB_PORT', 6379),
-        username=os.getenv('FALKORDB_USERNAME', None),
-        password=os.getenv('FALKORDB_PASSWORD', None),
-        cypher_system_instruction=CYPHER_GEN_SYSTEM,
-        qa_system_instruction=GRAPH_QA_SYSTEM,
-        cypher_gen_prompt=CYPHER_GEN_PROMPT,
-        qa_prompt=GRAPH_QA_PROMPT,
+def _falkordb() -> AsyncFalkorDB:
+    return AsyncFalkorDB(
+        host=os.getenv("FALKORDB_HOST", "localhost"),
+        port=int(os.getenv("FALKORDB_PORT", "6379")),
+        username=os.getenv("FALKORDB_USERNAME") or None,
+        password=os.getenv("FALKORDB_PASSWORD") or None,
     )
 
-    return code_graph_kg.chat_session()
 
-def _ask_sync(repo_name: str, question: str) -> str:
-    chat = _create_kg_agent(repo_name)
-
-    logging.debug(f"Question: {question}")
-    print(f"Question: {question}")
-    response = chat.send_message(question)
-    logging.debug(f"Response: {response}")
-    print(f"Response: {response['response']}")
-    return response['response']
+async def _run_cypher(repo_name: str, cypher: str) -> list[list[Any]]:
+    if not cypher:
+        return []
+    db = _falkordb()
+    graph = db.select_graph(repo_name)
+    try:
+        result = await graph.query(cypher)
+        return list(result.result_set or [])
+    except Exception:
+        logger.exception("Cypher execution failed: %s", cypher)
+        return []
 
 
 async def ask(repo_name: str, question: str) -> str:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _ask_sync, repo_name, question)
+    """Answer a natural-language question against the code graph for repo_name."""
+    llm = _build_llm()
+
+    cypher_resp = await llm.ainvoke_messages(
+        [
+            ChatMessage(role="system", content=CYPHER_GEN_SYSTEM.format(ontology=_ONTOLOGY_TEXT)),
+            ChatMessage(role="user", content=CYPHER_GEN_PROMPT.format(question=question)),
+        ]
+    )
+    cypher = _extract_cypher(cypher_resp.content)
+    logger.debug("Generated Cypher: %s", cypher)
+
+    context = await _run_cypher(repo_name, cypher)
+
+    answer_resp = await llm.ainvoke_messages(
+        [
+            ChatMessage(role="system", content=GRAPH_QA_SYSTEM),
+            ChatMessage(
+                role="user",
+                content=GRAPH_QA_PROMPT.format(
+                    cypher=cypher,
+                    context=context,
+                    question=question,
+                ),
+            ),
+        ]
+    )
+    return answer_resp.content
