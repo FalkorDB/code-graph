@@ -1,22 +1,32 @@
 # SWE-agent tool bundle: lsp config.
 #
-# Baseline + pyright-backed navigation via multilspy. The benchmark
-# instantiates one multilspy LanguageServer per task (cached per
-# <repo>@<commit>) and exposes the five tools below as SWE-agent custom
-# commands that shell out to a thin Python adapter.
+# Baseline + LSP-backed navigation via multilspy. The benchmark
+# instantiates one multilspy SyncLanguageServer per task (cached per
+# <repo>@<commit>) and exposes the four tools below as SWE-agent custom
+# commands that shell out to bench/agents/lsp_adapter.py.
 
 extends: ../baseline/tools.yaml
 
 tools:
-  - goto_definition       # (file, line, col) -> [definition_location]
-  - find_references       # (file, line, col) -> [reference_location]
-  - hover                 # (file, line, col) -> markdown
-  - document_symbols      # (file) -> [symbol]
-  - workspace_symbols     # (query) -> [symbol]
+  - goto_definition       # (file, line, col) -> [{path, line, col}]
+  - find_references       # (file, line, col) -> [{path, line, col}]
+  - hover                 # (file, line, col) -> {text}
+  - document_symbols      # (file) -> [{name, kind, path, line, col}]
+
+# workspace_symbols is intentionally NOT exposed: the multilspy fork we
+# depend on (forked at python-init-params) does not implement
+# request_workspace_symbol. The agent falls back to bash+grep, which is
+# also what real-world LSP workflows do.
 
 backend:
-  language_server: pyright
+  language_server: jedi-language-server
   driver: multilspy
-
-  # Multilspy starts pyright as a subprocess per repo; we cache the
-  # server handle in bench/cache/lsp/<repo>@<commit>.
+  # Notes:
+  # - The plan originally specified pyright. multilspy ≥0.0.15 is required
+  #   for that, but our pinned fork is older (it adds environment_path
+  #   support for jedi to multilspy 0.0.11). The shim normalizes responses
+  #   so jedi-vs-pyright doesn't affect the validity comparison.
+  # - environment_path is passed through MultilspyConfig.from_dict;
+  #   defaults to the current interpreter's sys.prefix for jedi.
+  #
+  # Cache: bench/cache/lsp/<repo>@<commit> tracks first-run setup time.

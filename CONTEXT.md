@@ -21,9 +21,14 @@ SWE-agent's default file-edit/bash tools (`read_file`, `write_file`,
 filesystem access is not a useful comparison.
 
 ### lsp (config)
-`baseline` + multilspy-driven pyright tools (`goto_definition`,
-`find_references`, `hover`, `document_symbols`, `workspace_symbols`),
-each wrapped by the LSP response shim (see below).
+`baseline` + multilspy-driven LSP tools (`goto_definition`,
+`find_references`, `hover`, `document_symbols`), each wrapped by the LSP
+response shim (see below). The plan originally specified pyright +
+`workspace_symbols`; we run **jedi-language-server** (what the pinned
+multilspy fork ships) and drop `workspace_symbols` (the fork doesn't
+implement `request_workspace_symbol`). The shim normalizes responses
+so jedi-vs-pyright does not affect the validity comparison; agent falls
+back to bash+grep for workspace-wide symbol search.
 
 ### code-graph (config)
 `baseline` + primitive graph tools: `graph_entities`, `get_neighbors`,

@@ -29,5 +29,10 @@ test = [
     "httpx>=0.28.0,<1.0.0",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests that spawn external subprocesses (LSP servers, FalkorDB, etc.); skip with -m 'not slow'",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
