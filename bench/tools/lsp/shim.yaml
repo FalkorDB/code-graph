@@ -1,0 +1,35 @@
+# LSP response shim — implementation contract.
+#
+# The `lsp` config wraps each multilspy/pyright tool in this adapter so
+# raw LSP verbosity doesn't dominate the token-cost comparison.
+# See CONTEXT.md "LSP response shim" for the rationale.
+#
+# This file is the spec. Actual code lands in bench/tools/lsp/adapter.py
+# when the runner is implemented.
+
+caps:
+  max_results_per_call: 50
+  hover_signature_lines: 1
+  hover_docstring_sentences: 1
+
+pagination:
+  tools_supporting_page_arg:
+    - find_references
+    - workspace_symbols
+    - document_symbols
+  page_size: 50
+
+location_shape:
+  # Output shape for every location-returning tool. Replaces the raw
+  # LSP Range object (uri + start/end line/col + character offsets).
+  fields: [path, line, col]
+
+opt_in_tools:
+  # Full-verbosity tools the agent must explicitly request.
+  hover_full:
+    description: "Full raw hover markdown for this symbol (verbose)."
+
+audit:
+  # Every shimmed call records (raw_token_estimate, shimmed_token_count)
+  # so the writeup can show how much the shim reduced.
+  log_raw_vs_shimmed: true

@@ -17,7 +17,12 @@ tools:
   - auto_complete         # (repo, prefix) -> [symbol]
   - find_symbol           # (repo, name) -> [node]  NEW helper; thin wrapper
                           # over auto_complete + filter for exact match.
-                          # Lives in bench/tools/code_graph/adapter.py.
+  - note_edit             # (repo, path) -> ok  NEW. Called by the agent
+                          # after every write_file/edit. Triggers a
+                          # single-file incremental re-index on the
+                          # code-graph backend. Keeps the graph current
+                          # against agent edits without paying a full
+                          # re-index. Fairness vs live-LSP.
 
 backend:
   service_url: http://host.docker.internal:5000

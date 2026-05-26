@@ -16,17 +16,29 @@ agent:
 
 benchmarks:
   swe_bench:
-    split: lite                # verified-lite, ~50 tasks
-    sample: full               # 'full' or an integer
-  repobench:
-    sets: [retrieval, pipeline]
-    sample: 200
-  intrinsic:
-    queries_per_repo: 30
+    split: verified              # 500-task human-validated split
+    sample_size: 50              # random sample
+    sample_seed: 20260526        # committed for reproducibility
+    expand_to_if_delta_below_pp: 10
+    expand_to_size: 150
 
 runs:
-  default: 1
-  retry_on_stochastic_failure: 2   # if a config fails, retry 2x more
+  default: 1                       # pass@1
+  retry_on_stochastic_failure: 2   # if failed, retry 2x; never demotes passes
+
+rollout:
+  stages:
+    - name: smoke
+      tasks: 3
+      configs: [baseline, lsp, code-graph]
+    - name: calibration
+      tasks: 10
+      configs: [baseline, lsp, code-graph]
+      preamble_phrasing_check: true
+    - name: headline
+      tasks: 37                    # remaining of the 50-task sample
+      configs: [baseline, lsp, code-graph]
+      retries: 2
 
 indexing:
   cache_dir: bench/cache

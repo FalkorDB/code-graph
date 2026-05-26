@@ -20,40 +20,40 @@ Next steps are tracked in the session's todo list.
 
 ```text
 bench/
-  agents/       # (planned) thin Python adapters around SWE-agent
-  runners/      # (planned) swe_bench.py, repobench.py
-  metrics/      # (planned) token + accuracy scoring from SWE-agent trajectories
+  agents/       # (planned) thin adapters around SWE-agent
+  runners/      # (planned) swe_bench.py
+  metrics/      # (planned) token + accuracy from SWE-agent trajectories
   report/       # (planned) JSONL -> markdown table aggregator
   configs/      # YAML run configs (model, temperature, split, budget)
   cache/        # FalkorDB graph cache keyed by <repo>@<commit>  (gitignored)
   tools/
     baseline/   # SWE-agent default tools (no navigation)
-    lsp/        # baseline + pyright tools via multilspy
+    lsp/        # baseline + pyright tools via multilspy + shim
     code_graph/ # baseline + primitive graph tools (graph_entities,
-                #   get_neighbors, find_paths, auto_complete, find_symbol)
-  intrinsic/    # (planned) ~30 hand-crafted nav queries per repo, no agent
-  opencode/     # (planned) qualitative track using opencode + code-graph MCP
+                #   get_neighbors, find_paths, auto_complete,
+                #   find_symbol, note_edit)
 ```
 
-## Headline metrics
+## Headline metric
 
-- **Outcome accuracy** — SWE-bench-Lite patch-pass rate.
+- **Outcome accuracy** — SWE-bench-Verified-sample patch-pass rate
+  (pass@1, temperature 0, retry stochastic failures 2×).
 - **Token cost** — LLM in+out tokens per task; report median, p90,
-  and Δ vs baseline. Indexing cost reported separately.
-- **Intrinsic accuracy** — diagnostic only, from `bench/intrinsic/`.
+  and Δ vs baseline. **Indexing cost reported separately**; never
+  combined with per-task token cost.
 
 ## Run targets (planned Makefile)
 
 ```text
-make bench-swe        # SWE-bench-Lite, all 3 configs, frontier model
-make bench-repo       # RepoBench R+P, all 3 configs
-make bench-intrinsic  # tool-only diagnostic, no agent in the loop
+make bench-smoke      # stage 1: 3 hand-picked tasks x 3 configs
+make bench-calibrate  # stage 2: 10 random tasks x 3 configs
+make bench-headline   # stage 3: 37 remaining tasks x 3 configs (pass@1+retry)
 make bench-report     # aggregate JSONL into bench/report/results.md
 ```
 
-## Why not opencode as the primary harness?
+## Out of scope (decided during the grill)
 
-opencode is an interactive terminal agent (excellent dev UX, plugin/MCP
-model) but lacks a batch runner and per-call token accounting suitable
-for scoring. We use opencode for a **secondary qualitative track**
-(`bench/opencode/`) showing real dev-flow use, not headline numbers.
+- RepoBench — shape mismatch with code-graph's node-granularity outputs.
+- opencode qualitative track — marketing, not validity.
+- Intrinsic retrieval diagnostic — focus on the outcome question.
+- Raw-LSP comparison run — shim is documented and consistent.
