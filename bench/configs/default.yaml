@@ -1,0 +1,38 @@
+# Default run config — frontier model on SWE-bench-Lite.
+#
+# This is the headline config referenced in CONTEXT.md.
+# Override for cheaper iteration with a separate file (e.g. flash.yaml).
+
+model:
+  # LiteLLM model identifier. Same model is used across baseline/lsp/code-graph.
+  name: anthropic/claude-sonnet-4-6
+  temperature: 0.0
+  max_tokens_per_call: 8192
+
+agent:
+  # SWE-agent settings shared across all three tool bundles.
+  max_iterations: 75
+  per_task_budget_tokens: 1500000   # hard cap; tasks exceeding count as failures
+
+benchmarks:
+  swe_bench:
+    split: lite                # verified-lite, ~50 tasks
+    sample: full               # 'full' or an integer
+  repobench:
+    sets: [retrieval, pipeline]
+    sample: 200
+  intrinsic:
+    queries_per_repo: 30
+
+runs:
+  default: 1
+  retry_on_stochastic_failure: 2   # if a config fails, retry 2x more
+
+indexing:
+  cache_dir: bench/cache
+  # graph cache key is <repo>@<commit>; no incremental indexing.
+
+reporting:
+  out_dir: bench/report
+  jsonl_file: results.jsonl
+  summary_file: results.md

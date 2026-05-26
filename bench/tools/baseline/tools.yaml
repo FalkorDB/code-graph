@@ -1,0 +1,18 @@
+# SWE-agent tool bundle: baseline config.
+#
+# This is intentionally just SWE-agent's default file-edit + bash tools.
+# It is the control group for the whole benchmark: an LLM with realistic
+# I/O but no code-navigation tools. NOT "zero tools" — that comparison
+# would be unrealistic.
+#
+# Wired into the agent via SWE-agent's --tools-config flag once the
+# runner lands. The exact set of tool names below mirrors SWE-agent's
+# default bundle and will be validated against the installed sweagent
+# version at runtime by bench/runners/swe_bench.py.
+
+tools:
+  - read_file
+  - write_file
+  - edit             # str_replace style
+  - bash
+  - submit

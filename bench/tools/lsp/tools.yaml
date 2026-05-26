@@ -1,0 +1,22 @@
+# SWE-agent tool bundle: lsp config.
+#
+# Baseline + pyright-backed navigation via multilspy. The benchmark
+# instantiates one multilspy LanguageServer per task (cached per
+# <repo>@<commit>) and exposes the five tools below as SWE-agent custom
+# commands that shell out to a thin Python adapter.
+
+extends: ../baseline/tools.yaml
+
+tools:
+  - goto_definition       # (file, line, col) -> [definition_location]
+  - find_references       # (file, line, col) -> [reference_location]
+  - hover                 # (file, line, col) -> markdown
+  - document_symbols      # (file) -> [symbol]
+  - workspace_symbols     # (query) -> [symbol]
+
+backend:
+  language_server: pyright
+  driver: multilspy
+
+  # Multilspy starts pyright as a subprocess per repo; we cache the
+  # server handle in bench/cache/lsp/<repo>@<commit>.
