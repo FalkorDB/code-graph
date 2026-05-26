@@ -339,13 +339,15 @@ def run_batch(
     """Run every (task, config) combination and append rows to a JSONL file."""
     from bench.metrics import append_jsonl
 
+    defer_jsonl = run_kwargs.pop("defer_jsonl", False)
     results_path.parent.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, Any]] = []
     for task in tasks:
         for cfg in configs:
             res = run_task(task, cfg, benchmark=benchmark, **run_kwargs)
             _write_trajectory(task.task_id, cfg, res["trajectory"], trajectories_dir)
-            append_jsonl(results_path, res["metrics"])
+            if not defer_jsonl:
+                append_jsonl(results_path, res["metrics"])
             rows.append(res)
     return rows
 
@@ -356,7 +358,12 @@ def run_batch(
 
 
 def _make_dry_run_task(tmp: Path) -> Task:
-    """A trivially tiny synthetic repo used by --dry-run."""
+    """A trivially tiny synthetic repo used by --dry-run.
+
+    The dry-run stub model just submits immediately, so this repo
+    doesn't need to be solvable — it only needs to be a valid git
+    working tree so `git diff` and `LocalEnvironment` cwd work.
+    """
     tmp.mkdir(parents=True, exist_ok=True)
     (tmp / "hello.py").write_text("print('hi')\n")
     subprocess.run(["git", "init", "-q"], cwd=tmp, check=False)
@@ -373,6 +380,68 @@ def _make_dry_run_task(tmp: Path) -> Task:
     )
 
 
+def _make_synthetic_smoke_task(tmp: Path) -> Task:
+    """A tiny but **non-trivial** synthetic task used by --real-run.
+
+    Unlike `_make_dry_run_task` (no-op for the stub model), this task
+    requires the agent to actually *do* something: read a file, find
+    a bug, and submit a patch. It's deliberately ~2-minute work for a
+    competent LLM — enough to exercise the trajectory, tool-call,
+    token-accounting, and diff-capture paths end-to-end, without the
+    cost or time of a SWE-bench task.
+    """
+    tmp.mkdir(parents=True, exist_ok=True)
+    (tmp / "math_utils.py").write_text(
+        "def add(a, b):\n"
+        "    # BUG: should return a + b\n"
+        "    return a - b\n"
+        "\n"
+        "def multiply(a, b):\n"
+        "    return a * b\n"
+    )
+    (tmp / "test_math_utils.py").write_text(
+        "from math_utils import add, multiply\n"
+        "\n"
+        "def test_add():\n"
+        "    assert add(2, 3) == 5\n"
+        "    assert add(0, 0) == 0\n"
+        "    assert add(-1, 1) == 0\n"
+        "\n"
+        "def test_multiply():\n"
+        "    assert multiply(2, 3) == 6\n"
+    )
+    subprocess.run(["git", "init", "-q"], cwd=tmp, check=False)
+    subprocess.run(["git", "add", "."], cwd=tmp, check=False)
+    subprocess.run(
+        ["git", "-c", "user.email=b@b", "-c", "user.name=b", "commit", "-q", "-m", "init"],
+        cwd=tmp, check=False,
+    )
+    return Task(
+        task_id="smoke-add-bug",
+        repo_name="smoke-synthetic",
+        repo_path=tmp,
+        problem_statement=(
+            "The `add` function in math_utils.py is buggy: it subtracts "
+            "instead of adding. Fix it so that `pytest test_math_utils.py` "
+            "passes. Do not modify the tests."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def _verify_smoke_task(repo_path: Path) -> tuple[bool, str]:
+    """Run the smoke task's pytest. Returns (resolved, output)."""
+    res = subprocess.run(
+        ["python", "-m", "pytest", "test_math_utils.py", "-q"],
+        cwd=repo_path, capture_output=True, text=True, check=False, timeout=60,
+    )
+    return res.returncode == 0, res.stdout + res.stderr
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -383,11 +452,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", choices=VALID_CONFIGS, action="append",
                    help="one of baseline / lsp / code_graph; repeatable. "
                         "Default: all three.")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Use the stub LLM and a synthetic 1-task dataset; no API key needed.")
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--dry-run", action="store_true",
+                      help="Stub LLM + no-op synthetic task. No API key needed.")
+    mode.add_argument("--real-run", action="store_true",
+                      help="Real LLM + a tiny synthetic 'add' bug task. "
+                           "Validates real token accounting and the actual "
+                           "model loop without paying for SWE-bench. "
+                           "Requires an LLM API key for the chosen --model.")
     p.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     p.add_argument("--trajectories", type=Path, default=DEFAULT_CACHE_DIR / "trajectories")
-    p.add_argument("--model", default="anthropic/claude-sonnet-4-5")
+    p.add_argument("--model", default="anthropic/claude-sonnet-4-5",
+                   help="litellm model name. Examples: "
+                        "'anthropic/claude-sonnet-4-5' (needs ANTHROPIC_API_KEY); "
+                        "'github/openai/gpt-4o-mini' (free GitHub Models, "
+                        "needs GITHUB_TOKEN with models:read scope); "
+                        "'github_copilot/gpt-4o' (uses your Copilot session, "
+                        "device-code OAuth on first call).")
     p.add_argument("--step-limit", type=int, default=50)
     p.add_argument("--cost-limit", type=float, default=3.0)
     p.add_argument("--wall-time", type=int, default=1200)
@@ -395,36 +476,55 @@ def main(argv: list[str] | None = None) -> int:
 
     configs = args.config or list(VALID_CONFIGS)
 
-    if not args.dry_run:
-        sys.stderr.write(
-            "Non-dry-run mode is not wired to SWE-bench yet — that lands when "
-            "the Anthropic key is available. Use --dry-run for now.\n"
-        )
-        return 2
-
     import tempfile
 
     with tempfile.TemporaryDirectory() as td:
-        task = _make_dry_run_task(Path(td) / "repo")
-        rows = run_batch(
-            [task],
-            configs,
-            results_path=args.results,
-            trajectories_dir=args.trajectories,
-            model_name=args.model,
-            step_limit=args.step_limit,
-            cost_limit=args.cost_limit,
-            wall_time_limit_seconds=args.wall_time,
-            dry_run=True,
-        )
+        if args.dry_run:
+            task_fn = _make_dry_run_task
+            benchmark = "dry_run"
+            dry_run = True
+        else:
+            task_fn = _make_synthetic_smoke_task
+            benchmark = "synthetic_smoke"
+            dry_run = False
+
+        # Re-prep the repo per config so configs don't pollute each other's
+        # working trees. Each config sees the original buggy code.
+        rows: list[dict[str, Any]] = []
+        verify_results: dict[str, bool] = {}
+        for cfg in configs:
+            repo_path = Path(td) / f"repo-{cfg}"
+            task = task_fn(repo_path)
+            cfg_rows = run_batch(
+                [task],
+                [cfg],
+                benchmark=benchmark,
+                results_path=args.results,
+                trajectories_dir=args.trajectories,
+                model_name=args.model,
+                step_limit=args.step_limit,
+                cost_limit=args.cost_limit,
+                wall_time_limit_seconds=args.wall_time,
+                dry_run=dry_run,
+                defer_jsonl=args.real_run,
+            )
+            rows.extend(cfg_rows)
+            if args.real_run:
+                from bench.metrics import append_jsonl
+
+                ok, _ = _verify_smoke_task(repo_path)
+                verify_results[cfg] = ok
+                cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
+                append_jsonl(args.results, cfg_rows[-1]["metrics"])
 
     for row in rows:
         m = row["metrics"]
+        verdict = f" outcome={m.outcome}" if m.outcome else ""
         print(
             f"[{m.config:>10}] {m.task_id} "
             f"exit={row['exit_status']} "
             f"in={m.input_tokens} out={m.output_tokens} "
-            f"tool_calls={m.tool_calls_total} wall={m.wall_clock_sec}s"
+            f"tool_calls={m.tool_calls_total} wall={m.wall_clock_sec}s{verdict}"
         )
     return 0
 
