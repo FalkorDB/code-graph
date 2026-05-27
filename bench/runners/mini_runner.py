@@ -97,6 +97,72 @@ message that contains a unified diff of your changes inside a fenced
 """
 
 
+# The lsp / code_graph configs use a sharper template that mandates an
+# initial tool call. Smoke #2 showed Claude reads the system preamble's
+# "use cg/lsp first" guidance and then ignores it; embedding the
+# requirement in the per-instance task description is more obtrusive.
+
+INSTANCE_TEMPLATE_LSP = """\
+You are working in the repository at {{cwd}}.
+
+The task to solve:
+
+{{task}}
+
+**Required workflow.** Before reading or editing any file, your first
+two bash commands MUST be:
+
+1. `grep -rn "<a symbol named in the task description>" --include='*.py' .`
+   to locate a `file:line` for jedi to anchor on.
+2. `lsp goto-definition --file <file> --line <line> --col <col>` to
+   resolve the true definition.
+
+Then use `lsp find-references` whenever you would have used a recursive
+grep, and `lsp document-symbols` whenever you would have run a textual
+outline pass. Reach for plain grep/sed/cat only after you've exhausted
+the LSP for navigation.
+
+When you believe the task is complete, finish your turn with a final
+message that contains a unified diff of your changes inside a fenced
+``` block, then exit. Do not commit; the harness reads the diff via
+`git diff`.
+"""
+
+INSTANCE_TEMPLATE_CODE_GRAPH = """\
+You are working in the repository at {{cwd}}.
+The code-graph service has already indexed this repository under the
+name `$REPO_NAME` (use the env var literally).
+
+The task to solve:
+
+{{task}}
+
+**Required workflow.** Before reading or editing any file, your first
+bash command MUST be:
+
+  `cg find-symbol --repo "$REPO_NAME" --name <a symbol named in the task description>`
+
+then use `cg get-neighbors --repo "$REPO_NAME" --ids <id>` to expand
+relationships before doing any textual search. After every file edit,
+run `cg note-edit --repo "$REPO_NAME" --path <relpath>` so subsequent
+graph queries reflect your change. Reach for grep/sed/cat only for
+content reading after `cg` has located the right place.
+
+When you believe the task is complete, finish your turn with a final
+message that contains a unified diff of your changes inside a fenced
+``` block, then exit. Do not commit; the harness reads the diff via
+`git diff`.
+"""
+
+
+def load_instance_template(config: str) -> str:
+    if config == "lsp":
+        return INSTANCE_TEMPLATE_LSP
+    if config == "code_graph":
+        return INSTANCE_TEMPLATE_CODE_GRAPH
+    return INSTANCE_TEMPLATE
+
+
 def load_preamble(config: str) -> str:
     """Read the per-config system preamble; fall back to a generic stub."""
     path = TOOLS_DIR / config / "system_preamble.md"
@@ -310,7 +376,7 @@ def run_task(
         model,
         env,
         system_template=preamble,
-        instance_template=INSTANCE_TEMPLATE,
+        instance_template=load_instance_template(config),
         step_limit=step_limit,
         cost_limit=cost_limit,
         wall_time_limit_seconds=wall_time_limit_seconds,
