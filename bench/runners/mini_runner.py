@@ -522,6 +522,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--stage", choices=("smoke", "calibration", "headline"),
                    default="smoke",
                    help="SWE-bench stage (sample size). Only used with --swe-bench.")
+    p.add_argument("--limit", type=int, default=None,
+                   help="Cap number of instances sampled. Overrides --stage size "
+                        "for quick checks (e.g. --limit 1).")
     p.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     p.add_argument("--trajectories", type=Path, default=DEFAULT_CACHE_DIR / "trajectories")
     p.add_argument("--model", default="anthropic/claude-sonnet-4-5",
@@ -550,7 +553,10 @@ def main(argv: list[str] | None = None) -> int:
         from bench.metrics import append_jsonl
 
         insts = sample_instances(load_instances(), stage=args.stage)
-        print(f"[swe-bench] stage={args.stage} sampling {len(insts)} instances")
+        if args.limit is not None:
+            insts = insts[: args.limit]
+        print(f"[swe-bench] stage={args.stage} running {len(insts)} instances "
+              f"x {len(configs)} configs = {len(insts) * len(configs)} trajectories")
         for inst in insts:
             for cfg in configs:
                 # Fresh worktree per (instance, config) to avoid cross-talk.
