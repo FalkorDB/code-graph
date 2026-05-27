@@ -23,7 +23,7 @@ from .prompts import (CYPHER_GEN_SYSTEM,
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
-def _define_ontology() -> Ontology:
+def define_ontology() -> Ontology:
     # Build ontology:
     ontology = Ontology()
 
@@ -233,14 +233,14 @@ def _define_ontology() -> Ontology:
     return ontology
 
 # Global ontology
-ontology = _define_ontology()
+ontology = define_ontology()
 
 def _create_kg_agent(repo_name: str):
     model_name = os.getenv('MODEL_NAME', 'gemini/gemini-flash-lite-latest')
 
     model = LiteModel(model_name)
 
-    #ontology = _define_ontology()
+    #ontology = define_ontology()
     code_graph_kg = KnowledgeGraph(
         name=repo_name,
         ontology=ontology,
