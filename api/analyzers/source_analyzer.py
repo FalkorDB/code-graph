@@ -134,7 +134,27 @@ class SourceAnalyzer():
         else:
             lsps[".java"] = NullLanguageServer()
         if any(path.rglob('*.py')):
-            config = MultilspyConfig.from_dict({"code_language": "python", "environment_path": f"{path}/venv"})
+            import sys
+            py_venv = path / "venv"
+            py_dotvenv = path / ".venv"
+            if py_venv.is_dir() and (py_venv / "bin" / "python").exists():
+                env_path = str(py_venv)
+            elif py_dotvenv.is_dir() and (py_dotvenv / "bin" / "python").exists():
+                env_path = str(py_dotvenv)
+            else:
+                # Fall back to the host's Python environment so jedi has a
+                # valid interpreter to introspect; otherwise every
+                # request_definition() raises InvalidPythonEnvironment and
+                # we'd silently produce a graph with zero CALLS edges.
+                env_path = str(Path(sys.executable).resolve().parent.parent)
+                logging.info(
+                    "No venv at %s; falling back to host env %s for jedi LSP",
+                    path, env_path,
+                )
+            config = MultilspyConfig.from_dict({
+                "code_language": "python",
+                "environment_path": env_path,
+            })
             lsps[".py"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".py"] = NullLanguageServer()
