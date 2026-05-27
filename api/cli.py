@@ -172,6 +172,9 @@ def index(
     repo: Optional[str] = typer.Option(
         None, "--repo", help="Graph name (defaults to folder name)"
     ),
+    branch: Optional[str] = typer.Option(
+        None, "--branch", help="Branch to associate with this index (auto-detected from git checkout when omitted; '_default' for non-git paths)"
+    ),
 ) -> None:
     """Index a local folder into the knowledge graph."""
     from .project import Project
@@ -204,14 +207,14 @@ def index(
 
     _stderr(f"Indexing {folder} as '{name}'…")
     try:
-        project = Project(name, folder, url)
+        project = Project(name, folder, url, branch=branch)
         graph = project.analyze_sources(ignore=list(ignore) if ignore else [])
         stats = graph.stats()
     except Exception as e:
         _json_error(str(e))
 
-    _stderr(f"Done — {stats['node_count']} nodes, {stats['edge_count']} edges")
-    _json_out({"status": "ok", "repo": name, **stats})
+    _stderr(f"Done — {stats['node_count']} nodes, {stats['edge_count']} edges (branch={project.branch})")
+    _json_out({"status": "ok", "repo": name, "branch": project.branch, **stats})
 
 
 # ── index-repo ─────────────────────────────────────────────────────────
@@ -223,6 +226,9 @@ def index_repo(
     ignore: Optional[List[str]] = typer.Option(
         None, "--ignore", help="Directories to ignore (repeatable)"
     ),
+    branch: Optional[str] = typer.Option(
+        None, "--branch", help="Branch to associate with this index (auto-detected from the cloned checkout when omitted)"
+    ),
 ) -> None:
     """Clone a git repository and index it into the knowledge graph."""
     from .project import Project
@@ -233,14 +239,14 @@ def index_repo(
         import io
         import contextlib
         with contextlib.redirect_stdout(io.StringIO()):
-            project = Project.from_git_repository(url)
+            project = Project.from_git_repository(url, branch=branch)
         graph = project.analyze_sources(ignore=list(ignore) if ignore else [])
         stats = graph.stats()
     except Exception as e:
         _json_error(str(e))
 
-    _stderr(f"Done — {stats['node_count']} nodes, {stats['edge_count']} edges")
-    _json_out({"status": "ok", "repo": project.name, **stats})
+    _stderr(f"Done — {stats['node_count']} nodes, {stats['edge_count']} edges (branch={project.branch})")
+    _json_out({"status": "ok", "repo": project.name, "branch": project.branch, **stats})
 
 
 # ── list ───────────────────────────────────────────────────────────────
@@ -248,7 +254,7 @@ def index_repo(
 
 @app.command("list")
 def list_repos() -> None:
-    """List all indexed repositories."""
+    """List all indexed (project, branch) pairs."""
     from .graph import get_repos
 
     try:
@@ -257,6 +263,30 @@ def list_repos() -> None:
         _json_error(str(e))
 
     _json_out({"repos": repos})
+
+
+# ── migrate ────────────────────────────────────────────────────────────
+
+
+@app.command("migrate")
+def migrate(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without performing them"),
+) -> None:
+    """Promote legacy (pre-T17) graphs and Redis keys into the per-branch namespace.
+
+    Renames each legacy ``<project>`` graph to ``code:<project>:_default``,
+    each ``{project}_info`` Redis key to ``{project}:_default_info``, and
+    each ``{project}_git`` graph to ``{project}:_default_git``. Idempotent.
+    """
+
+    from .migrations.per_branch import run_migration
+
+    try:
+        result = run_migration(dry_run=dry_run)
+    except Exception as e:
+        _json_error(str(e))
+
+    _json_out(result)
 
 
 # ── search ─────────────────────────────────────────────────────────────
@@ -268,18 +298,24 @@ def search(
     repo: Optional[str] = typer.Option(
         None, "--repo", help="Repository name (defaults to CWD name)"
     ),
+    branch: Optional[str] = typer.Option(
+        None, "--branch", help="Branch (auto-detected from CWD; '_default' for non-git paths)"
+    ),
 ) -> None:
     """Search for entities by prefix (full-text search)."""
     from .graph import Graph
+    from .project import detect_branch
 
     name = _default_repo(repo)
+    if branch is None:
+        branch = detect_branch(Path.cwd())
     try:
-        g = Graph(name)
+        g = Graph(name, branch=branch)
         results = g.prefix_search(query)
     except Exception as e:
         _json_error(str(e))
 
-    _json_out({"repo": name, "results": results})
+    _json_out({"repo": name, "branch": branch, "results": results})
 
 
 # ── neighbors ──────────────────────────────────────────────────────────
@@ -297,18 +333,24 @@ def neighbors(
     label: Optional[str] = typer.Option(
         None, "--label", help="Filter by destination label (e.g. Function, Class)"
     ),
+    branch: Optional[str] = typer.Option(
+        None, "--branch", help="Branch (auto-detected from CWD; '_default' for non-git paths)"
+    ),
 ) -> None:
     """Get neighboring entities of the given node(s)."""
     from .graph import Graph
+    from .project import detect_branch
 
     name = _default_repo(repo)
+    if branch is None:
+        branch = detect_branch(Path.cwd())
     try:
-        g = Graph(name)
+        g = Graph(name, branch=branch)
         result = g.get_neighbors(node_ids, rel=rel, lbl=label)
     except Exception as e:
         _json_error(str(e))
 
-    _json_out({"repo": name, **result})
+    _json_out({"repo": name, "branch": branch, **result})
 
 
 # ── paths ──────────────────────────────────────────────────────────────
@@ -321,18 +363,24 @@ def paths(
     repo: Optional[str] = typer.Option(
         None, "--repo", help="Repository name (defaults to CWD name)"
     ),
+    branch: Optional[str] = typer.Option(
+        None, "--branch", help="Branch (auto-detected from CWD; '_default' for non-git paths)"
+    ),
 ) -> None:
     """Find call-chain paths between two nodes."""
     from .graph import Graph
+    from .project import detect_branch
 
     name = _default_repo(repo)
+    if branch is None:
+        branch = detect_branch(Path.cwd())
     try:
-        g = Graph(name)
+        g = Graph(name, branch=branch)
         result = g.find_paths(src, dest)
     except Exception as e:
         _json_error(str(e))
 
-    _json_out({"repo": name, "paths": result})
+    _json_out({"repo": name, "branch": branch, "paths": result})
 
 
 # ── info ───────────────────────────────────────────────────────────────
@@ -343,20 +391,26 @@ def info(
     repo: Optional[str] = typer.Option(
         None, "--repo", help="Repository name (defaults to CWD name)"
     ),
+    branch: Optional[str] = typer.Option(
+        None, "--branch", help="Branch (auto-detected from CWD; '_default' for non-git paths)"
+    ),
 ) -> None:
     """Show repository statistics and metadata."""
     from .graph import Graph
     from .info import get_repo_info
+    from .project import detect_branch
 
     name = _default_repo(repo)
+    if branch is None:
+        branch = detect_branch(Path.cwd())
     try:
-        g = Graph(name)
+        g = Graph(name, branch=branch)
         stats = g.stats()
-        metadata = get_repo_info(name) or {}
+        metadata = get_repo_info(name, branch) or {}
     except Exception as e:
         _json_error(str(e))
 
-    _json_out({"repo": name, **stats, "metadata": metadata})
+    _json_out({"repo": name, "branch": branch, **stats, "metadata": metadata})
 
 
 if __name__ == "__main__":

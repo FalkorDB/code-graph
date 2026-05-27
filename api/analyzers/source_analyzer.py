@@ -208,21 +208,26 @@ class SourceAnalyzer():
 
         logging.info("Done analyzing path")
 
-    def analyze_local_repository(self, path: str, ignore: Optional[list[str]] = None) -> Graph:
+    def analyze_local_repository(self, path: str, ignore: Optional[list[str]] = None, branch: Optional[str] = None) -> Graph:
         """
         Analyze a local Git repository.
 
         Args:
             path (str): Path to a local git repository
             ignore (List(str)): List of paths to skip
+            branch (Optional[str]): Branch name. Auto-detected from the
+                checkout when ``None``.
         """
         if ignore is None:
             ignore = []
 
         from pygit2.repository import Repository
+        from ..project import detect_branch
 
         proj_name = Path(path).name
-        graph = Graph(proj_name)
+        if branch is None:
+            branch = detect_branch(Path(path))
+        graph = Graph(proj_name, branch=branch)
         self.analyze_local_folder(path, graph, ignore)
 
         # Save processed commit hash to the DB
