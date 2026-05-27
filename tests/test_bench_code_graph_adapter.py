@@ -80,6 +80,26 @@ def test_find_symbol_filters_for_exact_match():
     assert all(item["name"] == "Foo" for item in out)
 
 
+def test_find_symbol_reads_nested_properties_name():
+    # Regression: the real /api/auto_complete payload nests `name` under
+    # `properties` (FalkorDB node properties). Before this fix every
+    # exact-name lookup returned [], so the agent fell back to bash grep.
+    resp = httpx.Response(
+        200,
+        json={"completions": [
+            {"id": 1, "labels": ["Function"],
+             "properties": {"name": "FooBar", "path": "/a.py"}},
+            {"id": 2, "labels": ["Function"],
+             "properties": {"name": "Foo", "path": "/b.py"}},
+            {"id": 3, "labels": ["Function"],
+             "properties": {"name": "Foo", "path": "/c.py"}},
+        ]},
+    )
+    with _client_with({"POST /api/auto_complete": resp}) as c:
+        out = c.find_symbol("r", "Foo")
+    assert [item["id"] for item in out] == [2, 3]
+
+
 def test_note_edit_calls_analyze_folder_and_reports_path():
     resp = httpx.Response(200, json={"status": "ok"})
     with _client_with({"POST /api/analyze_folder": resp}) as c:

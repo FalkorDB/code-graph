@@ -38,6 +38,10 @@ bench = [
 markers = [
     "slow: marks tests that spawn external subprocesses (LSP servers, FalkorDB, etc.); skip with -m 'not slow'",
 ]
+# Keep pytest from walking into per-instance bench worktrees that contain
+# their own copies of pytest source — collecting from those breaks the
+# host pytest's AST rewriter.
+norecursedirs = ["bench/cache", ".venv", "node_modules", "build", "dist", "*.egg-info"]
 
 [tool.setuptools.packages.find]
 where = ["."]
