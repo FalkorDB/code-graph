@@ -22,8 +22,16 @@ from . import tools  # noqa: F401, E402
 def main() -> None:
     """Run the MCP server over stdio.
 
-    Console-script entry point for ``cgraph-mcp``.
+    Console-script entry point for ``cgraph-mcp``. Runs the T12
+    auto-init helpers first so a freshly-cloned user gets a working
+    FalkorDB without manual `cgraph ensure-db`, and (opt-in via
+    ``CODE_GRAPH_AUTO_INDEX``) an indexed CWD without manual
+    `index_repo`.
     """
+    from .auto_init import ensure_falkordb, maybe_auto_index
+
+    ensure_falkordb()
+    maybe_auto_index()
     app.run(transport="stdio")
 
 
