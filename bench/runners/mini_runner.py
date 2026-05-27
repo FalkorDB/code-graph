@@ -448,6 +448,18 @@ def _verify_smoke_task(repo_path: Path) -> tuple[bool, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Load .env from repo root if present, so users don't have to export
+    # provider creds manually. litellm picks up ANTHROPIC_API_KEY /
+    # ANTHROPIC_API_BASE / AZURE_API_KEY / GITHUB_API_KEY from process env.
+    try:
+        from dotenv import load_dotenv
+
+        env_path = REPO_ROOT / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
+    except ImportError:
+        pass
+
     p = argparse.ArgumentParser(description="code-graph benchmark runner")
     p.add_argument("--config", choices=VALID_CONFIGS, action="append",
                    help="one of baseline / lsp / code_graph; repeatable. "
