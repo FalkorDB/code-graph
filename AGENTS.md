@@ -154,3 +154,26 @@ cgraph info [--repo <name>]              # Repo stats + metadata
 ```
 
 `--repo` defaults to the current directory name. Claude Code skill in `skills/code-graph/`.
+
+## MCP server (for agents)
+
+`cgraph-mcp` exposes the code graph over MCP stdio. Eight tools:
+`index_repo`, `search_code`, `get_callers`, `get_callees`,
+`get_dependencies`, `impact_analysis`, `find_path`, `ask`.
+
+Drop the canonical agent guidance into any repo:
+
+```bash
+cgraph init-agent             # writes CLAUDE.md + .cursorrules
+cgraph init-agent --force     # overwrite existing files
+```
+
+See `api/mcp/templates/claude_mcp_section.md` for the full tool table
+and rules of thumb (start with `search_code`; prefer structural tools
+over `ask`; run `impact_analysis` before refactoring).
+
+Environment:
+
+- `CODE_GRAPH_AUTO_INDEX=true` — auto-index CWD on MCP startup.
+- `CGRAPH_MODE=mcp` — run `cgraph-mcp` instead of the FastAPI web
+  server when using the Docker image.

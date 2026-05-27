@@ -413,5 +413,47 @@ def info(
     _json_out({"repo": name, "branch": branch, **stats, "metadata": metadata})
 
 
+# ── init-agent ─────────────────────────────────────────────────────────
+
+
+_TEMPLATES_DIR = Path(__file__).parent / "mcp" / "templates"
+
+
+@app.command("init-agent")
+def init_agent(
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite existing CLAUDE.md / .cursorrules."
+    ),
+) -> None:
+    """Drop AI-agent guidance files (CLAUDE.md, .cursorrules) into CWD.
+
+    Copies the canonical code-graph MCP guidance bundled with this
+    package so any repo can announce the tools to Cursor and Claude
+    Code with one command.
+    """
+    targets = {
+        "CLAUDE.md": _TEMPLATES_DIR / "claude_mcp_section.md",
+        ".cursorrules": _TEMPLATES_DIR / "cursorrules.template",
+    }
+
+    cwd = Path.cwd()
+    if not force:
+        existing = [name for name in targets if (cwd / name).exists()]
+        if existing:
+            _json_error(
+                f"Refusing to overwrite existing files: {', '.join(existing)}. "
+                "Re-run with --force to clobber."
+            )
+
+    written: List[str] = []
+    for name, template in targets.items():
+        dest = cwd / name
+        dest.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
+        written.append(str(dest))
+        _stderr(f"Wrote {dest}")
+
+    _json_out({"status": "ok", "written": written, "force": force})
+
+
 if __name__ == "__main__":
     app()
