@@ -421,3 +421,85 @@ async def search_code(
     finally:
         await g.close()
     return [_node_summary(node) for node in raw[:limit]]
+
+
+# ---------------------------------------------------------------------------
+# T6 — impact_analysis (variable-depth Cypher with DISTINCT for cycle safety)
+# ---------------------------------------------------------------------------
+
+
+IMPACT_MAX_DEPTH = 10
+"""Hard cap on traversal depth — passed values above this are silently
+clamped. Prevents pathological queries (e.g. depth=999) from hammering
+FalkorDB while still letting agents request "deep" impact without
+hitting an error."""
+
+
+def _clamp_depth(depth: Any) -> int:
+    """Coerce ``depth`` to ``1..IMPACT_MAX_DEPTH``. Strings accepted."""
+    if isinstance(depth, bool):
+        raise ValueError(f"depth must be an integer, got bool: {depth!r}")
+    if isinstance(depth, str) and depth.lstrip("-").isdigit():
+        depth = int(depth)
+    if not isinstance(depth, int):
+        raise ValueError(f"depth must be an integer, got: {depth!r}")
+    if depth < 1:
+        return 1
+    if depth > IMPACT_MAX_DEPTH:
+        return IMPACT_MAX_DEPTH
+    return depth
+
+
+@app.tool(
+    name="impact_analysis",
+    description=(
+        "Transitive call-graph impact for refactoring: "
+        "`direction='IN'` returns all upstream callers (what breaks if you "
+        "change this symbol); `direction='OUT'` returns all downstream "
+        "callees (what this symbol indirectly depends on). Traverses only "
+        f"CALLS edges. Depth is clamped to {IMPACT_MAX_DEPTH}; cycles are "
+        "deduplicated via Cypher DISTINCT (each node appears at most once)."
+    ),
+)
+async def impact_analysis(
+    symbol_id: Any,
+    project: str,
+    branch: Optional[str] = None,
+    direction: str = "IN",
+    depth: int = 3,
+) -> list[dict[str, Any]]:
+    node_id = _coerce_node_id(symbol_id)
+    eff_depth = _clamp_depth(depth)
+
+    if direction == "IN":
+        # Upstream callers: (impacted) -[:CALLS*]-> (n)
+        q = (
+            f"MATCH (n)<-[:CALLS*1..{eff_depth}]-(impacted) "
+            f"WHERE ID(n) = $sid "
+            f"RETURN DISTINCT impacted"
+        )
+    elif direction == "OUT":
+        # Downstream callees: (n) -[:CALLS*]-> (impacted)
+        q = (
+            f"MATCH (n)-[:CALLS*1..{eff_depth}]->(impacted) "
+            f"WHERE ID(n) = $sid "
+            f"RETURN DISTINCT impacted"
+        )
+    else:
+        raise ValueError(
+            f"direction must be 'IN' (upstream) or 'OUT' (downstream), "
+            f"got: {direction!r}"
+        )
+
+    g = _project_arg(project, branch)
+    try:
+        res = await g._query(q, {"sid": node_id})
+    finally:
+        await g.close()
+
+    out: list[dict[str, Any]] = []
+    for row in res.result_set:
+        entry = _node_summary(row[0])
+        entry["direction"] = direction
+        out.append(entry)
+    return out
