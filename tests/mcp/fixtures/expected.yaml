@@ -1,0 +1,48 @@
+# MCP fixture assertion contract.
+#
+# Anything declared here is treated as load-bearing by tests/mcp/*. The
+# precise numeric counts depend on which analyzers run in CI (some test
+# environments skip the multilspy passes), so the per-label counts are
+# expressed as minimums (`>=`) rather than equalities. Named-symbol
+# assertions are exact.
+
+# The graph is named after the fixture directory (per Project.from_local_repository).
+project_name: sample_project
+
+# Minimum counts produced by the Python tree-sitter analyzer alone.
+# Java + C# add more when multilspy is available.
+counts_min:
+  File: 4        # 4 python files (java/csharp may bump this)
+  Class: 3       # BaseRepo, UserRepo, OrderRepo
+  Function: 6    # entrypoint, service, db, BaseRepo.repo, UserRepo.repo, OrderRepo.repo
+
+# Named callers / callees (used by T5 — get_callers / get_callees).
+calls:
+  service:
+    callers: ["entrypoint"]
+    # service() instantiates UserRepo + OrderRepo and calls .repo() on each;
+    # the analyzer encodes that as CALLS edges on the method.
+    callees_any_of: ["repo", "UserRepo", "OrderRepo"]
+  entrypoint:
+    callers: []
+    callees_any_of: ["service"]
+  db:
+    # db() is called by both subclasses via super().repo() -> BaseRepo.repo().
+    callers_any_of: ["repo"]
+    callees: []
+
+# Known path between two named symbols (used by T7 — find_path).
+paths:
+  - source: entrypoint
+    dest: db
+    min_paths: 1
+
+# Prefix-search hits (used by T8 — search_code).
+search_prefixes:
+  ent:
+    must_include: ["entrypoint"]
+  serv:
+    must_include: ["service"]
+  Repo:
+    # case-insensitive prefix match on Searchable label
+    must_include_any_of: ["BaseRepo", "UserRepo", "OrderRepo"]

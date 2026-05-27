@@ -383,6 +383,7 @@ test = [
 dev = [
     { name = "pytest" },
     { name = "pytest-anyio" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -416,6 +417,7 @@ provides-extras = ["test"]
 dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-anyio", specifier = ">=0.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
 [[package]]
