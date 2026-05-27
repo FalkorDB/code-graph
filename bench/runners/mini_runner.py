@@ -281,10 +281,19 @@ def _ensure_indexed(repo_path: Path) -> None:
                 print(f"[index] {repo_name} already indexed; skip")
                 return
         print(f"[index] analyzing {repo_path} ...")
+        # Default ignore set: auto-generated / vendored / pathological dirs
+        # that either contain no useful symbols or send jedi into a
+        # multi-hour resolve loop (e.g. sympy/integrals/rubi/rules has
+        # 3000-line files with hundreds of unresolvable symbols per line).
+        default_ignore = [
+            ".git", "venv", ".venv", "node_modules", "__pycache__",
+            "rubi/rules",  # sympy: blocks indexing for ~hours otherwise
+            "build", "dist", ".tox", ".eggs",
+        ]
         with httpx.Client(timeout=1800.0, headers=headers) as c:
             r = c.post(
                 f"{base}/api/analyze_folder",
-                json={"path": str(repo_path), "ignore": []},
+                json={"path": str(repo_path), "ignore": default_ignore},
             )
             if r.status_code != 200:
                 raise RuntimeError(
@@ -708,6 +717,13 @@ def main(argv: list[str] | None = None) -> int:
               f"x {len(configs)} configs = {len(insts) * len(configs)} trajectories")
         for inst in insts:
             for cfg in configs:
+                # Resume support: if a trajectory file for this (instance, cfg)
+                # already exists, skip the run entirely. Lets us recover from
+                # crashes / kills without re-spending tokens on completed work.
+                existing_traj = args.trajectories / f"{inst.instance_id}__{cfg}.json"
+                if existing_traj.exists():
+                    print(f"[resume] {inst.instance_id}/{cfg}: trajectory exists, skip")
+                    continue
                 # Fresh worktree per (instance, config) to avoid cross-talk.
                 wt = prepare_worktree(inst)
                 # Rename so each cfg gets a distinct path.
