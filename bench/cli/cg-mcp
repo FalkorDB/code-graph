@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Bash-callable entry point for the code-graph MCP CLI. Mirrors `cg`
+# but speaks JSON-RPC over stdio to a spawned `cgraph-mcp` server
+# instead of HTTP to the FastAPI service. Runner adds bench/cli to PATH.
+exec "${BENCH_PYTHON:-python3}" -m bench.cli.cg_mcp "$@"
