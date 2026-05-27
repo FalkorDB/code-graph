@@ -1,0 +1,76 @@
+name: MCP tests
+
+on:
+  push:
+    branches: ["main", "staging", "mcp/**"]
+    paths:
+      - "api/mcp/**"
+      - "tests/mcp/**"
+      - "api/llm.py"
+      - "api/graph.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/mcp-tests.yml"
+  pull_request:
+    paths:
+      - "api/mcp/**"
+      - "tests/mcp/**"
+      - "api/llm.py"
+      - "api/graph.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/mcp-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcp-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    env:
+      FALKORDB_HOST: localhost
+      FALKORDB_PORT: "6379"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install backend dependencies
+        run: uv sync --all-extras
+
+      - name: Verify FalkorDB reachable
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y redis-tools
+          redis-cli -h localhost -p 6379 ping
+
+      - name: Run MCP test suite
+        run: uv run pytest tests/mcp/ -v
