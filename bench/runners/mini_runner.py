@@ -132,13 +132,54 @@ def config_env(config: str, repo_path: Path) -> dict[str, str]:
     )
     # Make `python -m bench.cli.cg ...` work too, regardless of cwd.
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    # Pin the python the bash shims invoke to this process's interpreter so
+    # the bench deps (requests, multilspy, ...) are available.
+    env["BENCH_PYTHON"] = sys.executable
     if config == "lsp":
         env["LSP_REPO_ROOT"] = str(repo_path)
         env.setdefault("LSP_LANGUAGE", "python")
     elif config == "code_graph":
         # The runner is responsible for ensuring the service is up.
         env.setdefault("CODEGRAPH_URL", "http://127.0.0.1:5000")
+        # The agent's preamble references $REPO_NAME — set it to the
+        # worktree dirname, which is what analyze_folder used as the id.
+        env["REPO_NAME"] = repo_path.name
     return env
+
+
+def _ensure_indexed(repo_path: Path) -> None:
+    """Trigger /api/analyze_folder so `cg --repo <dirname>` returns data.
+
+    The code-graph backend uses `Path(folder).name` as the repo identifier;
+    each (instance, config) worktree has a unique directory name like
+    `pytest-dev__pytest-6202__code_graph`, which becomes the `--repo` value
+    the agent passes to `cg`. We skip indexing if the repo already exists
+    in FalkorDB (cheap precheck against /api/list_repos).
+    """
+    import httpx
+
+    base = os.environ.get("CODEGRAPH_URL", "http://127.0.0.1:5000").rstrip("/")
+    repo_name = repo_path.name
+    token = os.environ.get("SECRET_TOKEN") or os.environ.get("CODEGRAPH_TOKEN")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        with httpx.Client(timeout=10.0, headers=headers) as c:
+            r = c.get(f"{base}/api/list_repos")
+            if r.status_code == 200 and repo_name in (r.json() or {}).get("repositories", []):
+                print(f"[index] {repo_name} already indexed; skip")
+                return
+        print(f"[index] analyzing {repo_path} ...")
+        with httpx.Client(timeout=600.0, headers=headers) as c:
+            r = c.post(
+                f"{base}/api/analyze_folder",
+                json={"path": str(repo_path), "ignore": []},
+            )
+            if r.status_code != 200:
+                print(f"[index] WARN analyze_folder returned {r.status_code}: {r.text[:200]}")
+            else:
+                print(f"[index] indexed {repo_name}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[index] WARN failed to index {repo_name}: {exc!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -521,6 +562,12 @@ def main(argv: list[str] | None = None) -> int:
                     shutil.rmtree(cfg_wt)
                 wt.rename(cfg_wt)
                 task = instance_to_task(inst, cfg_wt)
+                # For the code-graph track, the agent's `cg` commands query
+                # FalkorDB by repo name (= worktree dir name). The graph must
+                # exist before the task runs, otherwise every `cg find-symbol`
+                # call returns nothing and the agent abandons the tool.
+                if cfg == "code_graph":
+                    _ensure_indexed(cfg_wt)
                 cfg_rows = run_batch(
                     [task],
                     [cfg],
