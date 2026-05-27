@@ -281,17 +281,19 @@ def _ensure_indexed(repo_path: Path) -> None:
                 print(f"[index] {repo_name} already indexed; skip")
                 return
         print(f"[index] analyzing {repo_path} ...")
-        with httpx.Client(timeout=600.0, headers=headers) as c:
+        with httpx.Client(timeout=1800.0, headers=headers) as c:
             r = c.post(
                 f"{base}/api/analyze_folder",
                 json={"path": str(repo_path), "ignore": []},
             )
             if r.status_code != 200:
-                print(f"[index] WARN analyze_folder returned {r.status_code}: {r.text[:200]}")
-            else:
-                print(f"[index] indexed {repo_name}")
-    except Exception as exc:  # noqa: BLE001
-        print(f"[index] WARN failed to index {repo_name}: {exc!r}")
+                raise RuntimeError(
+                    f"analyze_folder returned {r.status_code}: {r.text[:300]}. "
+                    f"Check ALLOWED_ANALYSIS_DIR on the API server covers {repo_path}."
+                )
+            print(f"[index] indexed {repo_name}")
+    except Exception as exc:
+        raise RuntimeError(f"failed to index {repo_name} at {repo_path}: {exc}") from exc
 
 
 def _ensure_indexed_mcp(repo_path: Path) -> None:
