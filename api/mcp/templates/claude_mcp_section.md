@@ -8,7 +8,7 @@ need to understand how symbols connect.
 
 | Tool | Call this when… | Example |
 |---|---|---|
-| `index_repo(path)` | **First** thing in a new repo; or after large changes outside your edits. | `index_repo(path=".")` |
+| `index_repo(path_or_url, branch?)` | **First** thing in a new repo; or after large changes outside your edits. Project name is **derived from the folder or repo URL** — read it back from the response. | `index_repo(path_or_url=".")` |
 | `search_code(prefix, project)` | You know part of a symbol name and need its id. | `search_code(prefix="processPay", project="myrepo")` |
 | `get_callers(symbol_id, project)` | "Who calls this?" — refactoring a function, tracking down a regression. | `get_callers(symbol_id=42, project="myrepo")` |
 | `get_callees(symbol_id, project)` | "What does this call?" — understanding a function before editing it. | `get_callees(symbol_id=42, project="myrepo")` |
@@ -27,6 +27,11 @@ need to understand how symbols connect.
    the answer — the transitive closure often surprises you.
 4. **`branch` is optional** but pass it when working on a feature branch
    so you query the right per-branch index.
+5. **Response shape.** Tools that return collections (`search_code`,
+   `get_callers`, `get_callees`, `get_dependencies`, `find_path`,
+   `impact_analysis`) put the array in `structuredContent.result` per
+   the MCP spec. The text content is the same JSON for convenience.
+   `index_repo` and `ask` return a single object.
 
 ## Environment
 
