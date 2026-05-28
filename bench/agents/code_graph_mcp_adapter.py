@@ -30,7 +30,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-DEFAULT_TIMEOUT_SEC = 60.0
+DEFAULT_TIMEOUT_SEC = 300.0
 
 
 def _env_for_mcp() -> dict[str, str]:

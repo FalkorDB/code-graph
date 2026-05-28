@@ -47,7 +47,7 @@ def _print(obj: Any) -> None:
 
 def _timeout() -> float:
     try:
-        return float(os.getenv("CGRAPH_MCP_TIMEOUT_SEC", "60"))
+        return float(os.getenv("CGRAPH_MCP_TIMEOUT_SEC", "300"))
     except ValueError:
         return 60.0
 
