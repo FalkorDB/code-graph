@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from .entities import *
 from typing import Optional
@@ -10,6 +11,56 @@ import logging
 logging.basicConfig(level=logging.DEBUG,
                     format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
+
+# ---------------------------------------------------------------------------
+# Branch-aware graph naming (T17)
+#
+# Each indexed (project, branch) pair gets its own FalkorDB graph so that
+# concurrent agents indexing the same repo on different branches do not
+# overwrite each other. The format is::
+#
+#     code:{project_name}:{branch}
+#
+# When ``branch`` is omitted it defaults to ``_default`` — that is also the
+# name the one-shot migration uses when promoting legacy ``{project_name}``
+# graphs into the new namespace.
+# ---------------------------------------------------------------------------
+
+DEFAULT_BRANCH = "_default"
+_GRAPH_NAME_RE = re.compile(r"^code:(?P<project>[^:]+):(?P<branch>.+)$")
+
+
+def compose_graph_name(project_name: str, branch: Optional[str] = None) -> str:
+    """Compose the FalkorDB graph name for a (project, branch) pair.
+
+    Args:
+        project_name: The repository / project name (typically the
+            directory basename).
+        branch: Branch name. ``None`` is treated as :data:`DEFAULT_BRANCH`.
+
+    Returns:
+        ``"code:{project_name}:{branch}"``.
+    """
+
+    if branch is None or branch == "":
+        branch = DEFAULT_BRANCH
+    return f"code:{project_name}:{branch}"
+
+
+def parse_graph_name(graph_name: str) -> Optional[tuple[str, str]]:
+    """Inverse of :func:`compose_graph_name`.
+
+    Returns ``(project, branch)`` if ``graph_name`` follows the new
+    ``code:{project}:{branch}`` format, otherwise ``None`` so callers can
+    treat it as a legacy / unrelated graph.
+    """
+
+    m = _GRAPH_NAME_RE.match(graph_name)
+    if not m:
+        return None
+    return m.group("project"), m.group("branch")
+
+
 def graph_exists(name: str):
     db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
                   port=os.getenv('FALKORDB_PORT', 6379),
@@ -18,9 +69,21 @@ def graph_exists(name: str):
 
     return name in db.list_graphs()
 
-def get_repos() -> list[str]:
+
+def _is_internal_suffix(graph_name: str) -> bool:
+    """Internal helper graph suffixes that should never be listed as repos."""
+    return graph_name.endswith('_git') or graph_name.endswith('_schema') or graph_name.endswith('_tmp')
+
+
+def get_repos() -> list[dict]:
     """
-        List processed repositories
+        List processed (project, branch) pairs.
+
+        Returns a list of ``{"project": ..., "branch": ..., "graph": ...}``
+        dicts for every graph that matches the new ``code:{project}:{branch}``
+        format. Legacy graphs (created before T17) are returned with
+        ``branch == DEFAULT_BRANCH`` so callers can keep treating them as a
+        single graph until the migration is run.
     """
 
     db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
@@ -28,22 +91,60 @@ def get_repos() -> list[str]:
                   username=os.getenv('FALKORDB_USERNAME', None),
                   password=os.getenv('FALKORDB_PASSWORD', None))
 
-    graphs = db.list_graphs()
-    graphs = [g for g in graphs if not (g.endswith('_git') or g.endswith('_schema'))]
-    return graphs
+    repos = []
+    for g in db.list_graphs():
+        parsed = parse_graph_name(g)
+        if parsed is None:
+            # Legacy graph (pre-T17) or internal helper graph: skip when
+            # the bare name carries an internal suffix; otherwise synthesize
+            # a virtual entry so it stays discoverable.
+            if _is_internal_suffix(g):
+                continue
+            repos.append({"project": g, "branch": DEFAULT_BRANCH, "graph": g})
+        else:
+            project, branch = parsed
+            # Hide per-branch internal companion graphs (e.g. ``branch_git``,
+            # ``branch_schema``, ``branch_tmp``); their suffix lives on the
+            # branch component, so check that explicitly.
+            if _is_internal_suffix(branch):
+                continue
+            repos.append({"project": project, "branch": branch, "graph": g})
+    return repos
 
 class Graph():
     """
     Represents a connection to a graph database using FalkorDB.
+
+    The underlying graph is named ``code:{project_name}:{branch}`` so that
+    concurrent agents working on different branches of the same repo do
+    not corrupt each other's data (see T17, issue #651).
+
+    For backwards compatibility ``name`` may be either a bare project name
+    (``"falkordb"``) or a fully composed graph name (``"code:falkordb:main"``);
+    in the former case the composition is performed automatically using
+    ``branch`` (default :data:`DEFAULT_BRANCH`).
     """
 
-    def __init__(self, name: str) -> None:
-        self.name = name
+    def __init__(self, name: str, branch: Optional[str] = None) -> None:
+        # Accept either an already-composed graph name or a bare project
+        # name + branch. ``parse_graph_name`` returns ``None`` for legacy /
+        # bare names, signalling that we need to compose.
+        parsed = parse_graph_name(name)
+        if parsed is not None:
+            self.project, self.branch = parsed
+            self.name = name
+        else:
+            self.project = name
+            # Normalize empty / None to DEFAULT_BRANCH so the stored
+            # branch matches the key actually used by compose_graph_name.
+            self.branch = branch or DEFAULT_BRANCH
+            self.name = compose_graph_name(self.project, self.branch)
+
         self.db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
                            port=os.getenv('FALKORDB_PORT', 6379),
                            username=os.getenv('FALKORDB_USERNAME', None),
                            password=os.getenv('FALKORDB_PASSWORD', None))
-        self.g = self.db.select_graph(name)
+        self.g = self.db.select_graph(self.name)
 
         # Initialize the backlog as disabled by default
         self.backlog = None
@@ -62,9 +163,34 @@ class Graph():
         except Exception:
             pass
 
+    @classmethod
+    def from_raw_name(cls, raw_name: str) -> "Graph":
+        """Construct a :class:`Graph` from an already-composed (or raw) name.
+
+        Used by :meth:`clone` and the migration helper, where the caller
+        already knows the final FalkorDB key. Bypasses
+        :func:`compose_graph_name`.
+        """
+
+        obj = cls.__new__(cls)
+        obj.name = raw_name
+        parsed = parse_graph_name(raw_name)
+        if parsed is None:
+            obj.project = raw_name
+            obj.branch = DEFAULT_BRANCH
+        else:
+            obj.project, obj.branch = parsed
+        obj.db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
+                          port=os.getenv('FALKORDB_PORT', 6379),
+                          username=os.getenv('FALKORDB_USERNAME', None),
+                          password=os.getenv('FALKORDB_PASSWORD', None))
+        obj.g = obj.db.select_graph(raw_name)
+        obj.backlog = None
+        return obj
+
     def clone(self, clone: str) -> "Graph":
         """
-        Create a copy of the graph under the name clone
+        Create a copy of the graph under the name clone (raw FalkorDB key).
 
         Returns:
             a new instance of Graph
@@ -81,7 +207,7 @@ class Graph():
             # TODO: add a waiting limit
             time.sleep(1)
 
-        return Graph(clone)
+        return Graph.from_raw_name(clone)
 
 
     def delete(self) -> None:
@@ -639,12 +765,26 @@ async def async_graph_exists(name: str) -> bool:
         await db.aclose()
 
 
-async def async_get_repos() -> list[str]:
-    """List processed repositories (async version)."""
+async def async_get_repos() -> list[dict]:
+    """List processed (project, branch) pairs (async version).
+
+    Mirrors :func:`get_repos`; see that function for the return shape.
+    """
     db = _async_db()
     try:
-        graphs = await db.list_graphs()
-        return [g for g in graphs if not (g.endswith('_git') or g.endswith('_schema'))]
+        repos = []
+        for g in await db.list_graphs():
+            parsed = parse_graph_name(g)
+            if parsed is None:
+                if _is_internal_suffix(g):
+                    continue
+                repos.append({"project": g, "branch": DEFAULT_BRANCH, "graph": g})
+            else:
+                project, branch = parsed
+                if _is_internal_suffix(branch):
+                    continue
+                repos.append({"project": project, "branch": branch, "graph": g})
+        return repos
     finally:
         await db.aclose()
 
@@ -654,12 +794,22 @@ class AsyncGraphQuery:
 
     Uses falkordb.asyncio under the hood.  No index creation or backlog —
     indexes already exist from the sync Graph used during analysis.
+
+    Accepts either a bare project name + branch or a fully composed graph
+    name (``code:{project}:{branch}``); see :class:`Graph` for details.
     """
 
-    def __init__(self, name: str) -> None:
-        self.name = name
+    def __init__(self, name: str, branch: Optional[str] = None) -> None:
+        parsed = parse_graph_name(name)
+        if parsed is not None:
+            self.project, self.branch = parsed
+            self.name = name
+        else:
+            self.project = name
+            self.branch = branch or DEFAULT_BRANCH
+            self.name = compose_graph_name(self.project, self.branch)
         self.db = _async_db()
-        self.g = self.db.select_graph(name)
+        self.g = self.db.select_graph(self.name)
 
     async def graph_exists(self) -> bool:
         """Check if this graph exists, reusing the current connection."""
