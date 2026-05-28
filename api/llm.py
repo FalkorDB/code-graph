@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+from typing import Optional
 
 from graphrag_sdk.models.litellm import LiteModel
 from graphrag_sdk import (
@@ -235,14 +236,23 @@ def _define_ontology() -> Ontology:
 # Global ontology
 ontology = _define_ontology()
 
-def _create_kg_agent(repo_name: str):
+def _create_kg_agent(repo_name: str, branch: Optional[str] = None):
+    from .graph import compose_graph_name, DEFAULT_BRANCH
+
     model_name = os.getenv('MODEL_NAME', 'gemini/gemini-flash-lite-latest')
 
     model = LiteModel(model_name)
 
+    # Resolve the actual FalkorDB graph key: callers may pass either a
+    # bare project name + branch or an already-composed ``code:p:b`` name.
+    if repo_name.startswith("code:") and ":" in repo_name[5:]:
+        graph_name = repo_name
+    else:
+        graph_name = compose_graph_name(repo_name, branch or DEFAULT_BRANCH)
+
     #ontology = _define_ontology()
     code_graph_kg = KnowledgeGraph(
-        name=repo_name,
+        name=graph_name,
         ontology=ontology,
         model_config=KnowledgeGraphModelConfig.with_model(model),
         host=os.getenv('FALKORDB_HOST', 'localhost'),
@@ -257,8 +267,8 @@ def _create_kg_agent(repo_name: str):
 
     return code_graph_kg.chat_session()
 
-def _ask_sync(repo_name: str, question: str) -> str:
-    chat = _create_kg_agent(repo_name)
+def _ask_sync(repo_name: str, question: str, branch: Optional[str] = None) -> str:
+    chat = _create_kg_agent(repo_name, branch=branch)
 
     logging.debug(f"Question: {question}")
     print(f"Question: {question}")
@@ -268,6 +278,6 @@ def _ask_sync(repo_name: str, question: str) -> str:
     return response['response']
 
 
-async def ask(repo_name: str, question: str) -> str:
+async def ask(repo_name: str, question: str, branch: Optional[str] = None) -> str:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _ask_sync, repo_name, question)
+    return await loop.run_in_executor(None, _ask_sync, repo_name, question, branch)
