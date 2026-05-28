@@ -266,35 +266,52 @@ def _ensure_indexed(repo_path: Path) -> float:
     The code-graph backend uses `Path(folder).name` as the repo identifier;
     each (instance, config) worktree has a unique directory name like
     `pytest-dev__pytest-6202__code_graph`, which becomes the `--repo` value
-    the agent passes to `cg`. We skip indexing if the repo already exists
-    in FalkorDB (cheap precheck against /api/list_repos).
+    the agent passes to `cg`. We skip indexing if the graph already exists
+    in FalkorDB (cheap GRAPH.LIST scan, matches the MCP-track behavior).
 
     Returns wall-clock seconds spent indexing (0.0 if cache hit / skip).
     """
     import httpx
+    import redis
     start = time.monotonic()
 
     base = os.environ.get("CODEGRAPH_URL", "http://127.0.0.1:5000").rstrip("/")
     repo_name = repo_path.name
     token = os.environ.get("SECRET_TOKEN") or os.environ.get("CODEGRAPH_TOKEN")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    # Cheap precheck via FalkorDB GRAPH.LIST. The HTTP /api/list_repos
+    # path returned a list of names historically; it now returns dicts
+    # ({project, branch, graph}), so the old `name in repositories`
+    # match silently failed and every run re-indexed. GRAPH.LIST avoids
+    # that schema churn.
+    host = os.environ.get("FALKORDB_HOST", "127.0.0.1")
+    port = int(os.environ.get("FALKORDB_PORT", "6379"))
+    expected_graph = repo_name  # the HTTP path uses bare folder name as graph key
     try:
-        with httpx.Client(timeout=10.0, headers=headers) as c:
-            r = c.get(f"{base}/api/list_repos")
-            if r.status_code == 200 and repo_name in (r.json() or {}).get("repositories", []):
-                print(f"[index] {repo_name} already indexed; skip")
-                return 0.0
-        print(f"[index] analyzing {repo_path} ...")
-        # Default ignore set: auto-generated / vendored / pathological dirs
-        # that either contain no useful symbols or send jedi into a
-        # multi-hour resolve loop (e.g. sympy/integrals/rubi/rules has
-        # 3000-line files with hundreds of unresolvable symbols per line).
-        default_ignore = [
-            ".git", "venv", ".venv", "node_modules", "__pycache__",
-            "rubi/rules",  # sympy: blocks indexing for ~hours otherwise
-            "build", "dist", ".tox", ".eggs",
-        ]
-        with httpx.Client(timeout=7200.0, headers=headers) as c:
+        r = redis.Redis(host=host, port=port, decode_responses=True, socket_timeout=2)
+        graphs = r.execute_command("GRAPH.LIST") or []
+        # Match either bare name (legacy) or "code:<name>:<branch>" pattern.
+        if expected_graph in graphs or any(
+            g == repo_name or g.startswith(f"code:{repo_name}:") for g in graphs
+        ):
+            print(f"[index] {repo_name} already in FalkorDB; skip")
+            return 0.0
+    except Exception as exc:  # noqa: BLE001
+        print(f"[index] WARN GRAPH.LIST precheck failed ({exc!r}); attempting index anyway")
+
+    print(f"[index] analyzing {repo_path} ...")
+    default_ignore = [
+        ".git", "venv", ".venv", "node_modules", "__pycache__",
+        "rubi/rules",  # sympy: blocks indexing for ~hours otherwise
+        "build", "dist", ".tox", ".eggs",
+    ]
+    # Bounded timeout so a server-side hang surfaces instead of stalling
+    # the entire benchmark. 30 min is generous for any sane repo and
+    # well below the previous 7200s that masked failures for an hour.
+    try:
+        with httpx.Client(timeout=httpx.Timeout(connect=10.0, read=1800.0, write=30.0, pool=10.0),
+                          headers=headers) as c:
             r = c.post(
                 f"{base}/api/analyze_folder",
                 json={"path": str(repo_path), "ignore": default_ignore},
@@ -304,8 +321,15 @@ def _ensure_indexed(repo_path: Path) -> float:
                     f"analyze_folder returned {r.status_code}: {r.text[:300]}. "
                     f"Check ALLOWED_ANALYSIS_DIR on the API server covers {repo_path}."
                 )
-            print(f"[index] indexed {repo_name} in {time.monotonic() - start:.1f}s")
-            return time.monotonic() - start
+        elapsed = time.monotonic() - start
+        print(f"[index] indexed {repo_name} in {elapsed:.1f}s")
+        return elapsed
+    except httpx.ReadTimeout as exc:
+        elapsed = time.monotonic() - start
+        raise RuntimeError(
+            f"analyze_folder read-timeout after {elapsed:.0f}s on {repo_name} — "
+            f"API server likely hung indexing. Check uvicorn logs."
+        ) from exc
     except Exception as exc:
         raise RuntimeError(f"failed to index {repo_name} at {repo_path}: {exc}") from exc
 
