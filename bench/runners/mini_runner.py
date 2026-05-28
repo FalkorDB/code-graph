@@ -290,7 +290,7 @@ def _ensure_indexed(repo_path: Path) -> None:
             "rubi/rules",  # sympy: blocks indexing for ~hours otherwise
             "build", "dist", ".tox", ".eggs",
         ]
-        with httpx.Client(timeout=1800.0, headers=headers) as c:
+        with httpx.Client(timeout=7200.0, headers=headers) as c:
             r = c.post(
                 f"{base}/api/analyze_folder",
                 json={"path": str(repo_path), "ignore": default_ignore},

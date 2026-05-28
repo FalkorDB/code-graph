@@ -166,7 +166,16 @@ class SourceAnalyzer():
         with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
-                file = self.files[file_path]
+                file = self.files.get(file_path)
+                if file is None:
+                    # first_pass skipped this file (e.g. parse error, empty,
+                    # or ignored after entering the candidate list). Skip
+                    # in second_pass too instead of crashing the whole index.
+                    logging.warning(
+                        "second_pass: %s not in files map (first_pass skipped it); skipping",
+                        file_path,
+                    )
+                    continue
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
                 for _, entity in file.entities.items():
                     entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, key, symbol))
