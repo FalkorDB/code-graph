@@ -222,6 +222,48 @@ npx skills add FalkorDB/code-graph
 
 Then ask Claude things like *"what functions call analyze_sources?"* or *"find the dependency chain between parse_config and send_request"* — it will handle the indexing and querying automatically.
 
+### MCP server (`cgraph-mcp`)
+
+For agents that speak the [Model Context Protocol](https://modelcontextprotocol.io)
+(Claude Code, Cursor, Cline, …), code-graph ships a stdio MCP server
+that exposes the knowledge graph as 8 first-class tools: `index_repo`,
+`search_code`, `get_callers`, `get_callees`, `get_dependencies`,
+`impact_analysis`, `find_path`, and `ask` (NL→Cypher via GraphRAG).
+
+Quickstart — Claude Code:
+
+```bash
+# 1. Install (in any venv with the cgraph package on PATH)
+pip install code-graph         # or: uv pip install code-graph
+
+# 2. Register with Claude Code
+claude mcp add-json code-graph '{
+  "command": "cgraph-mcp",
+  "env": {
+    "FALKORDB_HOST": "localhost",
+    "FALKORDB_PORT": "6379",
+    "CODE_GRAPH_AUTO_INDEX": "true"
+  }
+}'
+
+# 3. Drop agent guidance into your repo
+cd /path/to/your/repo
+cgraph init-agent              # writes CLAUDE.md and .cursorrules
+```
+
+Quickstart — Docker Compose:
+
+```bash
+docker compose up -d falkordb                       # start the DB
+docker compose --profile mcp run --rm -i code-graph-mcp   # attach via stdio
+```
+
+The MCP server auto-bootstraps FalkorDB if it's missing on localhost
+(via `cgraph ensure-db`). When `CODE_GRAPH_AUTO_INDEX=true` is set,
+the current working directory is indexed automatically on start.
+
+**Transport:** Phase 1 is stdio only. HTTP/SSE is deferred.
+
 ## Running with Docker
 
 ### Using Docker Compose
@@ -232,17 +274,33 @@ docker compose up --build
 
 This starts FalkorDB and the CodeGraph app together. The checked-in compose file sets `CODE_GRAPH_PUBLIC=1` for the app service.
 
+To run the **MCP stdio server** instead of the web app from the same
+image, set `CGRAPH_MODE=mcp` and use the `mcp` profile:
+
+```bash
+docker compose --profile mcp run --rm -i code-graph-mcp
+```
+
 ### Using Docker directly
 
 ```bash
 docker build -t code-graph .
 
+# Web mode (default)
 docker run -p 5000:5000 \
   -e FALKORDB_HOST=host.docker.internal \
   -e FALKORDB_PORT=6379 \
   -e MODEL_NAME=gemini/gemini-flash-lite-latest \
   -e GEMINI_API_KEY=<YOUR_GEMINI_API_KEY> \
   -e SECRET_TOKEN=<YOUR_SECRET_TOKEN> \
+  code-graph
+
+# MCP stdio mode (same image)
+docker run --rm -i \
+  -e CGRAPH_MODE=mcp \
+  -e FALKORDB_HOST=host.docker.internal \
+  -e FALKORDB_PORT=6379 \
+  -e MODEL_NAME=gemini/gemini-flash-lite-latest \
   code-graph
 ```
 

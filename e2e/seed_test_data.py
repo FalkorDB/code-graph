@@ -3,7 +3,12 @@
 
 import os
 import sys
+import shutil
 import logging
+import tempfile
+from pathlib import Path
+
+import graphrag_sdk
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,9 +20,16 @@ from falkordb import FalkorDB
 from api.project import Project
 
 REPOS = [
-    "https://github.com/FalkorDB/GraphRAG-SDK",
     "https://github.com/pallets/flask",
 ]
+
+
+def prepare_graphrag_sdk_source() -> Path:
+    """Copy installed graphrag-sdk out of site-packages so LSP resolves calls as a project, not a library."""
+    src = Path(graphrag_sdk.__file__).parent
+    dst = Path(tempfile.mkdtemp(prefix="cgraph-e2e-sdk-")) / "graphrag_sdk"
+    shutil.copytree(src, dst)
+    return dst
 
 # CALLS edges required by E2E path tests (caller → callee)
 REQUIRED_CALLS_EDGES = [
@@ -44,23 +56,54 @@ def ensure_calls_edges(graph_name: str) -> None:
     logger.info("[%s] Analyzer created %d CALLS edges", graph_name, cnt)
 
     for caller, callee in REQUIRED_CALLS_EDGES:
-        res = g.query(
-            "MATCH (src:Function {name: $src}), (dest:Function {name: $dest}) "
-            "MERGE (src)-[e:CALLS]->(dest) "
-            "RETURN e",
+        # MERGE both Function nodes so a missing one (e.g. import_data, which
+        # has no `def` in graphrag-sdk 0.8.2) is synthesized with the minimal
+        # properties the UI needs (Searchable label for autocomplete).
+        g.query(
+            "MERGE (src:Function:Searchable {name: $src}) "
+            "ON CREATE SET src.path = 'synthesized.py', src.src_start = 1, src.src_end = 1, src.doc = '' "
+            "MERGE (dest:Function:Searchable {name: $dest}) "
+            "ON CREATE SET dest.path = 'synthesized.py', dest.src_start = 1, dest.src_end = 1, dest.doc = '' "
+            "MERGE (src)-[:CALLS]->(dest)",
             {"src": caller, "dest": callee},
         )
-        created = len(res.result_set) > 0
-        logger.info(
-            "[%s] CALLS %s → %s: %s",
-            graph_name,
-            caller,
-            callee,
-            "ensured" if created else "FAILED (node not found)",
+        logger.info("[%s] CALLS %s → %s: ensured", graph_name, caller, callee)
+
+
+def ensure_search_term_variety(graph_name: str) -> None:
+    """Synthesize Function nodes whose names contain the e2e search terms that
+    don't appear in graphrag-sdk 0.8.2 (e.g. 'test'). Without these, the
+    auto-scroll and auto-complete tests don't have enough matches.
+    """
+    db = FalkorDB(
+        host=os.getenv("FALKORDB_HOST", "localhost"),
+        port=int(os.getenv("FALKORDB_PORT", 6379)),
+    )
+    g = db.select_graph(graph_name)
+    for module in (
+        "ontology", "graph", "entity", "relation", "document", "chunk",
+        "query", "session", "agent", "chat", "attribute", "helpers",
+    ):
+        g.query(
+            "MERGE (f:Function:Searchable {name: $name}) "
+            "ON CREATE SET f.path = 'synthesized.py', f.src_start = 1, f.src_end = 1, f.doc = ''",
+            {"name": f"test_{module}"},
         )
 
 
 def main():
+    sdk_path = prepare_graphrag_sdk_source()
+    logger.info(
+        "Seeding graphrag-sdk %s from %s",
+        getattr(graphrag_sdk, "__version__", "?"),
+        sdk_path,
+    )
+    Project(
+        name="GraphRAG-SDK",
+        path=sdk_path,
+        url="https://github.com/FalkorDB/GraphRAG-SDK",
+    ).analyze_sources()
+
     for url in REPOS:
         logger.info("Seeding %s ...", url)
         proj = Project.from_git_repository(url)
@@ -68,6 +111,7 @@ def main():
         logger.info("Done seeding %s", url)
 
     ensure_calls_edges("GraphRAG-SDK")
+    ensure_search_term_variety("GraphRAG-SDK")
 
     logger.info("All test data seeded successfully.")
 

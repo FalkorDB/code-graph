@@ -14,8 +14,21 @@ from ..analyzers import SourceAnalyzer
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
-def GitRepoName(repo_name):
-    """ Returns the git repository name """
+def GitRepoName(repo_name, branch=None):
+    """ Returns the git transitions graph key for ``(repo_name, branch)``.
+
+    Format: ``{repo_name}:{branch}_git``. Hash-tag stays on ``repo_name``
+    so the git-graph key lives on the same FalkorDB cluster slot as its
+    sibling code graph and ``*_info`` Redis hash.
+    """
+    from ..graph import DEFAULT_BRANCH
+    if branch is None or branch == "":
+        branch = DEFAULT_BRANCH
+    return "{" + repo_name + "}" + ":" + branch + "_git"
+
+
+def LegacyGitRepoName(repo_name):
+    """Pre-T17 git graph key shape — kept for the migration helper."""
     return "{" + repo_name + "}_git"
 
 def is_ignored(file_path: str, ignore_list: List[str]) -> bool:
@@ -70,7 +83,7 @@ def classify_changes(
     return added, deleted, modified
 
 # build a graph capturing the git commit history
-def build_commit_graph(path: str, analyzer: SourceAnalyzer, repo_name: str, ignore_list: Optional[List[str]] = None) -> GitGraph:
+def build_commit_graph(path: str, analyzer: SourceAnalyzer, repo_name: str, ignore_list: Optional[List[str]] = None, branch: Optional[str] = None) -> GitGraph:
     """
     Builds a graph representation of the git commit history.
 
@@ -78,6 +91,7 @@ def build_commit_graph(path: str, analyzer: SourceAnalyzer, repo_name: str, igno
         path (str): Path to the git repository.
         repo_name (str): Name of the repository.
         ignore_list (List[str], optional): List of file patterns to ignore.
+        branch (Optional[str]): Branch name. Defaults to ``_default``.
 
     Returns:
         GitGraph: Graph object representing the commit history.
@@ -86,13 +100,15 @@ def build_commit_graph(path: str, analyzer: SourceAnalyzer, repo_name: str, igno
     if ignore_list is None:
         ignore_list = []
 
-    # Copy the graph into a temporary graph
-    logging.info("Cloning source graph %s -> %s_tmp", repo_name, repo_name)
-    # Will be deleted at the end of this function
-    g = Graph(repo_name).clone(repo_name + "_tmp")
+    # Copy the graph into a temporary graph (sibling key with `_tmp` suffix on
+    # the branch component so the clone lands on the same cluster slot).
+    source = Graph(repo_name, branch=branch)
+    tmp_name = source.name + "_tmp"
+    logging.info("Cloning source graph %s -> %s", source.name, tmp_name)
+    g = source.clone(tmp_name)
     g.enable_backlog()
 
-    git_graph       = GitGraph(GitRepoName(repo_name))
+    git_graph       = GitGraph(GitRepoName(repo_name, branch))
     supported_types = analyzer.supported_types()
 
     # Initialize with the current commit
@@ -252,12 +268,12 @@ def build_commit_graph(path: str, analyzer: SourceAnalyzer, repo_name: str, igno
     # Delete temporaty graph
     g.disable_backlog()
 
-    logging.debug(f"Deleting temporary graph {repo_name + '_tmp'}")
+    logging.debug(f"Deleting temporary graph {g.name}")
     g.delete()
 
     return git_graph
 
-def switch_commit(repo: str, to: str):
+def switch_commit(repo: str, to: str, branch: Optional[str] = None):
     """
     Switches the state of a graph repository from its current commit to the given commit.
 
@@ -268,6 +284,7 @@ def switch_commit(repo: str, to: str):
     Args:
         repo (str): The name of the graph repository to switch commits.
         to (str): The target commit hash to switch the graph to.
+        branch (Optional[str]): The branch. Defaults to ``_default``.
     """
 
     # Validate input arguments
@@ -280,11 +297,11 @@ def switch_commit(repo: str, to: str):
     logging.info(f"Switching to commit: {to}")
 
     # Initialize the graph and GitGraph objects
-    g = Graph(repo)
-    git_graph = GitGraph(GitRepoName(repo))
+    g = Graph(repo, branch=branch)
+    git_graph = GitGraph(GitRepoName(repo, branch))
 
     # Get the current commit hash of the graph
-    current_hash = get_repo_commit(repo)
+    current_hash = get_repo_commit(repo, branch)
     logging.info(f"Current graph commit: {current_hash}")
 
     if current_hash == to:
@@ -329,5 +346,5 @@ def switch_commit(repo: str, to: str):
             g.rerun_query(_q, _p)
 
     # Update the graph's commit to the new target commit
-    set_repo_commit(repo, to)
+    set_repo_commit(repo, to, branch)
     logging.info(f"Graph commit updated to {to}")
