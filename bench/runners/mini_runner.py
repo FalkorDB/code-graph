@@ -280,6 +280,29 @@ def _ensure_indexed(repo_path: Path) -> float:
     token = os.environ.get("SECRET_TOKEN") or os.environ.get("CODEGRAPH_TOKEN")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
 
+    # Sanity-check the server before we ask it to index anything. We've
+    # been bitten twice now by an API server launched without
+    # CODE_GRAPH_PY_RESOLVER=tree_sitter: the jedi/multilspy path tries
+    # to ``python -m venv venv && pip install poetry && poetry install``
+    # per repo, then runs jedi over the full transitive dep tree. On
+    # sphinx-8035 that wedged the server at 100% CPU for 3h+. Refuse
+    # to proceed instead of letting it happen again.
+    try:
+        with httpx.Client(timeout=5.0, headers=headers) as c:
+            meta = c.get(f"{base}/api/_health").json()
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"could not reach API server at {base}/api/_health ({exc!r}). "
+            "Start it with bench/scripts/start-api.sh."
+        ) from exc
+    if meta.get("py_resolver") != "tree_sitter":
+        raise RuntimeError(
+            f"API server at {base} is using py_resolver={meta.get('py_resolver')!r}. "
+            "The bench requires the tree-sitter static resolver — restart the "
+            "server with: CODE_GRAPH_PY_RESOLVER=tree_sitter "
+            "(bench/scripts/start-api.sh sets this by default)."
+        )
+
     # Cheap precheck via FalkorDB GRAPH.LIST. The HTTP /api/list_repos
     # path returned a list of names historically; it now returns dicts
     # ({project, branch, graph}), so the old `name in repositories`
