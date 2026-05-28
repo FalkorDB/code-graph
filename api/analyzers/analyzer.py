@@ -58,6 +58,17 @@ class AbstractAnalyzer(ABC):
             return [(files[Path(self.resolve_path(location['absolutePath'], path))], files[Path(self.resolve_path(location['absolutePath'], path))].tree.root_node.descendant_for_point_range(Point(location['range']['start']['line'], location['range']['start']['character']), Point(location['range']['end']['line'], location['range']['end']['character']))) for location in locations if location and Path(self.resolve_path(location['absolutePath'], path)) in files]
         except Exception:
             return []
+
+    def needs_lsp(self) -> bool:
+        """Whether this analyzer needs an LSP server started in second_pass.
+
+        Defaults to True for backward compatibility with the original
+        jedi/multilspy-backed analyzers. Subclasses that resolve symbols
+        statically (e.g. the tree-sitter resolver in #689) override to
+        return False so the orchestrator can skip the expensive LSP
+        warm-up.
+        """
+        return True
         
     @abstractmethod
     def add_dependencies(self, path: Path, files: list[Path]):

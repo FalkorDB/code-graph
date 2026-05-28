@@ -138,7 +138,7 @@ class SourceAnalyzer():
             lsps[".java"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".java"] = NullLanguageServer()
-        if any(path.rglob('*.py')):
+        if any(path.rglob('*.py')) and analyzers[".py"].needs_lsp():
             config = MultilspyConfig.from_dict({"code_language": "python", "environment_path": f"{path}/venv"})
             lsps[".py"] = SyncLanguageServer.create(config, logger, str(path))
         else:
@@ -157,8 +157,12 @@ class SourceAnalyzer():
             for i, file_path in enumerate(files):
                 if file_path not in self.files:
                     continue
-                # Skip symbol resolution when no real LSP is available
-                if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
+                analyzer = analyzers.get(file_path.suffix)
+                # Skip symbol resolution when no real LSP is available *and* the
+                # analyzer can't resolve statically (e.g. tree-sitter resolver).
+                if isinstance(lsps.get(file_path.suffix), NullLanguageServer) and (
+                    analyzer is None or analyzer.needs_lsp()
+                ):
                     continue
                 file = self.files[file_path]
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
