@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -465,21 +466,31 @@ TOOL_KEYWORDS = {
     "code_graph_mcp": ("cg-mcp",),
 }
 
+# Bash search commands the agent might fall back to instead of using the
+# configured code-navigation tool. Matched as whole tokens against the
+# bash command string. Tracked passively as a "fallback_rate" metric so
+# we can quantify how often each tool track silently degrades to grep.
+_FALLBACK_RE = re.compile(r"(?:^|[\s;&|`(])(grep|rg|find|ack|ag)(?:\s|$)")
+
 
 def compute_tool_usage(messages: list[dict[str, Any]], config: str) -> dict[str, Any]:
-    """Count assistant bash commands that actually invoke the configured tool.
+    """Count assistant bash commands that invoke the configured tool vs
+    fall back to plain text search.
 
-    Returns {turns, tool_turns, rate}. A low rate (<0.5) on a tool config
-    means the agent stopped using its tool — usually because the tool
-    crashed or was unhelpful — and the trajectory is effectively a baseline
-    run with extra preamble. Surface this in the report so we don't
-    misattribute baseline-like behaviour to the tool.
+    Returns {turns, tool_turns, fallback_turns, rate, fallback_rate}.
+    - rate = tool_turns / turns (None for baseline)
+    - fallback_rate = fallback_turns / turns (always reported; baseline's
+      fallback_rate is its raw grep/find usage and serves as a reference
+      point — tool tracks should be meaningfully below it).
+
+    A low tool rate combined with a high fallback rate on a tool track
+    means the agent abandoned the tool and is operating as a baseline
+    with extra preamble.
     """
     kws = TOOL_KEYWORDS.get(config, ())
-    if not kws:
-        return {"turns": 0, "tool_turns": 0, "rate": None}
     turns = 0
     tool_turns = 0
+    fallback_turns = 0
     for m in messages:
         if m.get("role") != "assistant":
             continue
@@ -492,11 +503,22 @@ def compute_tool_usage(messages: list[dict[str, Any]], config: str) -> dict[str,
             args = fn.get("arguments") or ""
             if isinstance(args, dict):
                 args = args.get("command", "")
+            if not isinstance(args, str):
+                args = str(args)
             turns += 1
-            if any(kw in args for kw in kws):
+            if kws and any(kw in args for kw in kws):
                 tool_turns += 1
-    rate = tool_turns / turns if turns else None
-    return {"turns": turns, "tool_turns": tool_turns, "rate": rate}
+            if _FALLBACK_RE.search(args):
+                fallback_turns += 1
+    rate = (tool_turns / turns) if (turns and kws) else None
+    fallback_rate = (fallback_turns / turns) if turns else None
+    return {
+        "turns": turns,
+        "tool_turns": tool_turns,
+        "rate": rate,
+        "fallback_turns": fallback_turns,
+        "fallback_rate": fallback_rate,
+    }
 
 
 def run_task(
@@ -606,6 +628,8 @@ def run_task(
     metrics.tool_usage_rate = tool_usage["rate"]
     metrics.tool_usage_turns = tool_usage["tool_turns"]
     metrics.tool_usage_total = tool_usage["turns"]
+    metrics.fallback_turns = tool_usage["fallback_turns"]
+    metrics.fallback_rate = tool_usage["fallback_rate"]
     if exit_status == "error":
         metrics.outcome = "error"
 

@@ -45,6 +45,11 @@ class TaskMetrics:
     tool_usage_rate: float | None = None
     tool_usage_turns: int = 0
     tool_usage_total: int = 0
+    # Fallback rate: fraction of bash commands that are plain text search
+    # (grep / rg / find / ack / ag) instead of the configured tool.
+    # Always populated (incl. baseline as a reference point).
+    fallback_rate: float | None = None
+    fallback_turns: int = 0
 
     # outcome (set after scoring; None until then)
     outcome: str | None = None   # "resolved" | "failed" | "budget_exceeded" | "error" | "tool_unavailable"

@@ -24,6 +24,7 @@ class ConfigSummary:
     median_tokens: int
     p90_tokens: int
     median_tool_usage: float | None = None  # fraction in [0,1] or None for baseline
+    median_fallback: float | None = None  # fraction in [0,1] of bash cmds that were grep/find/rg
 
     @property
     def resolve_rate(self) -> float:
@@ -82,6 +83,10 @@ def summarize(rows: list[dict[str, Any]]) -> list[ConfigSummary]:
             r["tool_usage_rate"] for r in best_by_task.values()
             if r.get("tool_usage_rate") is not None
         ]
+        fallback_rates = [
+            r["fallback_rate"] for r in best_by_task.values()
+            if r.get("fallback_rate") is not None
+        ]
         n_resolved = sum(1 for r in best_by_task.values() if r.get("outcome") == "resolved")
         summaries.append(
             ConfigSummary(
@@ -92,6 +97,7 @@ def summarize(rows: list[dict[str, Any]]) -> list[ConfigSummary]:
                 median_tokens=int(statistics.median(token_sums)) if token_sums else 0,
                 p90_tokens=_percentile(token_sums, 0.9),
                 median_tool_usage=statistics.median(usage_rates) if usage_rates else None,
+                median_fallback=statistics.median(fallback_rates) if fallback_rates else None,
             )
         )
     return summaries
@@ -109,18 +115,19 @@ def render_markdown(summaries: list[ConfigSummary]) -> str:
         baseline_med = baseline.median_tokens if baseline else 0
 
         lines.append(f"## {bench}\n")
-        lines.append("| config | tasks | resolved | resolve rate | median tokens | p90 tokens | Δ tokens vs baseline | tool-usage rate |")
-        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        lines.append("| config | tasks | resolved | resolve rate | median tokens | p90 tokens | Δ tokens vs baseline | tool-usage rate | fallback rate |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
         for s in sorted(group, key=lambda x: x.config):
             delta = "—"
             if baseline_med and s.config != "baseline":
                 pct = (s.median_tokens - baseline_med) / baseline_med * 100
                 delta = f"{pct:+.1f}%"
             usage = "—" if s.median_tool_usage is None else f"{s.median_tool_usage * 100:.0f}%"
+            fb = "—" if s.median_fallback is None else f"{s.median_fallback * 100:.0f}%"
             lines.append(
                 f"| {s.config} | {s.n_tasks} | {s.n_resolved} | "
                 f"{s.resolve_rate * 100:.1f}% | {s.median_tokens:,} | "
-                f"{s.p90_tokens:,} | {delta} | {usage} |"
+                f"{s.p90_tokens:,} | {delta} | {usage} | {fb} |"
             )
         lines.append("")
     return "\n".join(lines)
