@@ -83,15 +83,18 @@ def _falkordb_reachable() -> bool:
 
 
 @pytest.fixture(scope="session")
-def indexed_fixture(sample_project_path: Path) -> IndexedFixture:
+def indexed_fixture(sample_project_path: Path):
     """Index the sample project into a unique per-session graph.
 
     Each test session creates a new graph named
     ``code:sample_project:test-<uuid>`` so parallel CI shards never
-    contend on the same graph. The graph is intentionally **not**
-    cleaned up — short-lived CI runners discard the FalkorDB volume,
-    and keeping it around helps post-mortem debugging on developer
-    machines.
+    contend on the same graph. The graph is deleted on teardown so
+    long-lived FalkorDB deployments (developer machines, shared CI)
+    don't accumulate orphan ``test-*`` graphs across runs.
+
+    Set ``MCP_KEEP_TEST_GRAPHS=1`` to skip teardown — useful for
+    post-mortem debugging when a test fails and you want to poke at
+    the graph by hand.
 
     Uses :class:`api.analyzers.SourceAnalyzer` directly (instead of
     ``Project.from_local_repository``) so the fixture doesn't need to
@@ -123,9 +126,20 @@ def indexed_fixture(sample_project_path: Path) -> IndexedFixture:
         ignore=["venv", "__pycache__", ".venv"],
     )
 
-    return IndexedFixture(
+    yield IndexedFixture(
         project=project_name,
         branch=branch,
         graph_name=graph.name,
         path=sample_project_path,
     )
+
+    # Teardown — drop the graph so we don't leak ``test-<uuid>`` graphs
+    # across runs. Opt out with MCP_KEEP_TEST_GRAPHS=1 when debugging.
+    if os.getenv("MCP_KEEP_TEST_GRAPHS") == "1":
+        return
+    try:
+        graph.delete()
+    except Exception:
+        # Best-effort cleanup: never fail a test session because
+        # teardown couldn't reach FalkorDB.
+        pass
