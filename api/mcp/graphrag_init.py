@@ -22,13 +22,9 @@ the LLM relies on to generate good Cypher. Replacing it with
 from __future__ import annotations
 
 import os
-from typing import Tuple
-
-from graphrag_sdk import KnowledgeGraph, KnowledgeGraphModelConfig
-from graphrag_sdk.models.litellm import LiteModel
+from typing import Any, Tuple
 
 from api.graph import compose_graph_name
-from api.llm import define_ontology
 from api.mcp.code_prompts import (
     CYPHER_GEN_PROMPT,
     CYPHER_GEN_SYSTEM,
@@ -37,25 +33,29 @@ from api.mcp.code_prompts import (
 )
 
 
-_CACHE: dict[Tuple[str, str], KnowledgeGraph] = {}
+# Lazily imported to keep the MCP server starting even on graphrag-sdk 1.x,
+# where ``KnowledgeGraph`` was removed. The ``ask`` tool still requires the
+# 0.8 surface; structural tools work without it.
+_CACHE: dict[Tuple[str, str], Any] = {}
 
 
-def _make_model() -> LiteModel:
-    """Build the LiteModel from ``$MODEL_NAME`` (same default as api/llm.py)."""
+def _make_model():
+    """Build the LiteModel from ``$MODEL_NAME``."""
+    from graphrag_sdk.models.litellm import LiteModel
     model_name = os.getenv("MODEL_NAME", "gemini/gemini-flash-lite-latest")
     return LiteModel(model_name)
 
 
-def get_or_create_kg(project_name: str, branch: str = "_default") -> KnowledgeGraph:
-    """Return a cached :class:`KnowledgeGraph` for ``(project, branch)``.
+def get_or_create_kg(project_name: str, branch: str = "_default"):
+    """Return a cached ``KnowledgeGraph`` for ``(project, branch)``.
 
-    Two calls with the same ``(project, branch)`` are guaranteed to return
-    the **same** instance (identity preserved) so callers don't pay the
-    construction cost on every ``ask``.
-
-    The underlying graph name uses the T17 convention
-    ``code:{project}:{branch}`` so per-branch indexing works end-to-end.
+    Raises ``ImportError`` at call time if the installed graphrag-sdk does
+    not expose ``KnowledgeGraph`` (i.e. 1.x). This keeps the rest of the
+    MCP server functional under either SDK major.
     """
+    from graphrag_sdk import KnowledgeGraph, KnowledgeGraphModelConfig  # noqa: WPS433
+    from api.llm import define_ontology  # noqa: WPS433
+
     key = (project_name, branch)
     cached = _CACHE.get(key)
     if cached is not None:
