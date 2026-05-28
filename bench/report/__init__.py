@@ -26,6 +26,7 @@ class ConfigSummary:
     median_tool_usage: float | None = None  # fraction in [0,1] or None for baseline
     median_fallback: float | None = None  # fraction in [0,1] of bash cmds that were grep/find/rg
     median_wall_sec: float | None = None  # median wall-clock seconds per task
+    median_index_sec: float | None = None  # median one-time indexing seconds (cg / cg-mcp only)
 
     @property
     def resolve_rate(self) -> float:
@@ -92,6 +93,10 @@ def summarize(rows: list[dict[str, Any]]) -> list[ConfigSummary]:
             r["wall_clock_sec"] for r in best_by_task.values()
             if r.get("wall_clock_sec") is not None
         ]
+        index_secs = [
+            r["index_sec"] for r in best_by_task.values()
+            if r.get("index_sec") is not None
+        ]
         n_resolved = sum(1 for r in best_by_task.values() if r.get("outcome") == "resolved")
         summaries.append(
             ConfigSummary(
@@ -104,6 +109,7 @@ def summarize(rows: list[dict[str, Any]]) -> list[ConfigSummary]:
                 median_tool_usage=statistics.median(usage_rates) if usage_rates else None,
                 median_fallback=statistics.median(fallback_rates) if fallback_rates else None,
                 median_wall_sec=statistics.median(wall_secs) if wall_secs else None,
+                median_index_sec=statistics.median(index_secs) if index_secs else None,
             )
         )
     return summaries
@@ -122,8 +128,8 @@ def render_markdown(summaries: list[ConfigSummary]) -> str:
 
         lines.append(f"## {bench}\n")
         baseline_wall = baseline.median_wall_sec if baseline else None
-        lines.append("| config | tasks | resolved | resolve rate | median tokens | p90 tokens | Δ tokens vs baseline | median wall (s) | Δ wall vs baseline | tool-usage rate | fallback rate |")
-        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+        lines.append("| config | tasks | resolved | resolve rate | median tokens | p90 tokens | Δ tokens vs baseline | median wall (s) | Δ wall vs baseline | median index (s) | tool-usage rate | fallback rate |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
         for s in sorted(group, key=lambda x: x.config):
             delta = "—"
             if baseline_med and s.config != "baseline":
@@ -134,12 +140,13 @@ def render_markdown(summaries: list[ConfigSummary]) -> str:
             if baseline_wall and s.median_wall_sec is not None and s.config != "baseline":
                 wp = (s.median_wall_sec - baseline_wall) / baseline_wall * 100
                 wall_delta = f"{wp:+.1f}%"
+            idx = "—" if s.median_index_sec is None else f"{s.median_index_sec:.1f}"
             usage = "—" if s.median_tool_usage is None else f"{s.median_tool_usage * 100:.0f}%"
             fb = "—" if s.median_fallback is None else f"{s.median_fallback * 100:.0f}%"
             lines.append(
                 f"| {s.config} | {s.n_tasks} | {s.n_resolved} | "
                 f"{s.resolve_rate * 100:.1f}% | {s.median_tokens:,} | "
-                f"{s.p90_tokens:,} | {delta} | {wall} | {wall_delta} | {usage} | {fb} |"
+                f"{s.p90_tokens:,} | {delta} | {wall} | {wall_delta} | {idx} | {usage} | {fb} |"
             )
         lines.append("")
     return "\n".join(lines)

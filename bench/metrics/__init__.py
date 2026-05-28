@@ -50,6 +50,10 @@ class TaskMetrics:
     # Always populated (incl. baseline as a reference point).
     fallback_rate: float | None = None
     fallback_turns: int = 0
+    # One-time indexing wall-clock (only on first run per worktree). None
+    # for baseline/lsp (no indexing) and 0.0 when the graph was already
+    # built (cache hit on subsequent retries).
+    index_sec: float | None = None
 
     # outcome (set after scoring; None until then)
     outcome: str | None = None   # "resolved" | "failed" | "budget_exceeded" | "error" | "tool_unavailable"

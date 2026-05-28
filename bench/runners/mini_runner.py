@@ -260,7 +260,7 @@ def config_env(config: str, repo_path: Path) -> dict[str, str]:
     return env
 
 
-def _ensure_indexed(repo_path: Path) -> None:
+def _ensure_indexed(repo_path: Path) -> float:
     """Trigger /api/analyze_folder so `cg --repo <dirname>` returns data.
 
     The code-graph backend uses `Path(folder).name` as the repo identifier;
@@ -268,8 +268,11 @@ def _ensure_indexed(repo_path: Path) -> None:
     `pytest-dev__pytest-6202__code_graph`, which becomes the `--repo` value
     the agent passes to `cg`. We skip indexing if the repo already exists
     in FalkorDB (cheap precheck against /api/list_repos).
+
+    Returns wall-clock seconds spent indexing (0.0 if cache hit / skip).
     """
     import httpx
+    start = time.monotonic()
 
     base = os.environ.get("CODEGRAPH_URL", "http://127.0.0.1:5000").rstrip("/")
     repo_name = repo_path.name
@@ -280,7 +283,7 @@ def _ensure_indexed(repo_path: Path) -> None:
             r = c.get(f"{base}/api/list_repos")
             if r.status_code == 200 and repo_name in (r.json() or {}).get("repositories", []):
                 print(f"[index] {repo_name} already indexed; skip")
-                return
+                return 0.0
         print(f"[index] analyzing {repo_path} ...")
         # Default ignore set: auto-generated / vendored / pathological dirs
         # that either contain no useful symbols or send jedi into a
@@ -301,21 +304,25 @@ def _ensure_indexed(repo_path: Path) -> None:
                     f"analyze_folder returned {r.status_code}: {r.text[:300]}. "
                     f"Check ALLOWED_ANALYSIS_DIR on the API server covers {repo_path}."
                 )
-            print(f"[index] indexed {repo_name}")
+            print(f"[index] indexed {repo_name} in {time.monotonic() - start:.1f}s")
+            return time.monotonic() - start
     except Exception as exc:
         raise RuntimeError(f"failed to index {repo_name} at {repo_path}: {exc}") from exc
 
 
-def _ensure_indexed_mcp(repo_path: Path) -> None:
+def _ensure_indexed_mcp(repo_path: Path) -> float:
     """MCP-track equivalent of _ensure_indexed.
 
     Drives the `index_repo` MCP tool in-process via the bench adapter
     (avoids spawning a second cgraph-mcp just to bootstrap; the agent
     will spawn its own per call). Same skip-if-present optimization
     as the HTTP path: cheap GRAPH.LIST scan against FalkorDB.
+
+    Returns wall-clock seconds spent indexing (0.0 if cache hit / skip).
     """
     from bench.agents import code_graph_mcp_adapter as cgm
     import redis
+    start = time.monotonic()
 
     repo_name = repo_path.name
     branch = os.environ.get("CGRAPH_MCP_BRANCH", "_default")
@@ -326,7 +333,7 @@ def _ensure_indexed_mcp(repo_path: Path) -> None:
         r = redis.Redis(host=host, port=port, decode_responses=True, socket_timeout=2)
         if expected_graph in (r.execute_command("GRAPH.LIST") or []):
             print(f"[index-mcp] {expected_graph} already indexed; skip")
-            return
+            return 0.0
     except Exception as exc:  # noqa: BLE001
         print(f"[index-mcp] WARN list_graphs failed ({exc!r}); will attempt index anyway")
 
@@ -336,9 +343,10 @@ def _ensure_indexed_mcp(repo_path: Path) -> None:
         if isinstance(payload, dict) and payload.get("error"):
             print(f"[index-mcp] WARN index_repo error: {payload['error']!r}")
         else:
-            print(f"[index-mcp] indexed: {payload}")
+            print(f"[index-mcp] indexed in {time.monotonic() - start:.1f}s: {payload}")
     except Exception as exc:  # noqa: BLE001
         print(f"[index-mcp] WARN failed to index {repo_name}: {exc!r}")
+    return time.monotonic() - start
 
 
 # ---------------------------------------------------------------------------
@@ -874,9 +882,11 @@ def main(argv: list[str] | None = None) -> int:
                 # exist before the task runs, otherwise every `cg find-symbol`
                 # call returns nothing and the agent abandons the tool.
                 if cfg == "code_graph":
-                    _ensure_indexed(cfg_wt)
+                    index_sec = _ensure_indexed(cfg_wt)
                 elif cfg == "code_graph_mcp":
-                    _ensure_indexed_mcp(cfg_wt)
+                    index_sec = _ensure_indexed_mcp(cfg_wt)
+                else:
+                    index_sec = None
                 cfg_rows = run_batch(
                     [task],
                     [cfg],
@@ -891,6 +901,8 @@ def main(argv: list[str] | None = None) -> int:
                     defer_jsonl=True,
                 )
                 rows.extend(cfg_rows)
+                if cfg_rows and index_sec is not None:
+                    cfg_rows[-1]["metrics"].index_sec = index_sec
                 # Official SWE-bench harness verification. The agent's
                 # patch is on the trajectory metrics; pass it to the
                 # Docker-backed harness. When Docker is missing the
