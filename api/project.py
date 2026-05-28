@@ -66,7 +66,10 @@ class Project():
         self.name   = name
         self.path   = path
         # Auto-detect branch from the working tree when not explicitly given.
-        if branch is None:
+        # Treat the empty string the same as ``None`` so the project never
+        # reports a branch that disagrees with the graph/info keys it writes
+        # (which coerce empty branch to DEFAULT_BRANCH).
+        if not branch:
             branch = detect_branch(path) if path is not None and Path(path).exists() else DEFAULT_BRANCH
         self.branch = branch
         self.graph  = Graph(name, branch=self.branch)
