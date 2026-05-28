@@ -64,6 +64,17 @@ class AbstractAnalyzer(ABC):
                 exc_info=True,
             )
             return []
+
+    def needs_lsp(self) -> bool:
+        """Whether this analyzer needs an LSP server started in second_pass.
+
+        Defaults to True for backward compatibility with the original
+        jedi/multilspy-backed analyzers. Subclasses that resolve symbols
+        statically (e.g. the tree-sitter resolver in #689) override to
+        return False so the orchestrator can skip the expensive LSP
+        warm-up.
+        """
+        return True
         
     @abstractmethod
     def add_dependencies(self, path: Path, files: list[Path]):
