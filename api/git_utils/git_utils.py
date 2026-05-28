@@ -33,8 +33,32 @@ def legacy_git_repo_name(repo_name):
 
 
 # Backwards-compatible CamelCase aliases (deprecated, will be removed).
-GitRepoName = git_repo_name
-LegacyGitRepoName = legacy_git_repo_name
+# Behavior note: callers of the *old* ``GitRepoName(repo)`` got
+# ``"{repo}_git"``. The new function (and these aliases) return
+# ``"{repo}:<branch>_git"`` — defaulting ``branch`` to ``DEFAULT_BRANCH``
+# when omitted. That is a silent shape change for the legacy single-arg
+# call, so we emit DeprecationWarning to surface it.
+
+def GitRepoName(repo_name, branch=None):  # noqa: N802 — preserved name
+    import warnings
+    warnings.warn(
+        "GitRepoName is deprecated; use git_repo_name(repo_name, branch). "
+        "Note: single-arg calls now return '{repo}:<DEFAULT_BRANCH>_git', "
+        "not the pre-T17 '{repo}_git' shape.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return git_repo_name(repo_name, branch)
+
+
+def LegacyGitRepoName(repo_name):  # noqa: N802 — preserved name
+    import warnings
+    warnings.warn(
+        "LegacyGitRepoName is deprecated; use legacy_git_repo_name.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return legacy_git_repo_name(repo_name)
 
 def is_ignored(file_path: str, ignore_list: List[str]) -> bool:
     """
