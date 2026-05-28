@@ -70,7 +70,12 @@ def _extract(result: Any) -> Any:
 
 async def _call_tool_async(name: str, arguments: dict[str, Any], timeout: float) -> Any:
     params = StdioServerParameters(command="cgraph-mcp", args=[], env=_env_for_mcp())
-    async with stdio_client(params) as (read, write):
+    # Silence the server's stderr (analyzer + MCP DEBUG logs). When the
+    # bash shim is invoked by the agent, the server's stderr is merged
+    # into the agent's tool-output buffer, inflating context by ~1.8kB
+    # per call. The agent only needs the JSON-RPC result on stdout.
+    devnull = open(os.devnull, "w")
+    async with stdio_client(params, errlog=devnull) as (read, write):
         async with ClientSession(read, write) as session:
             await asyncio.wait_for(session.initialize(), timeout=timeout)
             result = await asyncio.wait_for(
