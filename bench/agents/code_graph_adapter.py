@@ -102,15 +102,24 @@ class CodeGraphClient:
 
         auto_complete returns prefix matches; the agent often wants exact
         matches. Doing this client-side keeps the FastAPI surface untouched.
+
+        The auto_complete payload nests the symbol name under
+        `item["properties"]["name"]` (FalkorDB node properties), so we look
+        there first and only fall back to a top-level `name` for older /
+        flatter shapes the tests may pass in.
         """
         payload = self.auto_complete(repo, name)
         results = payload.get("completions") or payload.get("results") or payload
         if isinstance(results, dict):
             results = results.get("items", [])
-        return [
-            item for item in (results or [])
-            if isinstance(item, dict) and item.get("name") == name
-        ]
+        out: list[dict[str, Any]] = []
+        for item in (results or []):
+            if not isinstance(item, dict):
+                continue
+            props = item.get("properties") if isinstance(item.get("properties"), dict) else {}
+            if props.get("name") == name or item.get("name") == name:
+                out.append(item)
+        return out
 
     def note_edit(self, repo: str, path: str) -> dict[str, Any]:
         """Tell code-graph the agent just edited `path`; trigger an
