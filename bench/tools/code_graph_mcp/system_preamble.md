@@ -57,6 +57,16 @@ for cases the graph can't answer.
    you.
 3. **Don't `grep` for callers.** `get_callers` is one cheap Cypher
    hop; grep over a large repo costs tens of thousands of tokens.
+4. **Do not fall back to `grep`/`rg`/`find` silently.** Your trajectory
+   is being measured for tool-usage rate. If `cg-mcp` returns no
+   results or errors, state that explicitly in your next message
+   (e.g. "cg-mcp returned empty for prefix X, falling back to rg")
+   BEFORE running the fallback. Trajectories where you abandon
+   `cg-mcp` after one failure without explanation are flagged as
+   invalid measurements.
+5. **At least one `cg-mcp` call before any source edit.** If you
+   cannot locate the symbol via `search_code`, document why before
+   resorting to text search.
 
 ## Submission
 

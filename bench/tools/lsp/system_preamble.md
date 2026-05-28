@@ -36,6 +36,19 @@ Lines and columns are **zero-indexed**. Paths are relative to the repo
 root. Each `lsp` call starts its own language-server subprocess
 (~1-3 seconds), so batch where you can.
 
+## Rules of thumb
+
+1. **At least one `lsp` call before any source edit.** Use
+   `find-references` to map callers and `goto-definition` to confirm
+   the symbol's home file before reading.
+2. **Do not fall back to `grep`/`rg`/`find` silently for "what calls
+   this?".** Your trajectory is being measured for tool-usage rate.
+   If `lsp` errors or returns nothing, state that explicitly in your
+   next message (e.g. "lsp find-references returned empty at L:C,
+   falling back to rg") BEFORE running the fallback. Trajectories
+   where you abandon `lsp` after one failure without explanation are
+   flagged as invalid measurements.
+
 ## Submission
 
 When you believe the task is complete, run a bash command whose first

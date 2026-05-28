@@ -2,4 +2,8 @@
 # Bash-callable entry point for the code-graph MCP CLI. Mirrors `cg`
 # but speaks JSON-RPC over stdio to a spawned `cgraph-mcp` server
 # instead of HTTP to the FastAPI service. Runner adds bench/cli to PATH.
-exec "${BENCH_PYTHON:-python3}" -m bench.cli.cg_mcp "$@"
+#
+# stdin redirected from /dev/null defensively — see comment in `cg`.
+# The MCP transport spawns its own child for stdio; this Python
+# process itself does not read stdin from the caller.
+exec "${BENCH_PYTHON:-python3}" -m bench.cli.cg_mcp "$@" </dev/null

@@ -3,4 +3,4 @@
 # bench/cli on PATH so the agent can invoke `lsp ...` directly.
 # BENCH_PYTHON is set by the runner to the venv's python; falls back
 # to system python3 if missing (won't have deps; will fail loudly).
-exec "${BENCH_PYTHON:-python3}" -m bench.cli.lsp "$@"
+exec "${BENCH_PYTHON:-python3}" -m bench.cli.lsp "$@" </dev/null

@@ -42,6 +42,21 @@ Typical loop:
 You also have the usual Unix tools (`cat`, `grep`/`rg`, `find`, `sed`)
 for cases the graph can't answer.
 
+## Rules of thumb
+
+1. **At least one `cg` call before any source edit.** Locate the
+   symbol via `find-symbol` or `auto-complete` before reading files.
+2. **Do not fall back to `grep`/`rg`/`find` silently.** Your
+   trajectory is being measured for tool-usage rate. If `cg` errors
+   or returns nothing, state that explicitly in your next message
+   (e.g. "cg find-symbol returned empty for X, falling back to rg")
+   BEFORE running the fallback. Trajectories where you abandon `cg`
+   after one failure without explanation are flagged as invalid
+   measurements.
+3. **Don't `grep` for callers.** `get-neighbors` is one cheap
+   Cypher hop; grep over a large repo costs tens of thousands of
+   tokens.
+
 ## Submission
 
 When you believe the task is complete, run a bash command whose first
