@@ -1,0 +1,32 @@
+# SWE-agent tool bundle: code-graph config.
+#
+# Baseline + primitive graph tools backed by this repo's FastAPI service
+# at api/. The agent's container reaches the host code-graph service via
+# host network (see bench/runners/swe_bench.py docker setup).
+#
+# IMPORTANT: the GraphRAG `chat` endpoint is intentionally excluded.
+# Including it would mean benchmarking a nested LLM agent and would
+# double-count tokens. We benchmark the *graph*, not GraphRAG.
+
+extends: ../baseline/tools.yaml
+
+tools:
+  - graph_entities        # (repo) -> nodes+edges (paginated)
+  - get_neighbors         # (repo, node_ids) -> adjacent nodes
+  - find_paths            # (repo, src_id, dest_id) -> [path]
+  - auto_complete         # (repo, prefix) -> [symbol]
+  - find_symbol           # (repo, name) -> [node]  NEW helper; thin wrapper
+                          # over auto_complete + filter for exact match.
+  - note_edit             # (repo, path) -> ok  NEW. Called by the agent
+                          # after every write_file/edit. Triggers a
+                          # single-file incremental re-index on the
+                          # code-graph backend. Keeps the graph current
+                          # against agent edits without paying a full
+                          # re-index. Fairness vs live-LSP.
+
+backend:
+  service_url: http://host.docker.internal:5000
+  auth_token_env: SECRET_TOKEN     # injected via .env, never committed
+
+  # Each task indexes its <repo>@<commit> via POST /api/analyze_folder
+  # then exposes the five tools above. Cache: bench/cache/codegraph/.

@@ -6,7 +6,7 @@ authors = [{name = "Roi Lipman", email = "roilipman@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "graphrag-sdk>=0.8.1,<0.9.0",
+    "graphrag-sdk>=1.1.1,<2.0.0",
     "tree-sitter>=0.25.2,<0.26.0",
     "validators>=0.35.0,<0.36.0",
     "falkordb>=1.1.3,<2.0.0",
@@ -37,6 +37,20 @@ test = [
     "httpx>=0.28.0,<1.0.0",
     "anyio>=4.0,<5.0",
 ]
+bench = [
+    "datasets>=4.8.5",
+    "mini-swe-agent>=1.0.0",
+    "swebench>=4.0",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests that spawn external subprocesses (LSP servers, FalkorDB, etc.); skip with -m 'not slow'",
+]
+# Keep pytest from walking into per-instance bench worktrees that contain
+# their own copies of pytest source — collecting from those breaks the
+# host pytest's AST rewriter.
+norecursedirs = ["bench/cache", ".venv", "node_modules", "build", "dist", "*.egg-info"]
 
 [build-system]
 requires = ["setuptools>=68.0"]

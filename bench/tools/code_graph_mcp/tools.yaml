@@ -1,0 +1,39 @@
+# SWE-agent tool bundle: code-graph MCP-transport config.
+#
+# This is the MCP-transport sibling of bench/tools/code_graph/tools.yaml.
+# Same backend graph; different transport. Where `code_graph` calls the
+# host FastAPI service over HTTP, `code_graph_mcp` spawns the
+# `cgraph-mcp` stdio server for each tool call — the exact transport
+# Claude Code / Cursor / Cline use in production.
+#
+# Tool names mirror the 8 MCP tools registered in api/mcp/tools/
+# (search_code, get_callers, get_callees, get_dependencies,
+# impact_analysis, find_path, index_repo, ask). The bash agent calls
+# them through the `cg-mcp <tool> ...` shim (see bench/cli/cg-mcp).
+#
+# IMPORTANT: `ask` (GraphRAG) is intentionally NOT in the tool list.
+# Including it would double-count tokens (nested LLM agent). Same Q2
+# decision as the HTTP code_graph config — we benchmark the *graph*,
+# not GraphRAG.
+
+extends: ../baseline/tools.yaml
+
+tools:
+  - index_repo            # (path_or_url, branch?) -> indexing stats
+  - search_code           # (project, prefix) -> [symbol]
+  - get_callers           # (project, symbol_id) -> [caller]
+  - get_callees           # (project, symbol_id) -> [callee]
+  - get_dependencies      # (project, symbol_id) -> [dep]
+  - impact_analysis       # (project, symbol_id, direction, depth) -> [impacted]
+  - find_path             # (project, source_id, dest_id) -> [path]
+
+backend:
+  transport: mcp_stdio
+  command: cgraph-mcp
+  # Container has cgraph-mcp on PATH via `pip install -e .` against this
+  # repo. FALKORDB_HOST/PORT are passed through to the spawned MCP
+  # server, pointing at the same host FalkorDB the HTTP config uses.
+  env_passthrough:
+    - FALKORDB_HOST
+    - FALKORDB_PORT
+    - MODEL_NAME
