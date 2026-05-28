@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from tree_sitter import Language, Node, Parser, Point, QueryCursor
+from tree_sitter import Language, Node, Parser, Point, Query, QueryCursor
 from api.entities.entity import Entity
 from api.entities.file import File
 from abc import ABC, abstractmethod
@@ -11,11 +11,20 @@ class AbstractAnalyzer(ABC):
     def __init__(self, language: Language) -> None:
         self.language = language
         self.parser = Parser(language)
+        # Memoise compiled queries; tree-sitter query compilation is ~370us
+        # each and adds up to seconds on large repos.
+        self._query_cache: dict[str, Query] = {}
+
+    def _get_query(self, pattern: str) -> Query:
+        q = self._query_cache.get(pattern)
+        if q is None:
+            q = Query(self.language, pattern)
+            self._query_cache[pattern] = q
+        return q
 
     def _captures(self, pattern: str, node: Node) -> dict:
         """Run a tree-sitter query and return captures dict."""
-        query = self.language.query(pattern)
-        cursor = QueryCursor(query)
+        cursor = QueryCursor(self._get_query(pattern))
         return cursor.captures(node)
 
     def find_parent(self, node: Node, parent_types: list) -> Node:
