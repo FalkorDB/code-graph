@@ -64,15 +64,21 @@ def sample_project_path() -> Path:
 
 
 def _falkordb_reachable() -> bool:
-    """Cheap probe so the integration fixture can self-skip in dev."""
+    """Cheap probe so the integration fixture can self-skip in dev.
+
+    Uses the falkordb-py client (rather than a raw TCP socket) so the
+    check exercises the same connection settings the rest of the test
+    suite uses, and surfaces auth / protocol failures — not just
+    "something is listening on that port".
+    """
     try:
-        import socket
+        from falkordb import FalkorDB
 
         host = os.getenv("FALKORDB_HOST", "localhost")
         port = int(os.getenv("FALKORDB_PORT", 6379))
-        with socket.create_connection((host, port), timeout=1):
-            return True
-    except OSError:
+        db = FalkorDB(host=host, port=port, socket_timeout=1)
+        return bool(db.connection.ping())
+    except Exception:
         return False
 
 
@@ -106,7 +112,16 @@ def indexed_fixture(sample_project_path: Path) -> IndexedFixture:
     graph = Graph(project_name, branch=branch)
 
     analyzer = SourceAnalyzer()
-    analyzer.analyze_local_folder(str(sample_project_path), graph)
+    # Belt-and-suspenders: jedi/multilspy used to create venv/ inside the
+    # fixture during resolution, which polluted the tree with hundreds of
+    # site-packages files. Tree-sitter doesn't do this, but we still pass
+    # an explicit ignore list so a stray venv on a contributor's machine
+    # can never break the exact-count contract.
+    analyzer.analyze_local_folder(
+        str(sample_project_path),
+        graph,
+        ignore=["venv", "__pycache__", ".venv"],
+    )
 
     return IndexedFixture(
         project=project_name,
