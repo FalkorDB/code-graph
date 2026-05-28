@@ -800,6 +800,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--step-limit", type=int, default=50)
     p.add_argument("--cost-limit", type=float, default=3.0)
     p.add_argument("--wall-time", type=int, default=1200)
+    p.add_argument("--skip-verify", action="store_true",
+                   help="Skip SWE-bench Docker verification; record "
+                        "outcome=verify_skipped. Useful on hosts without "
+                        "Docker for token-cost / tool-usage measurement runs.")
+    p.add_argument("--verify-timeout", type=int, default=1800,
+                   help="Per-instance verification timeout in seconds "
+                        "passed to swebench.harness (default 1800).")
     args = p.parse_args(argv)
 
     configs = args.config or list(VALID_CONFIGS)
@@ -811,7 +818,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.swe_bench:
         from bench.datasets.swe_bench import (
             load_instances, sample_instances, prepare_worktree,
-            instance_to_task, verify_instance,
+            instance_to_task, verify_with_swebench_harness,
         )
         from bench.metrics import append_jsonl
 
@@ -860,10 +867,25 @@ def main(argv: list[str] | None = None) -> int:
                     defer_jsonl=True,
                 )
                 rows.extend(cfg_rows)
-                ok, summary = verify_instance(inst, cfg_wt)
-                cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
-                if not ok:
-                    cfg_rows[-1]["verify_summary"] = summary[-200:]
+                # Official SWE-bench harness verification. The agent's
+                # patch is on the trajectory metrics; pass it to the
+                # Docker-backed harness. When Docker is missing the
+                # outcome is recorded as `verifier_unavailable` rather
+                # than silently graded `failed`.
+                patch = (cfg_rows[-1]["metrics"].patch or "") if cfg_rows else ""
+                if args.skip_verify:
+                    cfg_rows[-1]["metrics"].outcome = "verify_skipped"
+                else:
+                    resolved, summary = verify_with_swebench_harness(
+                        inst, patch, timeout=args.verify_timeout,
+                    )
+                    if resolved is None:
+                        cfg_rows[-1]["metrics"].outcome = "verifier_unavailable"
+                    else:
+                        cfg_rows[-1]["metrics"].outcome = (
+                            "resolved" if resolved else "failed"
+                        )
+                    cfg_rows[-1]["verify_summary"] = summary[-300:]
                 append_jsonl(args.results, cfg_rows[-1]["metrics"])
     else:
         with tempfile.TemporaryDirectory() as td:

@@ -215,8 +215,143 @@ def instance_to_task(inst: SweBenchInstance, repo_path: Path) -> Task:
 
 
 # ---------------------------------------------------------------------------
-# Verification (approximate — official harness needs Docker)
+# Verification — official SWE-bench harness path
 # ---------------------------------------------------------------------------
+#
+# The original verify_instance implementation ran modern pytest from the
+# bench venv against the SWE-bench worktree's legacy code, which collected
+# zero tests on most instances (e.g. pytest-6202 INTERNALERRORs on removed
+# config keys like `rsyncdirs`). Every trajectory was graded `failed`
+# regardless of patch correctness, invalidating the Sonnet calibration's
+# 0/10 resolve rate.
+#
+# The replacement defers to the official swebench harness, which builds /
+# pulls per-instance Docker images with the right Python + dependencies
+# and runs FAIL_TO_PASS + PASS_TO_PASS exactly the way the leaderboard
+# does. Requires Docker on the host; when Docker is absent we return a
+# `verifier_unavailable` outcome so we never silently grade wrongly again.
+
+
+def _docker_available() -> bool:
+    """Cheap probe — does `docker info` succeed?"""
+    try:
+        r = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return r.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def verify_with_swebench_harness(
+    inst: SweBenchInstance,
+    patch: str,
+    *,
+    run_id: str | None = None,
+    namespace: str | None = "swebench",
+    timeout: int = 1800,
+    report_dir: Path | None = None,
+) -> tuple[bool | None, str]:
+    """Grade a single (instance, patch) via the official swebench harness.
+
+    Returns (resolved, summary):
+      - (True, "..." ) — FAIL_TO_PASS flipped + PASS_TO_PASS held
+      - (False, "...") — patch did not resolve
+      - (None,  "verifier_unavailable: <reason>") — could not grade (no
+        Docker, harness exception). Caller should record outcome=
+        `verifier_unavailable` rather than `failed`.
+
+    `namespace="swebench"` pulls prebuilt images from Docker Hub (the
+    `swebench/sweb.eval.x86_64.<instance>` family) and avoids the 30+
+    minute per-instance build step. Pass `namespace=None` to force a
+    local build instead.
+    """
+    if not _docker_available():
+        return None, "verifier_unavailable: docker not available on host"
+
+    if not patch.strip():
+        return False, "empty patch"
+
+    run_id = run_id or f"code-graph-bench-{inst.instance_id}"
+    report_dir = report_dir or (DEFAULT_CACHE_ROOT / "verify" / run_id)
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    # predictions.jsonl in the format the harness expects
+    model_tag = "code-graph-bench"
+    pred_path = report_dir / "predictions.jsonl"
+    with pred_path.open("w") as f:
+        f.write(json.dumps({
+            "instance_id": inst.instance_id,
+            "model_name_or_path": model_tag,
+            "model_patch": patch,
+        }) + "\n")
+
+    try:
+        from swebench.harness.run_evaluation import main as run_eval
+    except Exception as e:  # pragma: no cover — bench extra missing
+        return None, f"verifier_unavailable: swebench import failed: {e}"
+
+    try:
+        run_eval(
+            dataset_name=DATASET_NAME,
+            split="test",
+            instance_ids=[inst.instance_id],
+            predictions_path=str(pred_path),
+            max_workers=1,
+            force_rebuild=False,
+            cache_level="env",
+            clean=False,
+            open_file_limit=4096,
+            run_id=run_id,
+            timeout=timeout,
+            namespace=namespace,
+            rewrite_reports=False,
+            modal=False,
+            report_dir=str(report_dir),
+        )
+    except Exception as e:
+        return None, f"verifier_unavailable: harness raised {type(e).__name__}: {e}"
+
+    # The harness writes per-instance reports under
+    # logs/run_evaluation/<run_id>/<model>/<instance>/report.json
+    # but the path is CWD-relative. Find the resulting report.
+    candidates = list(Path.cwd().glob(
+        f"logs/run_evaluation/{run_id}/{model_tag}/{inst.instance_id}/report.json"
+    ))
+    if not candidates:
+        # Fallback: the harness writes a top-level run report too.
+        top = list(report_dir.glob(f"*.{run_id}.json"))
+        if top:
+            try:
+                data = json.loads(top[0].read_text())
+                resolved_ids = set(data.get("resolved_ids", []))
+                ok = inst.instance_id in resolved_ids
+                return ok, f"top-level report: resolved={ok}"
+            except Exception:
+                pass
+        return None, "verifier_unavailable: no per-instance report produced"
+
+    try:
+        data = json.loads(candidates[0].read_text())
+        # The per-instance report nests under the instance_id.
+        inst_data = data.get(inst.instance_id, data)
+        resolved = bool(inst_data.get("resolved"))
+        tests_status = inst_data.get("tests_status", {})
+        f2p = tests_status.get("FAIL_TO_PASS", {})
+        p2p = tests_status.get("PASS_TO_PASS", {})
+        summary = (
+            f"resolved={resolved} "
+            f"F2P: success={len(f2p.get('success', []))} "
+            f"failure={len(f2p.get('failure', []))} "
+            f"P2P: success={len(p2p.get('success', []))} "
+            f"failure={len(p2p.get('failure', []))}"
+        )
+        return resolved, summary
+    except Exception as e:
+        return None, f"verifier_unavailable: report parse failed: {e}"
 
 
 def verify_instance(
@@ -225,20 +360,14 @@ def verify_instance(
     *,
     python: str | None = None,
 ) -> tuple[bool, str]:
-    """Run FAIL_TO_PASS + PASS_TO_PASS tests against the patched repo.
+    """DEPRECATED — runs modern pytest against legacy repos and returns
+    bogus results. Kept as a thin shim that fails loud so any caller
+    still using it gets a clear message instead of a silent wrong grade.
 
-    Returns (passed, summary). Best-effort: many SWE-bench repos need
-    bespoke conda envs we don't build here. If pytest itself fails to
-    collect, returns (False, "<error>") so the runner records `failed`
-    and we know to investigate.
+    Real verification goes through `verify_with_swebench_harness(inst,
+    patch)`, which uses the official swebench Docker harness.
     """
-    py = python or os.environ.get("BENCH_REPO_PYTHON") or "python"
-    test_ids = list(inst.fail_to_pass) + list(inst.pass_to_pass)
-    if not test_ids:
-        return False, "no test ids in dataset row"
-
-    cmd = [py, "-m", "pytest", "-q", "--no-header", "-p", "no:cacheprovider", *test_ids]
-    res = subprocess.run(cmd, cwd=str(repo_path), capture_output=True, text=True)
-    ok = res.returncode == 0
-    summary = res.stdout[-500:] + res.stderr[-500:]
-    return ok, summary
+    return False, (
+        "verify_instance is deprecated; use verify_with_swebench_harness "
+        "with the agent's submitted patch and a Docker-enabled host."
+    )
