@@ -26,7 +26,7 @@ and exit non-zero.
 
 Env: FALKORDB_HOST / FALKORDB_PORT are passed through to the spawned
 server. Optionally set CGRAPH_MCP_TIMEOUT_SEC to override the
-default 60s timeout.
+default 900s timeout.
 """
 
 from __future__ import annotations
@@ -47,9 +47,9 @@ def _print(obj: Any) -> None:
 
 def _timeout() -> float:
     try:
-        return float(os.getenv("CGRAPH_MCP_TIMEOUT_SEC", "300"))
+        return float(os.getenv("CGRAPH_MCP_TIMEOUT_SEC", "900"))
     except ValueError:
-        return 60.0
+        return 900.0
 
 
 def _add_project(p: argparse.ArgumentParser) -> None:

@@ -30,7 +30,21 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-DEFAULT_TIMEOUT_SEC = 300.0
+def _default_timeout() -> float:
+    """Pick the per-call MCP timeout, honoring CGRAPH_MCP_TIMEOUT_SEC.
+
+    Defaults to 900 s (15 min). Bumped from the historical 300 s after
+    we observed `index_repo` on full SWE-bench worktrees (sphinx-doc,
+    sympy) finish in 5-10 min when spawned via the MCP stdio transport
+    rather than the warm in-process HTTP path.
+    """
+    try:
+        return float(os.environ.get("CGRAPH_MCP_TIMEOUT_SEC", "900"))
+    except ValueError:
+        return 900.0
+
+
+DEFAULT_TIMEOUT_SEC = _default_timeout()
 
 
 def _env_for_mcp() -> dict[str, str]:
@@ -39,10 +53,19 @@ def _env_for_mcp() -> dict[str, str]:
     Pass through everything from the caller but make sure the FalkorDB
     coordinates are present — the runner usually sets them to point at
     the host FalkorDB container.
+
+    Also default ``CODE_GRAPH_PY_RESOLVER=tree_sitter``. Without this,
+    the spawned server falls back to the legacy jedi/multilspy path,
+    which does ``python -m venv && pip install poetry && poetry install``
+    per repo before analyzing the transitive dep tree — wedges for hours
+    on large SWE-bench repos (sphinx, sympy). The HTTP track gets this
+    via ``bench/scripts/start-api.sh``; we mirror it here so the MCP
+    track is symmetric regardless of how the caller shell is configured.
     """
     env = dict(os.environ)
     env.setdefault("FALKORDB_HOST", os.environ.get("FALKORDB_HOST", "127.0.0.1"))
     env.setdefault("FALKORDB_PORT", os.environ.get("FALKORDB_PORT", "6379"))
+    env.setdefault("CODE_GRAPH_PY_RESOLVER", "tree_sitter")
     return env
 
 
