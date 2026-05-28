@@ -223,7 +223,7 @@ async def chat(data: ChatRequest, _=Depends(public_or_auth)):
     """Chat with the CodeGraph language model."""
 
     try:
-        answer = await ask(data.repo, data.msg)
+        answer = await ask(data.repo, data.msg, branch=data.branch)
     except Exception as e:
         logging.exception("Chat error for repo '%s': %s", data.repo, e)
         return JSONResponse({"status": "error", "response": "Internal server error"},

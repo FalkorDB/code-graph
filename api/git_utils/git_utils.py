@@ -14,7 +14,7 @@ from ..analyzers import SourceAnalyzer
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
-def GitRepoName(repo_name, branch=None):
+def git_repo_name(repo_name, branch=None):
     """ Returns the git transitions graph key for ``(repo_name, branch)``.
 
     Format: ``{repo_name}:{branch}_git``. Hash-tag stays on ``repo_name``
@@ -27,9 +27,14 @@ def GitRepoName(repo_name, branch=None):
     return "{" + repo_name + "}" + ":" + branch + "_git"
 
 
-def LegacyGitRepoName(repo_name):
+def legacy_git_repo_name(repo_name):
     """Pre-T17 git graph key shape — kept for the migration helper."""
     return "{" + repo_name + "}_git"
+
+
+# Backwards-compatible CamelCase aliases (deprecated, will be removed).
+GitRepoName = git_repo_name
+LegacyGitRepoName = legacy_git_repo_name
 
 def is_ignored(file_path: str, ignore_list: List[str]) -> bool:
     """
@@ -108,7 +113,7 @@ def build_commit_graph(path: str, analyzer: SourceAnalyzer, repo_name: str, igno
     g = source.clone(tmp_name)
     g.enable_backlog()
 
-    git_graph       = GitGraph(GitRepoName(repo_name, branch))
+    git_graph       = GitGraph(git_repo_name(repo_name, branch))
     supported_types = analyzer.supported_types()
 
     # Initialize with the current commit
@@ -298,11 +303,21 @@ def switch_commit(repo: str, to: str, branch: Optional[str] = None):
 
     # Initialize the graph and GitGraph objects
     g = Graph(repo, branch=branch)
-    git_graph = GitGraph(GitRepoName(repo, branch))
+    git_graph = GitGraph(git_repo_name(repo, branch))
 
     # Get the current commit hash of the graph
     current_hash = get_repo_commit(repo, branch)
     logging.info(f"Current graph commit: {current_hash}")
+
+    if current_hash is None:
+        logging.error(
+            "Cannot switch commit: no recorded commit for repo=%s branch=%s",
+            repo, branch,
+        )
+        raise ValueError(
+            f"No recorded commit for repo '{repo}' (branch={branch}); "
+            "the repository must be analyzed before switch_commit can run."
+        )
 
     if current_hash == to:
         logging.debug("Current commit: {current_hash} is the requested commit")

@@ -68,6 +68,22 @@ def _rename_graph(db: FalkorDB, src: str, dst: str, *, dry_run: bool) -> bool:
     """
 
     if db.connection.exists(dst):
+        # Recovery path: a previous migration may have copied ``src`` to
+        # ``dst`` but crashed before deleting ``src``. If both still exist,
+        # finish the job rather than skipping forever.
+        if db.connection.exists(src):
+            if dry_run:
+                logger.info(
+                    "[dry-run] would delete leftover legacy graph %s (dst %s already exists)",
+                    src, dst,
+                )
+                return True
+            db.select_graph(src).delete()
+            logger.info(
+                "Deleted leftover legacy graph %s (dst %s already exists)",
+                src, dst,
+            )
+            return True
         logger.warning("Target graph %s already exists — skipping rename of %s", dst, src)
         return False
     if dry_run:
