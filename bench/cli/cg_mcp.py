@@ -41,7 +41,9 @@ from bench.agents import code_graph_mcp_adapter as cgm
 
 
 def _print(obj: Any) -> None:
-    json.dump(obj, sys.stdout, indent=2, sort_keys=True, default=str)
+    # Compact JSON: agents don't care about indentation, and every byte we
+    # save here is re-fed to the LLM every subsequent turn.
+    json.dump(obj, sys.stdout, separators=(",", ":"), sort_keys=True, default=str)
     sys.stdout.write("\n")
 
 

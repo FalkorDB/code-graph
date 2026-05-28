@@ -24,12 +24,85 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Any
 
 from bench.agents.code_graph_adapter import CodeGraphClient
 
 
+# ---------- Output compaction --------------------------------------------------
+# Every byte returned here is re-fed to the LLM on every subsequent turn (the
+# context window grows monotonically until the trajectory ends). A neighbors
+# call that returns 20 KB of raw JSON costs ~5K tokens, and at 50+ turns that
+# compounds badly. The full FastAPI shape is needed by the React frontend, not
+# by an agent — strip the noise here so the LLM sees only what it can act on.
+
+_NODE_KEEP = ("id", "label", "labels", "name", "file", "src", "line", "start_line", "end_line")
+_EDGE_KEEP = ("id", "src_node", "dest_node", "relation")
+
+
+def _compact_node(n: Any) -> Any:
+    if not isinstance(n, dict):
+        return n
+    out: dict[str, Any] = {}
+    props = n.get("properties") or {}
+    for k in _NODE_KEEP:
+        if k in n and n[k] not in (None, "", [], {}):
+            out[k] = n[k]
+        elif k in props and props[k] not in (None, "", [], {}):
+            out[k] = props[k]
+    return out
+
+
+def _compact_edge(e: Any) -> Any:
+    if not isinstance(e, dict):
+        return e
+    out: dict[str, Any] = {}
+    for k in _EDGE_KEEP:
+        v = e.get(k)
+        if v not in (None, "", [], {}):
+            out[k] = v
+    return out
+
+
+def _compact_neighbors(payload: dict[str, Any], limit: int | None) -> dict[str, Any]:
+    """Strip empty properties + alias and apply optional limit."""
+    if not isinstance(payload, dict):
+        return payload
+    n = payload.get("neighbors") or payload
+    nodes = [_compact_node(x) for x in (n.get("nodes") or [])]
+    edges = [_compact_edge(x) for x in (n.get("edges") or [])]
+    if limit is not None and limit > 0:
+        nodes = nodes[:limit]
+        edges = edges[:limit]
+    out: dict[str, Any] = {"nodes": nodes, "edges": edges}
+    if "branch" in payload:
+        out["branch"] = payload["branch"]
+    return out
+
+
+def _compact_symbols(payload: Any) -> Any:
+    """Trim find-symbol / auto-complete records to the fields the agent needs.
+
+    The HTTP responses vary in shape:
+      - find_symbol: ``[node, ...]``
+      - auto_complete: ``{"branch": ..., "completions": [node, ...]}``
+    Compact both consistently.
+    """
+    if isinstance(payload, list):
+        return [_compact_node(x) for x in payload]
+    if isinstance(payload, dict):
+        for key in ("completions", "results", "matches", "items"):
+            if key in payload:
+                out = {k: v for k, v in payload.items() if k != key}
+                out[key] = [_compact_node(x) for x in (payload[key] or [])]
+                return out
+    return payload
+
+
 def _print(obj: object) -> None:
-    json.dump(obj, sys.stdout, indent=2, sort_keys=True)
+    # Compact separators shave ~30 % off vs the default indented form, which the
+    # LLM doesn't need (it ignores whitespace).
+    json.dump(obj, sys.stdout, separators=(",", ":"), sort_keys=True, default=str)
     sys.stdout.write("\n")
 
 
@@ -46,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     gn = sub.add_parser("get-neighbors")
     add_repo(gn)
     gn.add_argument("--ids", type=int, nargs="+", required=True)
+    gn.add_argument("--limit", type=int, default=50,
+                    help="cap nodes/edges in response (default 50, 0 = unlimited)")
 
     fp = sub.add_parser("find-paths")
     add_repo(fp)
@@ -70,13 +145,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "graph-entities":
             _print(c.graph_entities(args.repo))
         elif args.cmd == "get-neighbors":
-            _print(c.get_neighbors(args.repo, args.ids))
+            limit = args.limit if args.limit > 0 else None
+            _print(_compact_neighbors(c.get_neighbors(args.repo, args.ids), limit))
         elif args.cmd == "find-paths":
             _print(c.find_paths(args.repo, args.src, args.dst))
         elif args.cmd == "auto-complete":
-            _print(c.auto_complete(args.repo, args.prefix))
+            _print(_compact_symbols(c.auto_complete(args.repo, args.prefix)))
         elif args.cmd == "find-symbol":
-            _print(c.find_symbol(args.repo, args.name))
+            _print(_compact_symbols(c.find_symbol(args.repo, args.name)))
         elif args.cmd == "note-edit":
             _print(c.note_edit(args.repo, args.path))
         else:
