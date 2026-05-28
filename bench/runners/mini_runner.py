@@ -425,6 +425,80 @@ def _capture_diff(repo_path: Path) -> str:
         return ""
 
 
+def verify_tool_available(config: str, env: dict[str, str], cwd: Path) -> tuple[bool, str]:
+    """Smoke-test the agent's primary tool before launching the trajectory.
+
+    Returns (ok, message). When the tool is missing or crashes at startup,
+    the agent will silently fall back to plain bash and we'd attribute its
+    cheaper trajectory to the "tool" — invalidating the experiment. This
+    precheck makes that failure mode loud.
+    """
+    if config == "baseline":
+        return True, "baseline: no tool"
+    cmd_map = {
+        "lsp": ["lsp", "--help"],
+        "code_graph": ["cg", "--help"],
+        "code_graph_mcp": ["cg-mcp", "--help"],
+    }
+    cmd = cmd_map.get(config)
+    if cmd is None:
+        return True, f"no precheck for config {config!r}"
+    try:
+        res = subprocess.run(
+            cmd, cwd=str(cwd), env=env,
+            capture_output=True, text=True, timeout=15,
+        )
+    except FileNotFoundError as e:
+        return False, f"{cmd[0]} not on PATH: {e}"
+    except subprocess.TimeoutExpired:
+        return False, f"{cmd[0]} --help timed out (>15s)"
+    if res.returncode != 0:
+        tail = (res.stderr or res.stdout)[-300:]
+        return False, f"{cmd[0]} --help returncode={res.returncode}: {tail}"
+    return True, f"{cmd[0]} ok"
+
+
+TOOL_KEYWORDS = {
+    "baseline": (),
+    "lsp": ("lsp",),
+    "code_graph": ("cg ",),
+    "code_graph_mcp": ("cg-mcp",),
+}
+
+
+def compute_tool_usage(messages: list[dict[str, Any]], config: str) -> dict[str, Any]:
+    """Count assistant bash commands that actually invoke the configured tool.
+
+    Returns {turns, tool_turns, rate}. A low rate (<0.5) on a tool config
+    means the agent stopped using its tool — usually because the tool
+    crashed or was unhelpful — and the trajectory is effectively a baseline
+    run with extra preamble. Surface this in the report so we don't
+    misattribute baseline-like behaviour to the tool.
+    """
+    kws = TOOL_KEYWORDS.get(config, ())
+    if not kws:
+        return {"turns": 0, "tool_turns": 0, "rate": None}
+    turns = 0
+    tool_turns = 0
+    for m in messages:
+        if m.get("role") != "assistant":
+            continue
+        # mini-swe-agent v2 puts the bash command in tool_calls[*].function.arguments
+        tcs = m.get("tool_calls") or []
+        for tc in tcs:
+            fn = tc.get("function") or {}
+            if fn.get("name") != "bash":
+                continue
+            args = fn.get("arguments") or ""
+            if isinstance(args, dict):
+                args = args.get("command", "")
+            turns += 1
+            if any(kw in args for kw in kws):
+                tool_turns += 1
+    rate = tool_turns / turns if turns else None
+    return {"turns": turns, "tool_turns": tool_turns, "rate": rate}
+
+
 def run_task(
     task: Task,
     config: str,
@@ -454,6 +528,28 @@ def run_task(
     from minisweagent.environments.local import LocalEnvironment
 
     env_vars = config_env(config, task.repo_path)
+
+    # PRECHECK: verify the tool actually launches before spending model $$.
+    # If the tool crashes (e.g. cg shim hits "Bad file descriptor" on Python
+    # init), the agent will silently fall back to bash for the entire
+    # trajectory and we'd attribute its behaviour to the tool. Hard-fail here
+    # so the issue is visible.
+    if not dry_run:
+        tool_ok, tool_msg = verify_tool_available(config, env_vars, task.repo_path)
+        if not tool_ok:
+            from bench.metrics import TaskMetrics
+            return {
+                "metrics": TaskMetrics(
+                    benchmark=benchmark, task_id=task.task_id, config=config,
+                    run_idx=run_idx, outcome="tool_unavailable",
+                    wall_clock_sec=0.0,
+                ),
+                "trajectory": {"info": {"tool_precheck": tool_msg}},
+                "exit_status": "error",
+                "exit_reason": f"tool precheck failed for {config}: {tool_msg}",
+                "diff": "",
+            }
+
     env = LocalEnvironment(cwd=str(task.repo_path), env=env_vars, timeout=120)
     preamble = load_preamble(config)
 
@@ -491,6 +587,12 @@ def run_task(
     # didn't embed it.
     trajectory.setdefault("info", {})["submission"] = diff
 
+    # Tool-usage instrumentation: surface trajectories where the agent
+    # silently abandoned the configured tool. Stored on the trajectory
+    # and on the metrics row so report.py can flag low-usage runs.
+    tool_usage = compute_tool_usage(trajectory.get("messages", []), config)
+    trajectory["info"]["tool_usage"] = tool_usage
+
     from bench.metrics import TaskMetrics, task_metrics_from_trajectory
 
     metrics: TaskMetrics = task_metrics_from_trajectory(
@@ -501,6 +603,9 @@ def run_task(
         run_idx=run_idx,
         wall_clock_sec=round(wall, 3),
     )
+    metrics.tool_usage_rate = tool_usage["rate"]
+    metrics.tool_usage_turns = tool_usage["tool_turns"]
+    metrics.tool_usage_total = tool_usage["turns"]
     if exit_status == "error":
         metrics.outcome = "error"
 

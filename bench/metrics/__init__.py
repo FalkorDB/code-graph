@@ -39,9 +39,15 @@ class TaskMetrics:
     # tool-call sanity check
     tool_calls_total: int
     tool_calls_by_name: dict[str, int] = field(default_factory=dict)
+    # Tool-usage rate: fraction of bash commands that actually invoke the
+    # configured tool (cg / cg-mcp / lsp). Low rate = agent abandoned the
+    # tool and ran on plain bash. None for baseline (no tool expected).
+    tool_usage_rate: float | None = None
+    tool_usage_turns: int = 0
+    tool_usage_total: int = 0
 
     # outcome (set after scoring; None until then)
-    outcome: str | None = None   # "resolved" | "failed" | "budget_exceeded" | "error"
+    outcome: str | None = None   # "resolved" | "failed" | "budget_exceeded" | "error" | "tool_unavailable"
     patch: str | None = None
     wall_clock_sec: float | None = None
 

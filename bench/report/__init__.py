@@ -23,6 +23,7 @@ class ConfigSummary:
     n_resolved: int
     median_tokens: int
     p90_tokens: int
+    median_tool_usage: float | None = None  # fraction in [0,1] or None for baseline
 
     @property
     def resolve_rate(self) -> float:
@@ -77,6 +78,10 @@ def summarize(rows: list[dict[str, Any]]) -> list[ConfigSummary]:
         token_sums = [
             (r["input_tokens"] + r["output_tokens"]) for r in best_by_task.values()
         ]
+        usage_rates = [
+            r["tool_usage_rate"] for r in best_by_task.values()
+            if r.get("tool_usage_rate") is not None
+        ]
         n_resolved = sum(1 for r in best_by_task.values() if r.get("outcome") == "resolved")
         summaries.append(
             ConfigSummary(
@@ -86,6 +91,7 @@ def summarize(rows: list[dict[str, Any]]) -> list[ConfigSummary]:
                 n_resolved=n_resolved,
                 median_tokens=int(statistics.median(token_sums)) if token_sums else 0,
                 p90_tokens=_percentile(token_sums, 0.9),
+                median_tool_usage=statistics.median(usage_rates) if usage_rates else None,
             )
         )
     return summaries
@@ -103,17 +109,18 @@ def render_markdown(summaries: list[ConfigSummary]) -> str:
         baseline_med = baseline.median_tokens if baseline else 0
 
         lines.append(f"## {bench}\n")
-        lines.append("| config | tasks | resolved | resolve rate | median tokens | p90 tokens | Δ tokens vs baseline |")
-        lines.append("|---|---:|---:|---:|---:|---:|---:|")
+        lines.append("| config | tasks | resolved | resolve rate | median tokens | p90 tokens | Δ tokens vs baseline | tool-usage rate |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
         for s in sorted(group, key=lambda x: x.config):
             delta = "—"
             if baseline_med and s.config != "baseline":
                 pct = (s.median_tokens - baseline_med) / baseline_med * 100
                 delta = f"{pct:+.1f}%"
+            usage = "—" if s.median_tool_usage is None else f"{s.median_tool_usage * 100:.0f}%"
             lines.append(
                 f"| {s.config} | {s.n_tasks} | {s.n_resolved} | "
                 f"{s.resolve_rate * 100:.1f}% | {s.median_tokens:,} | "
-                f"{s.p90_tokens:,} | {delta} |"
+                f"{s.p90_tokens:,} | {delta} | {usage} |"
             )
         lines.append("")
     return "\n".join(lines)
