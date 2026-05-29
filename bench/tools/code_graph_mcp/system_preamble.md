@@ -25,7 +25,7 @@ A pre-indexed code-graph for this repo is available via the
 - `cg-mcp get_callers      --project P --symbol-id ID [--limit N]`
 - `cg-mcp get_callees      --project P --symbol-id ID [--limit N]`
 - `cg-mcp get_dependencies --project P --symbol-id ID [--limit N]`
-- `cg-mcp impact_analysis  --project P --symbol-id ID [--direction IN|OUT] [--depth N]`
+- `cg-mcp impact_analysis  --project P --symbol-id ID [--direction IN|OUT] [--depth N] [--limit N]`
 - `cg-mcp find_path        --project P --source-id ID --dest-id ID`
 
 ## Rules

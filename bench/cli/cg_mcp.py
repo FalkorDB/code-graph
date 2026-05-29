@@ -40,6 +40,71 @@ from typing import Any
 from bench.agents import code_graph_mcp_adapter as cgm
 
 
+# ---------------------------------------------------------------------------
+# Output compaction (iter2): keep token budget bounded
+# ---------------------------------------------------------------------------
+#
+# Iter1 (chunk-fix) un-broke list returns from the MCP layer. That exposed
+# two unbounded payload sources that re-feed every LLM turn:
+#
+#   1. `impact_analysis` has no `--limit` — a depth=3 traversal on a
+#      large project (sympy: 142k edges) routinely returns 500+ nodes.
+#   2. Every node's `file` field is an absolute worktree path
+#      (`/Users/.../worktrees/<project>/sympy/printing/latex.py`,
+#      ~130 chars). The 100+-char prefix is repeated for every entry and
+#      contributes nothing the agent can act on.
+#
+# We strip the worktree prefix and cap list outputs at the CLI layer so the
+# MCP server tools stay unchanged. Caps default to 50 (matches the other
+# tool CLIs) and can be overridden per call.
+
+# Heuristic worktree-prefix patterns we want to strip from `file` fields.
+# We match in order; first hit wins. The "/<project>/" segment is added
+# dynamically at call time because the project name is per-invocation.
+_WORKTREE_FRAGMENTS = (
+    "/.worktrees/",         # git worktree layout
+    "/bench/cache/worktrees/",  # bench harness layout
+)
+
+
+def _strip_worktree_prefix(path: Any, project: str | None) -> Any:
+    """Convert an absolute file path under a project worktree to repo-relative.
+
+    Returns the input unchanged for non-strings or paths we don't recognize.
+    """
+    if not isinstance(path, str) or not project:
+        return path
+    needle = f"/{project}/"
+    idx = path.find(needle)
+    if idx < 0:
+        return path
+    return path[idx + len(needle):]
+
+
+def _compact_entry(entry: Any, project: str | None) -> Any:
+    """Drop noise from a single node-summary dict."""
+    if not isinstance(entry, dict):
+        return entry
+    out: dict[str, Any] = {}
+    for k, v in entry.items():
+        if v in (None, "", [], {}):
+            continue
+        if k == "file":
+            v = _strip_worktree_prefix(v, project)
+        out[k] = v
+    return out
+
+
+def _compact_list(items: Any, project: str | None, limit: int | None) -> Any:
+    """Apply `_compact_entry` + truncate to `limit`."""
+    if not isinstance(items, list):
+        return items
+    compacted = [_compact_entry(x, project) for x in items]
+    if limit is not None and limit > 0:
+        compacted = compacted[:limit]
+    return compacted
+
+
 def _print(obj: Any) -> None:
     # Compact JSON: agents don't care about indentation, and every byte we
     # save here is re-fed to the LLM every subsequent turn.
@@ -88,6 +153,9 @@ def main(argv: list[str] | None = None) -> int:
     ia.add_argument("--symbol-id", type=int, required=True, dest="symbol_id")
     ia.add_argument("--direction", choices=["IN", "OUT"], default="IN")
     ia.add_argument("--depth", type=int, default=3)
+    # Iter2: cap output. impact_analysis on large graphs (sympy: 142k edges)
+    # routinely returns 500+ entries. Default 50 matches the other tools.
+    ia.add_argument("--limit", type=int, default=50)
 
     fp = sub.add_parser("find_path")
     _add_project(fp)
@@ -105,28 +173,46 @@ def main(argv: list[str] | None = None) -> int:
     cgm.DEFAULT_TIMEOUT_SEC = timeout
 
     try:
+        proj = getattr(args, "project", None)
         if args.cmd == "index_repo":
             _print(cgm.index_repo(args.path_or_url, branch=args.branch, ignore=args.ignore))
         elif args.cmd == "search_code":
-            _print(cgm.search_code(args.prefix, args.project, branch=args.branch, limit=args.limit))
+            _print(_compact_list(
+                cgm.search_code(args.prefix, args.project, branch=args.branch, limit=args.limit),
+                proj, args.limit,
+            ))
         elif args.cmd == "get_callers":
-            _print(cgm.get_callers(args.symbol_id, args.project, branch=args.branch, limit=args.limit))
+            _print(_compact_list(
+                cgm.get_callers(args.symbol_id, args.project, branch=args.branch, limit=args.limit),
+                proj, args.limit,
+            ))
         elif args.cmd == "get_callees":
-            _print(cgm.get_callees(args.symbol_id, args.project, branch=args.branch, limit=args.limit))
+            _print(_compact_list(
+                cgm.get_callees(args.symbol_id, args.project, branch=args.branch, limit=args.limit),
+                proj, args.limit,
+            ))
         elif args.cmd == "get_dependencies":
-            _print(cgm.get_dependencies(args.symbol_id, args.project, branch=args.branch, limit=args.limit))
+            _print(_compact_list(
+                cgm.get_dependencies(args.symbol_id, args.project, branch=args.branch, limit=args.limit),
+                proj, args.limit,
+            ))
         elif args.cmd == "impact_analysis":
-            _print(
+            # impact_analysis has no server-side `limit`; cap + compact in CLI.
+            _print(_compact_list(
                 cgm.impact_analysis(
                     args.symbol_id,
                     args.project,
                     branch=args.branch,
                     direction=args.direction,
                     depth=args.depth,
-                )
-            )
+                ),
+                proj, args.limit,
+            ))
         elif args.cmd == "find_path":
-            _print(cgm.find_path(args.source_id, args.dest_id, args.project, branch=args.branch))
+            _print(_compact_entry(
+                cgm.find_path(args.source_id, args.dest_id, args.project, branch=args.branch),
+                proj,
+            ))
         elif args.cmd == "ask":
             _print(cgm.ask(args.question, args.project, branch=args.branch))
         else:  # pragma: no cover — argparse already enforces this
