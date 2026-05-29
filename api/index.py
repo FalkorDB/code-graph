@@ -237,6 +237,119 @@ async def find_paths(data: FindPathsRequest, _=Depends(public_or_auth)):
     return {"status": "success", "branch": g.branch, "paths": paths}
 
 
+# ---------------------------------------------------------------------------
+# v2 agent endpoints (parity with the MCP transport)
+# ---------------------------------------------------------------------------
+#
+# These wrap the same async functions the FastMCP server exposes so that the
+# HTTP-track agent CLI (`cg`) and the stdio MCP-track CLI (`cg-mcp`) expose
+# an identical verb surface against an identical implementation. The only
+# difference between tracks is transport (HTTP vs stdio MCP).
+#
+# Implementation: import the tool functions directly from api.mcp.tools.* —
+# FastMCP's @app.tool decorator returns the original callable unchanged.
+from api.mcp.tools.structural import (  # noqa: E402
+    search_code as _mcp_search_code,
+    get_callers as _mcp_get_callers,
+    get_callees as _mcp_get_callees,
+    get_dependencies as _mcp_get_dependencies,
+    impact_analysis as _mcp_impact_analysis,
+    find_path as _mcp_find_path,
+)
+from api.mcp.tools.ask import ask as _mcp_ask  # noqa: E402
+
+
+class _SearchCodeRequest(BaseModel):
+    project: str
+    prefix: str
+    branch: Optional[str] = None
+    limit: int = 10
+
+
+class _SymbolRequest(BaseModel):
+    project: str
+    symbol_id: int
+    branch: Optional[str] = None
+    limit: int = 50
+
+
+class _ImpactRequest(BaseModel):
+    project: str
+    symbol_id: int
+    branch: Optional[str] = None
+    direction: str = "IN"
+    depth: int = 3
+
+
+class _FindPathRequest(BaseModel):
+    project: str
+    source_id: int
+    dest_id: int
+    branch: Optional[str] = None
+    max_paths: int = 10
+
+
+class _AskRequest(BaseModel):
+    project: str
+    question: str
+    branch: Optional[str] = None
+
+
+@app.post('/api/v2/search_code')
+async def v2_search_code(data: _SearchCodeRequest, _=Depends(public_or_auth)):
+    return await _mcp_search_code(
+        data.prefix, data.project, branch=data.branch, limit=data.limit
+    )
+
+
+@app.post('/api/v2/get_callers')
+async def v2_get_callers(data: _SymbolRequest, _=Depends(public_or_auth)):
+    return await _mcp_get_callers(
+        data.symbol_id, data.project, branch=data.branch, limit=data.limit
+    )
+
+
+@app.post('/api/v2/get_callees')
+async def v2_get_callees(data: _SymbolRequest, _=Depends(public_or_auth)):
+    return await _mcp_get_callees(
+        data.symbol_id, data.project, branch=data.branch, limit=data.limit
+    )
+
+
+@app.post('/api/v2/get_dependencies')
+async def v2_get_dependencies(data: _SymbolRequest, _=Depends(public_or_auth)):
+    return await _mcp_get_dependencies(
+        data.symbol_id, data.project, branch=data.branch, limit=data.limit
+    )
+
+
+@app.post('/api/v2/impact_analysis')
+async def v2_impact_analysis(data: _ImpactRequest, _=Depends(public_or_auth)):
+    return await _mcp_impact_analysis(
+        data.symbol_id,
+        data.project,
+        branch=data.branch,
+        direction=data.direction,
+        depth=data.depth,
+    )
+
+
+@app.post('/api/v2/find_path')
+async def v2_find_path(data: _FindPathRequest, _=Depends(public_or_auth)):
+    return await _mcp_find_path(
+        data.source_id,
+        data.dest_id,
+        data.project,
+        branch=data.branch,
+        max_paths=data.max_paths,
+    )
+
+
+@app.post('/api/v2/ask')
+async def v2_ask(data: _AskRequest, _=Depends(public_or_auth)):
+    return await _mcp_ask(data.question, data.project, branch=data.branch)
+
+
 @app.post('/api/chat')
 async def chat(data: ChatRequest, _=Depends(public_or_auth)):
     """Chat with the CodeGraph language model."""
