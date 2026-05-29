@@ -602,7 +602,9 @@ def run_task(
 
     # Late imports — they trigger litellm side effects.
     from minisweagent.agents.default import DefaultAgent
-    from minisweagent.environments.local import LocalEnvironment
+    from minisweagent.environments.local import LocalEnvironment  # noqa: F401  (still referenced in docstring)
+
+    from bench.runners.safe_local_env import SafeLocalEnvironment
 
     env_vars = config_env(config, task.repo_path)
 
@@ -627,7 +629,7 @@ def run_task(
                 "diff": "",
             }
 
-    env = LocalEnvironment(cwd=str(task.repo_path), env=env_vars, timeout=120)
+    env = SafeLocalEnvironment(cwd=str(task.repo_path), env=env_vars, timeout=120)
     preamble = load_preamble(config)
 
     if dry_run:
