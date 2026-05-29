@@ -132,7 +132,8 @@ message that contains a unified diff of your changes inside a fenced
 INSTANCE_TEMPLATE_CODE_GRAPH = """\
 You are working in the repository at {{cwd}}.
 The code-graph service has already indexed this repository under the
-name `$REPO_NAME` (use the env var literally).
+project name `$PROJECT_NAME` on branch `$BRANCH` (use the env vars
+literally).
 
 The task to solve:
 
@@ -141,13 +142,12 @@ The task to solve:
 **Required workflow.** Before reading or editing any file, your first
 bash command MUST be:
 
-  `cg find-symbol --repo "$REPO_NAME" --name <a symbol named in the task description>`
+  `cg search_code --project "$PROJECT_NAME" --branch "$BRANCH" --prefix <a symbol named in the task description>`
 
-then use `cg get-neighbors --repo "$REPO_NAME" --ids <id>` to expand
-relationships before doing any textual search. After every file edit,
-run `cg note-edit --repo "$REPO_NAME" --path <relpath>` so subsequent
-graph queries reflect your change. Reach for grep/sed/cat only for
-content reading after `cg` has located the right place.
+Then use `cg get_callers --project "$PROJECT_NAME" --branch "$BRANCH" --symbol-id <id>`
+to expand relationships before doing any textual search. Use
+`cg impact_analysis ... --symbol-id <id> --depth 3` before
+non-trivial edits.
 
 When you believe the task is complete, finish your turn with a final
 message that contains a unified diff of your changes inside a fenced
@@ -237,8 +237,12 @@ def config_env(config: str, repo_path: Path) -> dict[str, str]:
     elif config == "code_graph":
         # The runner is responsible for ensuring the service is up.
         env.setdefault("CODEGRAPH_URL", "http://127.0.0.1:5000")
-        # The agent's preamble references $REPO_NAME — set it to the
-        # worktree dirname, which is what analyze_folder used as the id.
+        # Parity with MCP track: both tracks now use the same verbs and the
+        # same env-var contract. PROJECT_NAME / BRANCH match what the
+        # indexing pre-step registers.
+        env["PROJECT_NAME"] = repo_path.name
+        env["BRANCH"] = os.environ.get("CGRAPH_HTTP_BRANCH", "_default")
+        # Keep REPO_NAME for any legacy preambles / tests.
         env["REPO_NAME"] = repo_path.name
     elif config == "code_graph_mcp":
         # MCP transport: agent calls `cg-mcp …` which spawns the
@@ -277,6 +281,7 @@ def _ensure_indexed(repo_path: Path) -> float:
 
     base = os.environ.get("CODEGRAPH_URL", "http://127.0.0.1:5000").rstrip("/")
     repo_name = repo_path.name
+    branch = os.environ.get("CGRAPH_HTTP_BRANCH", "_default")
     token = os.environ.get("SECRET_TOKEN") or os.environ.get("CODEGRAPH_TOKEN")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
 
@@ -310,15 +315,12 @@ def _ensure_indexed(repo_path: Path) -> float:
     # that schema churn.
     host = os.environ.get("FALKORDB_HOST", "127.0.0.1")
     port = int(os.environ.get("FALKORDB_PORT", "6379"))
-    expected_graph = repo_name  # the HTTP path uses bare folder name as graph key
+    expected_graph = f"code:{repo_name}:{branch}"
     try:
         r = redis.Redis(host=host, port=port, decode_responses=True, socket_timeout=2)
         graphs = r.execute_command("GRAPH.LIST") or []
-        # Match either bare name (legacy) or "code:<name>:<branch>" pattern.
-        if expected_graph in graphs or any(
-            g == repo_name or g.startswith(f"code:{repo_name}:") for g in graphs
-        ):
-            print(f"[index] {repo_name} already in FalkorDB; skip")
+        if expected_graph in graphs:
+            print(f"[index] {expected_graph} already in FalkorDB; skip")
             return 0.0
     except Exception as exc:  # noqa: BLE001
         print(f"[index] WARN GRAPH.LIST precheck failed ({exc!r}); attempting index anyway")
@@ -337,7 +339,7 @@ def _ensure_indexed(repo_path: Path) -> float:
                           headers=headers) as c:
             r = c.post(
                 f"{base}/api/analyze_folder",
-                json={"path": str(repo_path), "ignore": default_ignore},
+                json={"path": str(repo_path), "ignore": default_ignore, "branch": branch},
             )
             if r.status_code != 200:
                 raise RuntimeError(

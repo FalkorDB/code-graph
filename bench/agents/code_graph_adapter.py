@@ -140,6 +140,85 @@ class CodeGraphClient:
         except httpx.HTTPError as exc:
             return {"ok": False, "error": str(exc), "path": path}
 
+    # ------------------------------------------------------------------
+    # v2 agent verbs — parity with the MCP transport.
+    # ------------------------------------------------------------------
+    # Each hits a /api/v2/* endpoint that wraps the same async function
+    # the FastMCP server exposes. Output shape is identical between
+    # transports, so cg / cg-mcp benchmarks measure transport overhead
+    # rather than API-surface differences.
+
+    def search_code(self, project: str, prefix: str, branch: str | None = None,
+                    limit: int = 10) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {"project": project, "prefix": prefix, "limit": limit}
+        if branch:
+            body["branch"] = branch
+        r = self._client.post("/api/v2/search_code", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def get_callers(self, project: str, symbol_id: int, branch: str | None = None,
+                    limit: int = 50) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {"project": project, "symbol_id": symbol_id, "limit": limit}
+        if branch:
+            body["branch"] = branch
+        r = self._client.post("/api/v2/get_callers", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def get_callees(self, project: str, symbol_id: int, branch: str | None = None,
+                    limit: int = 50) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {"project": project, "symbol_id": symbol_id, "limit": limit}
+        if branch:
+            body["branch"] = branch
+        r = self._client.post("/api/v2/get_callees", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def get_dependencies(self, project: str, symbol_id: int, branch: str | None = None,
+                         limit: int = 50) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {"project": project, "symbol_id": symbol_id, "limit": limit}
+        if branch:
+            body["branch"] = branch
+        r = self._client.post("/api/v2/get_dependencies", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def impact_analysis(self, project: str, symbol_id: int,
+                        branch: str | None = None,
+                        direction: str = "IN",
+                        depth: int = 3) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {
+            "project": project, "symbol_id": symbol_id,
+            "direction": direction, "depth": depth,
+        }
+        if branch:
+            body["branch"] = branch
+        r = self._client.post("/api/v2/impact_analysis", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def find_path_v2(self, project: str, source_id: int, dest_id: int,
+                     branch: str | None = None,
+                     max_paths: int = 10) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {
+            "project": project, "source_id": source_id, "dest_id": dest_id,
+            "max_paths": max_paths,
+        }
+        if branch:
+            body["branch"] = branch
+        r = self._client.post("/api/v2/find_path", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def ask_v2(self, project: str, question: str, branch: str | None = None) -> Any:
+        body: dict[str, Any] = {"project": project, "question": question}
+        if branch:
+            body["branch"] = branch
+        r = self._client.post("/api/v2/ask", json=body)
+        r.raise_for_status()
+        return r.json()
+
 
 # Convenience function aliases — the SWE-agent tool registry expects
 # top-level callables. Each spins up a short-lived client; for hot loops
