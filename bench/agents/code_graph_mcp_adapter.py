@@ -72,23 +72,43 @@ def _env_for_mcp() -> dict[str, str]:
 def _extract(result: Any) -> Any:
     """Normalize a CallToolResult into a JSON-serialisable Python value.
 
-    The MCP spec lets servers put the payload in `structuredContent`
-    and/or echo it as a JSON text chunk. Our 8 tools do both; agents
-    have historically preferred the text payload. We mirror that:
-    return the parsed text chunk when present, otherwise fall back to
-    structuredContent (unwrapping the spec's `{"result": ...}` wrapper
-    for collection-returning tools).
+    FastMCP serializes list returns as **N separate TextContent
+    chunks** (one per item) AND echoes the full list in
+    ``structuredContent['result']``. Earlier versions of this helper
+    returned only the *first* TextContent chunk, which meant every
+    list-returning tool (``search_code``, ``get_callers``,
+    ``get_callees``, ``get_dependencies``, ``impact_analysis``,
+    ``find_path``) silently returned just the first element. On
+    sympy-19040 the Opus agent searched "factor", got back one record
+    instead of ten, gave up on the graph entirely and burned ~50 turns
+    on bash exploration — cg_mcp ended up at +35% vs baseline.
+
+    The new policy: prefer ``structuredContent`` when present (it
+    always carries the full payload), unwrapping the spec's
+    ``{"result": ...}`` envelope. Fall back to concatenating the text
+    chunks (which may be JSON-each or a single JSON document).
     """
-    for chunk in result.content:
-        if hasattr(chunk, "text") and chunk.text:
-            try:
-                return json.loads(chunk.text)
-            except json.JSONDecodeError:
-                return chunk.text
     struct = getattr(result, "structuredContent", None)
-    if isinstance(struct, dict) and set(struct.keys()) == {"result"}:
-        return struct["result"]
-    return struct
+    if isinstance(struct, dict):
+        if set(struct.keys()) == {"result"}:
+            return struct["result"]
+        return struct
+
+    chunks: list[str] = [c.text for c in (result.content or []) if getattr(c, "text", None)]
+    if not chunks:
+        return None
+    # Try parsing each chunk as JSON and assembling them. If every
+    # chunk parses, we likely had a per-item list serialization; if
+    # only one chunk parses, that's the whole payload.
+    parsed: list[Any] = []
+    for c in chunks:
+        try:
+            parsed.append(json.loads(c))
+        except json.JSONDecodeError:
+            return "\n".join(chunks)
+    if len(parsed) == 1:
+        return parsed[0]
+    return parsed
 
 
 async def _call_tool_async(name: str, arguments: dict[str, Any], timeout: float) -> Any:

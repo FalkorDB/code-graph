@@ -79,6 +79,34 @@ def test_extract_returns_raw_text_when_not_json():
     assert cgm._extract(r) == "not json at all"
 
 
+def test_extract_returns_full_list_from_structured_content():
+    """REGRESSION: FastMCP serializes ``list[dict]`` returns as N TextContent
+    chunks (one per item) AND the full list in ``structuredContent['result']``.
+    Earlier the extractor returned only the first text chunk, silently
+    truncating every list-returning tool (``search_code``, ``get_callers``,
+    ``impact_analysis``, …) to its first element. We caught this on the n=10
+    Opus run: cg_mcp burned +35% input tokens vs baseline because the agent
+    kept seeing 1-element results, gave up on the graph, and flailed in bash.
+    """
+    chunks = [_FakeChunk(json.dumps({"id": i, "name": f"x_{i}"})) for i in range(10)]
+    struct = {"result": [{"id": i, "name": f"x_{i}"} for i in range(10)]}
+    r = _FakeResult(chunks, structured=struct)
+    out = cgm._extract(r)
+    assert isinstance(out, list)
+    assert len(out) == 10
+    assert out[9] == {"id": 9, "name": "x_9"}
+
+
+def test_extract_returns_full_list_from_text_chunks_only():
+    """If structuredContent is absent but multiple JSON text chunks are
+    present (older FastMCP behavior), we still want the full list, not
+    just the first chunk."""
+    chunks = [_FakeChunk(json.dumps({"id": i})) for i in range(3)]
+    r = _FakeResult(chunks, structured=None)
+    out = cgm._extract(r)
+    assert out == [{"id": 0}, {"id": 1}, {"id": 2}]
+
+
 def test_cli_rejects_unknown_subcommand(capsys):
     with pytest.raises(SystemExit):
         cg_mcp.main(["totally_bogus"])
