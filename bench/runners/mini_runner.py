@@ -869,8 +869,9 @@ def main(argv: list[str] | None = None) -> int:
                    default="smoke",
                    help="SWE-bench stage (sample size). Only used with --swe-bench.")
     p.add_argument("--limit", type=int, default=None,
-                   help="Cap number of instances sampled. Overrides --stage size "
-                        "for quick checks (e.g. --limit 1).")
+                   help="Exact number of instances to sample. Overrides the "
+                        "--stage size (e.g. --limit 1 for a quick check, "
+                        "--limit 40 for a larger run).")
     p.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     p.add_argument("--trajectories", type=Path, default=DEFAULT_CACHE_DIR / "trajectories")
     p.add_argument("--model", default="anthropic/claude-sonnet-4-5",
@@ -905,9 +906,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         from bench.metrics import append_jsonl
 
-        insts = sample_instances(load_instances(), stage=args.stage)
-        if args.limit is not None:
-            insts = insts[: args.limit]
+        insts = sample_instances(load_instances(), stage=args.stage, n=args.limit)
         print(f"[swe-bench] stage={args.stage} running {len(insts)} instances "
               f"x {len(configs)} configs = {len(insts) * len(configs)} trajectories")
         for inst in insts:
