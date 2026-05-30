@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -66,6 +67,7 @@ class SweBenchInstance:
     pass_to_pass: list[str]
     environment_setup_commit: str
     version: str
+    patch: str = ""  # gold source patch (localization ground truth)
 
 
 def _git(args: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
@@ -113,6 +115,7 @@ def load_instances(
                 pass_to_pass=_parse_list_field(row["PASS_TO_PASS"]),
                 environment_setup_commit=row.get("environment_setup_commit") or "",
                 version=row.get("version") or "",
+                patch=row.get("patch") or "",
             )
         )
     return out
@@ -212,6 +215,198 @@ def instance_to_task(inst: SweBenchInstance, repo_path: Path) -> Task:
         problem_statement=inst.problem_statement,
         verify_cmd=None,  # verification done via swe_bench.verify_instance
     )
+
+
+# ---------------------------------------------------------------------------
+# Localization ground truth (LocAgent-style)
+# ---------------------------------------------------------------------------
+
+# Paths we exclude from the "files to modify" gold set: tests, docs, and
+# anything that isn't Python source. Localization asks for the *implementation*
+# files, so an agent that correctly avoids tests shouldn't be penalized.
+_TEST_PATH_RE = re.compile(
+    r"(^|/)(tests?|testing|test)(/|$)"          # tests/ dir
+    r"|(^|/)conftest\.py$"                        # pytest conftest
+    r"|(^|/)test_[^/]*\.py$"                       # test_*.py
+    r"|[^/]*_test\.py$"                            # *_test.py
+)
+_DOC_PATH_RE = re.compile(r"(^|/)docs?(/|$)|\.(rst|md|txt|cfg|ini|toml)$")
+
+
+def is_source_file(path: str) -> bool:
+    """True for non-test, non-doc Python source files."""
+    if not path.endswith(".py"):
+        return False
+    if _TEST_PATH_RE.search(path):
+        return False
+    if _DOC_PATH_RE.search(path):
+        return False
+    return True
+
+
+def gold_changed_files(patch: str, *, source_only: bool = True) -> list[str]:
+    """Repo-relative files touched by a unified diff, in patch order.
+
+    Reads `+++ b/<path>` headers (skips /dev/null deletions). When
+    `source_only`, filters to non-test non-doc Python files.
+    """
+    files: list[str] = []
+    for line in patch.splitlines():
+        if not line.startswith("+++ "):
+            continue
+        target = line[4:].strip()
+        if target == "/dev/null":
+            continue
+        # strip the leading "b/" git prefix if present
+        if target.startswith("b/"):
+            target = target[2:]
+        if target in files:
+            continue
+        if source_only and not is_source_file(target):
+            continue
+        files.append(target)
+    return files
+
+
+def _patch_hunk_ranges(patch: str) -> dict[str, list[tuple[int, int]]]:
+    """Map each target file -> list of (start, end) NEW-file line ranges
+    that the gold patch modifies. Used for symbol-level localization."""
+    ranges: dict[str, list[tuple[int, int]]] = {}
+    cur: str | None = None
+    for line in patch.splitlines():
+        if line.startswith("+++ "):
+            target = line[4:].strip()
+            if target.startswith("b/"):
+                target = target[2:]
+            cur = None if target == "/dev/null" else target
+            if cur is not None:
+                ranges.setdefault(cur, [])
+            continue
+        if line.startswith("@@"):
+            m = re.search(r"\+(\d+)(?:,(\d+))?", line)
+            if m and cur is not None:
+                start = int(m.group(1))
+                count = int(m.group(2) or "1")
+                ranges[cur].append((start, start + max(count - 1, 0)))
+            continue
+    return ranges
+
+
+def gold_symbols(inst: SweBenchInstance, repo_path: Path) -> dict[str, list[str]]:
+    """Best-effort Python symbol-level gold: for each gold source file,
+    the set of enclosing top-level/def/class symbol names whose body the
+    gold patch modifies. Maps NEW-file hunk line ranges to enclosing
+    ast.FunctionDef/AsyncFunctionDef/ClassDef. Files that don't parse or
+    don't map are silently skipped (reported as unmappable upstream).
+    """
+    import ast
+
+    out: dict[str, list[str]] = {}
+    ranges = _patch_hunk_ranges(inst.patch)
+    for rel, rngs in ranges.items():
+        if not is_source_file(rel):
+            continue
+        fpath = repo_path / rel
+        if not fpath.exists():
+            continue
+        try:
+            tree = ast.parse(fpath.read_text())
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        # Build (start,end,qualname) for every def/class.
+        spans: list[tuple[int, int, str]] = []
+
+        def _walk(node: ast.AST, prefix: str) -> None:
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    qual = f"{prefix}{child.name}"
+                    start = child.lineno
+                    end = getattr(child, "end_lineno", start)
+                    spans.append((start, end, qual))
+                    _walk(child, qual + ".")
+                else:
+                    _walk(child, prefix)
+
+        _walk(tree, "")
+        hit: list[str] = []
+        for (hs, he) in rngs:
+            # innermost enclosing symbol per hunk
+            best: tuple[int, str] | None = None
+            for (s, e, q) in spans:
+                if s <= hs <= e or s <= he <= e or (hs <= s and he >= e):
+                    size = e - s
+                    if best is None or size < best[0]:
+                        best = (size, q)
+            if best and best[1] not in hit:
+                hit.append(best[1])
+        if hit:
+            out[rel] = hit
+    return out
+
+
+def leakage_flags(inst: SweBenchInstance, gold_files: list[str]) -> dict[str, bool]:
+    """Annotate whether the issue text trivially leaks the gold location."""
+    text = inst.problem_statement or ""
+    basenames = {Path(f).name for f in gold_files}
+    return {
+        "mentions_gold_path": any(f in text for f in gold_files),
+        "mentions_gold_basename": any(b in text for b in basenames),
+        "contains_traceback": ("Traceback (most recent call last)" in text)
+        or ("\n  File \"" in text),
+    }
+
+
+def is_structural(inst: SweBenchInstance) -> bool:
+    """A task stresses structural navigation if its gold source patch
+    spans >=2 source files OR >=2 distinct directories."""
+    files = gold_changed_files(inst.patch, source_only=True)
+    if len(files) >= 2:
+        return True
+    dirs = {str(Path(f).parent) for f in files}
+    return len(dirs) >= 2
+
+
+def select_structural(
+    instances: Iterable[SweBenchInstance],
+    *,
+    seed: int = DEFAULT_SEED,
+    n: int | None = None,
+) -> list[SweBenchInstance]:
+    """Deterministically sample instances whose gold patch is multi-file/
+    multi-dir (structural-navigation stressors)."""
+    pool = [i for i in instances if is_structural(i)]
+    rng = random.Random(seed)
+    rng.shuffle(pool)
+    return pool[:n] if n is not None else pool
+
+
+def prepare_localize_worktree(
+    inst: SweBenchInstance,
+    *,
+    repos_dir: Path = REPOS_DIR,
+    worktrees_dir: Path | None = None,
+) -> Path:
+    """Materialize a TEST-FREE worktree under a distinct name (`{id}__loc`).
+
+    The distinct dirname matters: the code-graph backend keys its index on
+    the worktree dirname, so a fresh name forces a clean re-index that does
+    NOT contain the test_patch files (which would leak the bug location).
+    """
+    wt_dir = worktrees_dir or (DEFAULT_CACHE_ROOT / "worktrees-localize")
+    src = _ensure_repo_clone(inst.repo, repos_dir)
+    dest = wt_dir / f"{inst.instance_id}__loc"
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    if dest.exists():
+        # A locked/partial dir survived rmtree (e.g. an open handle from a
+        # prior interrupted run). Move it aside so the clone can proceed.
+        import time as _t
+        dest.rename(dest.with_name(f"{dest.name}.stale.{int(_t.time())}"))
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    _git(["clone", str(src), str(dest)])
+    _git(["fetch", "origin", inst.base_commit], cwd=dest, check=False)
+    _git(["checkout", "--detach", inst.base_commit], cwd=dest)
+    return dest
 
 
 # ---------------------------------------------------------------------------
