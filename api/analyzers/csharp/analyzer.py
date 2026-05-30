@@ -136,3 +136,11 @@ class CSharpAnalyzer(AbstractAnalyzer):
             return self.resolve_method(files, lsp, file_path, path, symbol)
         else:
             raise ValueError(f"Unknown key {key}")
+
+    def add_file_imports(self, file: File) -> None:
+        # C# import tracking not yet implemented
+        pass
+
+    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
+        # C# import resolution not yet implemented
+        return []

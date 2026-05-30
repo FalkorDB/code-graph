@@ -21,10 +21,30 @@ class File:
         self.path = path
         self.tree = tree
         self.entities: dict[Node, Entity] = {}
+        self.imports: list[Node] = []
+        self.resolved_imports: set[Entity] = set()
 
     def add_entity(self, entity: Entity):
         entity.parent = self
         self.entities[entity.node] = entity
+    
+    def add_import(self, import_node: Node):
+        """
+        Add an import statement node to track.
+        
+        Args:
+            import_node (Node): The import statement node.
+        """
+        self.imports.append(import_node)
+    
+    def add_resolved_import(self, resolved_entity: Entity):
+        """
+        Add a resolved import entity.
+        
+        Args:
+            resolved_entity (Entity): The resolved entity that is imported.
+        """
+        self.resolved_imports.add(resolved_entity)
 
     def __str__(self) -> str:
         return f"path: {self.path}"

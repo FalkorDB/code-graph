@@ -158,6 +158,14 @@ class JavaScriptAnalyzer(AbstractAnalyzer):
                 res.append(file.entities[method_dec])
         return res
 
+    def add_file_imports(self, file: File) -> None:
+        """JavaScript import tracking not yet implemented."""
+        pass
+
+    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
+        """JavaScript import resolution not yet implemented."""
+        return []
+
     def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
         """Dispatch symbol resolution based on the symbol category.
 

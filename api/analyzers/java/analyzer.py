@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 import subprocess
 from ...entities import *
+from ...entities.entity import Entity
+from ...entities.file import File
 from typing import Optional
 from ..analyzer import AbstractAnalyzer
 
@@ -127,3 +129,19 @@ class JavaAnalyzer(AbstractAnalyzer):
             return self.resolve_method(files, lsp, file_path, path, symbol)
         else:
             raise ValueError(f"Unknown key {key}")
+
+    def add_file_imports(self, file: File) -> None:
+        """
+        Extract and add import statements from the file.
+        Java imports are not yet implemented.
+        """
+        # TODO: Implement Java import tracking
+        pass
+
+    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
+        """
+        Resolve an import statement to the entities it imports.
+        Java imports are not yet implemented.
+        """
+        # TODO: Implement Java import resolution
+        return []

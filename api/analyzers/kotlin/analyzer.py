@@ -148,6 +148,14 @@ class KotlinAnalyzer(AbstractAnalyzer):
                     break
         return res
     
+    def add_file_imports(self, file: File) -> None:
+        """Kotlin import tracking not yet implemented."""
+        pass
+
+    def resolve_import(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, import_node: Node) -> list[Entity]:
+        """Kotlin import resolution not yet implemented."""
+        return []
+
     def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
         if key in ["implement_interface", "base_class", "parameters", "return_type"]:
             return self.resolve_type(files, lsp, file_path, path, symbol)
