@@ -124,3 +124,24 @@ def test_score_empty_prediction():
     assert s["file_recall"] == 0.0
     assert s["file_all_found"] is False
     assert s["file_mrr"] == 0.0
+
+
+def test_safe_env_kills_pipe_holding_grandchild_promptly():
+    """The exact deadlock: a command backgrounds a child that keeps the stdout
+    pipe open and sleeps far longer than the timeout. The stock
+    subprocess.run(timeout=) would block in communicate(); SafeLocalEnvironment
+    must return promptly with a timeout marker.
+    """
+    import time as _t
+
+    from bench.runners.localize_runner import SafeLocalEnvironment
+
+    env = SafeLocalEnvironment(cwd="/tmp", env={}, timeout=2)
+    # `sleep 60 &` inherits stdout; parent echoes then exits but the child
+    # holds the pipe open for 60s.
+    started = _t.time()
+    out = env.execute({"command": "sleep 60 & echo started; sleep 60"})
+    elapsed = _t.time() - started
+    assert elapsed < 15, f"did not reap promptly (took {elapsed:.1f}s)"
+    assert out["returncode"] == -1
+    assert "timed out" in out["output"]

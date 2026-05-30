@@ -27,7 +27,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import signal
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -45,6 +48,62 @@ LOCALIZE_RESULTS = DEFAULT_CACHE_DIR / "opus-localize" / "results.jsonl"
 LOCALIZE_TRAJECTORIES = DEFAULT_CACHE_DIR / "opus-localize" / "trajectories"
 
 SENTINEL = "FINAL_LOCALIZATION_JSON:"
+
+from minisweagent.environments.local import LocalEnvironment  # noqa: E402
+
+
+class SafeLocalEnvironment(LocalEnvironment):
+    """LocalEnvironment whose timeout reliably reaps the whole process tree.
+
+    The stock implementation runs ``subprocess.run(shell=True, timeout=...)``.
+    When a command spawns a grandchild that inherits the stdout pipe (e.g. a
+    jedi/multilspy language server that hangs while indexing a large repo such
+    as Django), the timeout kills only the shell and ``communicate()`` then
+    blocks *forever* waiting for the inherited pipe to close — wedging the whole
+    agent. We launch each command in its own session and ``SIGKILL`` the entire
+    process group on timeout, which closes the pipe and unblocks the read.
+
+    Everything else (the ``COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`` completion
+    check, template vars, serialization, pydantic config) is inherited.
+    """
+
+    def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
+        command = action.get("command", "")
+        run_cwd = cwd or self.config.cwd or os.getcwd()
+        tmo = timeout or self.config.timeout
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            text=True,
+            cwd=run_cwd,
+            env=os.environ | self.config.env,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        try:
+            out, _ = proc.communicate(timeout=tmo)
+            output = {"output": out, "returncode": proc.returncode, "exception_info": ""}
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            try:
+                out, _ = proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                out = ""
+            output = {
+                "output": (out or "") + f"\n[command timed out after {tmo}s; process group killed]",
+                "returncode": -1,
+                "exception_info": f"TimeoutExpired after {tmo}s",
+                "extra": {"exception_type": "TimeoutExpired", "exception": "timeout"},
+            }
+        self._check_finished(output)
+        return output
+
 
 # One template for ALL configs. The per-config preamble already advertises the
 # available navigation tool (cg / lsp / none); we deliberately do NOT force a
@@ -230,11 +289,10 @@ def run_localize_task(
         _ensure_indexed_mcp(repo_path)
 
     from minisweagent.agents.default import DefaultAgent
-    from minisweagent.environments.local import LocalEnvironment
     from minisweagent.models.litellm_model import LitellmModel
 
     env_vars = config_env(config, repo_path)
-    env = LocalEnvironment(cwd=str(repo_path), env=env_vars, timeout=120)
+    env = SafeLocalEnvironment(cwd=str(repo_path), env=env_vars, timeout=120)
     agent = DefaultAgent(
         LitellmModel(model_name=model_name),
         env,
