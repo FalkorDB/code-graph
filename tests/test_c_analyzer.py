@@ -1,70 +1,141 @@
-import os
 import unittest
 from pathlib import Path
 
-from api import SourceAnalyzer, Graph
+from api.analyzers.c.analyzer import CAnalyzer
+from api.entities.entity import Entity
+from api.entities.file import File
 
 
-class Test_C_Analyzer(unittest.TestCase):
-    def test_analyzer(self):
-        path = Path(__file__).parent
-        analyzer = SourceAnalyzer()
+def _entity_name(analyzer, entity):
+    """Get the name of an entity using the analyzer."""
+    return analyzer.get_entity_name(entity.node)
 
-        # Get the current file path
-        current_file_path = os.path.abspath(__file__)
 
-        # Get the directory of the current file
-        current_dir = os.path.dirname(current_file_path)
+class TestCAnalyzer(unittest.TestCase):
+    """Test the C analyzer's entity extraction (no DB required)."""
 
-        # Append 'source_files/c' to the current directory
-        path = os.path.join(current_dir, 'source_files')
-        path = os.path.join(path, 'c')
-        path = str(path)
+    @classmethod
+    def setUpClass(cls):
+        cls.analyzer = CAnalyzer()
+        source_dir = Path(__file__).parent / "source_files" / "c"
+        cls.sample_path = source_dir / "src.c"
+        source = cls.sample_path.read_bytes()
+        tree = cls.analyzer.parser.parse(source)
+        cls.file = File(cls.sample_path, tree)
 
-        g = Graph("c")
-        analyzer.analyze_local_folder(path, g)
+        # Walk AST and extract entities
+        types = cls.analyzer.get_entity_types()
+        stack = [tree.root_node]
+        while stack:
+            node = stack.pop()
+            if node.type in types:
+                entity = Entity(node)
+                cls.analyzer.add_symbols(entity)
+                cls.file.add_entity(entity)
+                stack.extend(node.children)
+            else:
+                stack.extend(node.children)
 
-        f = g.get_file('', 'src.c', '.c')
-        self.assertIsNotNone(f)
-        self.assertEqual(f.properties['name'], 'src.c')
-        self.assertEqual(f.properties['ext'], '.c')
+        # Extract includes
+        cls.includes = cls.analyzer.get_include_paths(tree)
 
-        s = g.get_struct_by_name('exp')
-        self.assertIsNotNone(s)
-        self.assertEqual(s.properties['name'], 'exp')
-        self.assertEqual(s.properties['path'], 'src.c')
-        self.assertEqual(s.properties['src_start'], 9)
-        self.assertEqual(s.properties['src_end'], 13)
-        self.assertEqual(s.properties['fields'], [['i', 'int'], ['f', 'float'], ['data', 'char[]']])
+    def _entity_names(self):
+        return [_entity_name(self.analyzer, e) for e in self.file.entities.values()]
 
-        add = g.get_function_by_name('add')
-        self.assertIsNotNone(add)
-        self.assertEqual(add.properties['name'], 'add')
-        self.assertEqual(add.properties['path'], 'src.c')
-        self.assertEqual(add.properties['ret_type'], 'int')
-        self.assertEqual(add.properties['src_start'], 0)
-        self.assertEqual(add.properties['src_end'], 7)
-        self.assertEqual(add.properties['args'], [['a', 'int'], ['b', 'int']])
-        self.assertIn('a + b', add.properties['src'])
+    def test_entity_types(self):
+        """Analyzer should recognise C entity types."""
+        self.assertEqual(
+            self.analyzer.get_entity_types(),
+            ['struct_specifier', 'function_definition'],
+        )
 
-        main = g.get_function_by_name('main')
-        self.assertIsNotNone(main)
-        self.assertEqual(main.properties['name'], 'main')
-        self.assertEqual(main.properties['path'], 'src.c')
-        self.assertEqual(main.properties['ret_type'], 'int')
-        self.assertEqual(main.properties['src_start'], 15)
-        self.assertEqual(main.properties['src_end'], 18)
-        self.assertEqual(main.properties['args'], [['argv', 'const char**'], ['argc', 'int']])
-        self.assertIn('x = add', main.properties['src'])
+    def test_function_extraction(self):
+        """Functions should be extracted from src.c."""
+        names = self._entity_names()
+        self.assertIn("add", names)
+        self.assertIn("main", names)
 
-        callees = g.function_calls(main.id)
-        self.assertEqual(len(callees), 1)
-        self.assertEqual(callees[0], add)
+    def test_struct_extraction(self):
+        """Structs should be extracted from src.c."""
+        names = self._entity_names()
+        self.assertIn("exp", names)
 
-        callers = g.function_called_by(add.id)
-        callers = [caller.properties['name'] for caller in callers]
+    def test_function_label(self):
+        """Functions should get the 'Function' label."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "add":
+                self.assertEqual(self.analyzer.get_entity_label(entity.node), "Function")
 
-        self.assertEqual(len(callers), 2)
-        self.assertIn('add', callers)
-        self.assertIn('main', callers)
+    def test_struct_label(self):
+        """Structs should get the 'Struct' label."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "exp":
+                self.assertEqual(self.analyzer.get_entity_label(entity.node), "Struct")
 
+    def test_call_symbols(self):
+        """Function 'main' should have call symbols (calls to 'add')."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "main":
+                call_syms = entity.symbols.get("call", [])
+                self.assertTrue(len(call_syms) > 0, "main should have call symbols")
+
+    def test_include_extraction(self):
+        """Include directives should be extracted."""
+        self.assertIn("myheader.h", self.includes)
+        self.assertIn("stdio.h", self.includes)
+
+    def test_is_dependency(self):
+        """is_dependency should return False for C files."""
+        self.assertFalse(self.analyzer.is_dependency("src/main.c"))
+
+    def test_docstring_extraction(self):
+        """Docstring (comment above entity) should be extracted."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "add":
+                doc = self.analyzer.get_entity_docstring(entity.node)
+                self.assertIsNotNone(doc)
+                self.assertIn("Adds two integers", doc)
+                return
+        self.fail("Function 'add' not found")
+
+    def test_no_docstring(self):
+        """Entities without a preceding comment should return None."""
+        for entity in self.file.entities.values():
+            if _entity_name(self.analyzer, entity) == "main":
+                doc = self.analyzer.get_entity_docstring(entity.node)
+                self.assertIsNone(doc)
+                return
+        self.fail("Function 'main' not found")
+
+    def test_unknown_entity_label_raises(self):
+        """get_entity_label should raise for unknown node types."""
+        # Use the tree root node which is 'translation_unit', not a known entity
+        with self.assertRaises(ValueError):
+            self.analyzer.get_entity_label(self.file.tree.root_node)
+
+    def test_unknown_entity_name_raises(self):
+        """get_entity_name should raise for unknown node types."""
+        with self.assertRaises(ValueError):
+            self.analyzer.get_entity_name(self.file.tree.root_node)
+
+    def test_resolve_path(self):
+        """resolve_path should return the file path unchanged."""
+        self.assertEqual(
+            self.analyzer.resolve_path("/foo/bar.c", Path("/root")),
+            "/foo/bar.c",
+        )
+
+    def test_include_extraction_empty(self):
+        """A file with no #include directives should return an empty list."""
+        source = b"int main() { return 0; }"
+        tree = self.analyzer.parser.parse(source)
+        self.assertEqual(self.analyzer.get_include_paths(tree), [])
+
+    def test_resolve_symbol_unknown_key_raises(self):
+        """resolve_symbol should raise ValueError for unknown keys."""
+        with self.assertRaises(ValueError):
+            self.analyzer.resolve_symbol({}, None, Path("x.c"), Path("."), "unknown_key", None)
+
+
+if __name__ == "__main__":
+    unittest.main()

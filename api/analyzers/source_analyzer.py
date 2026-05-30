@@ -7,7 +7,7 @@ from api.entities.file import File
 
 from ..graph import Graph
 from .analyzer import AbstractAnalyzer
-# from .c.analyzer import CAnalyzer
+from .c.analyzer import CAnalyzer
 from .csharp.analyzer import CSharpAnalyzer
 from .java.analyzer import JavaAnalyzer
 from .javascript.analyzer import JavaScriptAnalyzer
@@ -24,8 +24,8 @@ logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(
 
 # List of available analyzers
 analyzers: dict[str, AbstractAnalyzer] = {
-    # '.c': CAnalyzer(),
-    # '.h': CAnalyzer(),
+    '.c': CAnalyzer(),
+    '.h': CAnalyzer(),
     '.py': PythonAnalyzer(),
     '.java': JavaAnalyzer(),
     '.cs': CSharpAnalyzer(),
@@ -152,7 +152,10 @@ class SourceAnalyzer():
         lsps[".kt"] = NullLanguageServer()
         lsps[".kts"] = NullLanguageServer()
         lsps[".js"] = NullLanguageServer()
-        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server(), lsps[".kt"].start_server(), lsps[".kts"].start_server():
+        # C doesn't have a multilspy language server
+        lsps[".c"] = NullLanguageServer()
+        lsps[".h"] = NullLanguageServer()
+        with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server(), lsps[".kt"].start_server(), lsps[".kts"].start_server(), lsps[".c"].start_server(), lsps[".h"].start_server():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
                 if file_path not in self.files:
@@ -185,7 +188,7 @@ class SourceAnalyzer():
 
     def analyze_sources(self, path: Path, ignore: list[str], graph: Graph) -> None:
         path = path.resolve()
-        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + [f for f in path.rglob("*.js") if "node_modules" not in f.parts] + list(path.rglob("*.kt")) + list(path.rglob("*.kts"))
+        files = list(path.rglob("*.java")) + list(path.rglob("*.py")) + list(path.rglob("*.cs")) + [f for f in path.rglob("*.js") if "node_modules" not in f.parts] + list(path.rglob("*.kt")) + list(path.rglob("*.kts")) + list(path.rglob("*.c")) + list(path.rglob("*.h"))
         # First pass analysis of the source code
         self.first_pass(path, files, ignore, graph)
 

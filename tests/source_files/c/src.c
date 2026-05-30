@@ -1,3 +1,7 @@
+#include "myheader.h"
+#include <stdio.h>
+
+/* Adds two integers */
 int add
 (
 	int a,
