@@ -21,7 +21,9 @@ difference is transport (HTTP vs stdio MCP).
    who calls X. (Default `--limit 50`.)
 3. `cg impact_analysis --project "$PROJECT_NAME" --symbol-id <id> --depth 3` —
    transitive blast radius before any non-trivial edit.
-4. Read the file with `sed -n` / `cat`, then edit.
+4. Read ONLY the relevant span with `sed -n 'START,ENDp' <file>`,
+   anchored on the line number the graph already gave you (e.g.
+   `sed -n '430,470p'`). Then edit.
 
 ## Sub-commands
 
@@ -39,10 +41,12 @@ difference is transport (HTTP vs stdio MCP).
   earlier tool output in this conversation.
 - **Do not fall back to `grep`/`rg`/`find` silently.** If `cg`
   returns empty, say so in your next message before grepping.
+- **Never `cat` a whole source file.** The graph already gave you the
+  line number — read a bounded window with `sed -n 'START,ENDp'`
+  (widen by ~30 lines if you need more context). Full-file reads are
+  the single biggest source of wasted tokens.
 - Standard Unix tools remain available for cases the graph can't
   answer.
-
-## Submission
 
 When you believe the task is complete, run a bash command whose first
 line of stdout is exactly:
