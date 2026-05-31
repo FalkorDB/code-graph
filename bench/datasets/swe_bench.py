@@ -403,7 +403,25 @@ def prepare_localize_worktree(
         import time as _t
         dest.rename(dest.with_name(f"{dest.name}.stale.{int(_t.time())}"))
     dest.parent.mkdir(parents=True, exist_ok=True)
-    _git(["clone", str(src), str(dest)])
+    # Clone with a single retry. We have observed a transient `git clone`
+    # exit-128 on the *first* clone of a freshly-cleaned worktree dir (the
+    # next config's clone of the same instance then succeeds). Re-clean and
+    # retry once; surface git's stderr if it still fails so it's diagnosable.
+    last_err = ""
+    for attempt in range(2):
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        res = _git(["clone", str(src), str(dest)], check=False)
+        if res.returncode == 0:
+            break
+        last_err = (res.stderr or res.stdout or "").strip()
+        print(
+            f"[warn] git clone {dest.name} failed (attempt {attempt + 1}/2): "
+            f"{last_err}",
+            flush=True,
+        )
+    else:
+        raise RuntimeError(f"git clone failed for {dest}: {last_err}")
     _git(["fetch", "origin", inst.base_commit], cwd=dest, check=False)
     _git(["checkout", "--detach", inst.base_commit], cwd=dest)
     return dest
