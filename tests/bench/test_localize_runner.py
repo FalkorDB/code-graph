@@ -145,3 +145,52 @@ def test_safe_env_kills_pipe_holding_grandchild_promptly():
     assert elapsed < 15, f"did not reap promptly (took {elapsed:.1f}s)"
     assert out["returncode"] == -1
     assert "timed out" in out["output"]
+
+def test_timeout_retry_model_interrupts_stall_then_succeeds():
+    """A model whose query blocks past the per-call timeout must be interrupted
+    by SIGALRM and retried; once a call returns quickly the wrapper yields it."""
+    import time as _t
+
+    from bench.runners.localize_runner import TimeoutRetryModel
+
+    class FlakyModel:
+        def __init__(self):
+            self.calls = 0
+            self.cost = 1.23  # attribute that must be delegated
+
+        def query(self, messages, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                _t.sleep(30)  # stall: SIGALRM must interrupt this
+            return {"role": "assistant", "content": "ok"}
+
+    inner = FlakyModel()
+    wrapped = TimeoutRetryModel(inner, per_call_timeout=1, retries=2)
+    started = _t.time()
+    out = wrapped.query([{"role": "user", "content": "hi"}])
+    elapsed = _t.time() - started
+    assert out["content"] == "ok"
+    assert inner.calls == 2  # first stalled+interrupted, second succeeded
+    assert elapsed < 10, f"did not interrupt the stall promptly ({elapsed:.1f}s)"
+    assert wrapped.cost == 1.23  # delegation works
+
+
+def test_timeout_retry_model_raises_after_exhausting_retries():
+    import time as _t
+
+    from bench.runners.localize_runner import TimeoutRetryModel
+
+    class DeadModel:
+        def query(self, messages, **kwargs):
+            _t.sleep(30)
+
+    wrapped = TimeoutRetryModel(DeadModel(), per_call_timeout=1, retries=1)
+    started = _t.time()
+    try:
+        wrapped.query([{"role": "user", "content": "hi"}])
+        raised = False
+    except TimeoutError:
+        raised = True
+    elapsed = _t.time() - started
+    assert raised
+    assert elapsed < 10

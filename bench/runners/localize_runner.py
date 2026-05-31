@@ -105,6 +105,54 @@ class SafeLocalEnvironment(LocalEnvironment):
         return output
 
 
+class TimeoutRetryModel:
+    """Wrap a minisweagent model so each API call is bounded by a hard timeout.
+
+    litellm's own ``timeout`` does not reliably interrupt the Azure Anthropic
+    passthrough — we have observed an ESTABLISHED socket stall with the Python
+    process blocked in a C-level read for 20+ min, CPU frozen, never returning.
+    ``SIGALRM`` interrupts even a blocked syscall (PEP 475 re-raises from the
+    handler), so we arm it around each ``query`` and retry on stall. The agent's
+    own between-step wall-time check then actually becomes reachable.
+
+    All other attributes/methods (cost, n_calls, serialize, format_message, …)
+    are delegated to the wrapped model.
+    """
+
+    def __init__(self, inner: Any, *, per_call_timeout: int = 180, retries: int = 3):
+        self._inner = inner
+        self._per_call_timeout = per_call_timeout
+        self._retries = retries
+
+    def query(self, messages: list[dict[str, str]], **kwargs) -> dict:
+        last_exc: Exception | None = None
+        for attempt in range(self._retries + 1):
+            def _on_alarm(signum, frame):  # noqa: ARG001
+                raise TimeoutError(
+                    f"model.query stalled > {self._per_call_timeout}s"
+                )
+
+            prev = signal.signal(signal.SIGALRM, _on_alarm)
+            signal.alarm(self._per_call_timeout)
+            try:
+                return self._inner.query(messages, **kwargs)
+            except TimeoutError as exc:
+                last_exc = exc
+                print(
+                    f"[warn] model stalled (attempt {attempt + 1}/"
+                    f"{self._retries + 1}); retrying",
+                    flush=True,
+                )
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, prev)
+        raise last_exc if last_exc else RuntimeError("model.query failed")
+
+    def __getattr__(self, name: str) -> Any:
+        # Delegate everything we don't override (cost, n_calls, serialize, …).
+        return getattr(self._inner, name)
+
+
 # One template for ALL configs. The per-config preamble already advertises the
 # available navigation tool (cg / lsp / none); we deliberately do NOT force a
 # first command here so the comparison measures *natural* tool usage.
@@ -294,12 +342,13 @@ def run_localize_task(
     env_vars = config_env(config, repo_path)
     env = SafeLocalEnvironment(cwd=str(repo_path), env=env_vars, timeout=120)
     agent = DefaultAgent(
-        LitellmModel(
-            model_name=model_name,
-            # Bound each API call so a hung TLS connection (the Azure
-            # passthrough occasionally stalls an ESTABLISHED socket with no
-            # response) fails fast and retries instead of wedging the whole run.
-            model_kwargs={"timeout": 180, "num_retries": 4},
+        TimeoutRetryModel(
+            LitellmModel(
+                model_name=model_name,
+                model_kwargs={"timeout": 180},
+            ),
+            per_call_timeout=180,
+            retries=3,
         ),
         env,
         system_template=load_preamble(config),
