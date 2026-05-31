@@ -194,3 +194,25 @@ def test_timeout_retry_model_raises_after_exhausting_retries():
     elapsed = _t.time() - started
     assert raised
     assert elapsed < 10
+
+def test_build_instance_template_forced_vs_freeform():
+    from bench.runners.localize_runner import (
+        LOCALIZE_INSTANCE_TEMPLATE,
+        build_instance_template,
+    )
+
+    # Free-form: identical to the shared template for every config.
+    for cfg in ("baseline", "lsp", "code_graph", "code_graph_mcp"):
+        assert build_instance_template(cfg, force_tool=False) == LOCALIZE_INSTANCE_TEMPLATE
+
+    # Forced: tool configs get a mandate prefix naming their tool.
+    lsp_t = build_instance_template("lsp", force_tool=True)
+    assert lsp_t != LOCALIZE_INSTANCE_TEMPLATE
+    assert lsp_t.endswith(LOCALIZE_INSTANCE_TEMPLATE)
+    assert "MANDATORY" in lsp_t and "lsp" in lsp_t
+
+    cg_t = build_instance_template("code_graph", force_tool=True)
+    assert "MANDATORY" in cg_t and "cg search_code" in cg_t
+
+    # baseline has no tool -> forced is a no-op (still the shared template).
+    assert build_instance_template("baseline", force_tool=True) == LOCALIZE_INSTANCE_TEMPLATE

@@ -182,6 +182,44 @@ tests). The text after `{SENTINEL}` MUST be a valid JSON array of strings.
 
 _PY_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.py")
 
+# Optional forced-workflow ablation. The free-form primary measures *natural*
+# tool adoption (which on this model is near-zero — the agent defaults to
+# grep/find). To measure the tool's *intrinsic* value when adoption is
+# guaranteed, prepend a per-config mandate to invoke the navigation tool first.
+_FORCE_TOOL_SNIPPET = {
+    "lsp": (
+        "MANDATORY WORKFLOW: Before running any grep/find/cat, you MUST use the "
+        "`lsp` tool at least once to locate a relevant symbol's definition or "
+        "references (e.g. `lsp goto-definition <file> <line> <col>` or "
+        "`lsp find-references ...`). Prefer `lsp` over text search throughout.\n\n"
+    ),
+    "code_graph": (
+        "MANDATORY WORKFLOW: Before running any grep/find/cat, you MUST use the "
+        "`cg` tool at least once to locate candidate symbols "
+        "(`cg search_code --prefix <name>`) and trace cross-file structure "
+        "(`cg get-callers` / `cg get-dependencies` / `cg impact-analysis`). "
+        "Prefer `cg` over text search throughout.\n\n"
+    ),
+    "code_graph_mcp": (
+        "MANDATORY WORKFLOW: Before running any grep/find/cat, you MUST use the "
+        "`cg-mcp` tool at least once to locate candidate symbols "
+        "(`cg-mcp search_code --prefix <name>`) and trace cross-file structure "
+        "(`cg-mcp get_callers` / `cg-mcp get_dependencies` / "
+        "`cg-mcp impact_analysis`). Prefer `cg-mcp` over text search throughout.\n\n"
+    ),
+}
+
+
+def build_instance_template(config: str, *, force_tool: bool) -> str:
+    """Return the instance template, optionally prefixed with a per-config
+    mandate to use the navigation tool first (forced-workflow ablation)."""
+    if not force_tool:
+        return LOCALIZE_INSTANCE_TEMPLATE
+    snippet = _FORCE_TOOL_SNIPPET.get(config)
+    if not snippet:  # baseline has no tool; nothing to force.
+        return LOCALIZE_INSTANCE_TEMPLATE
+    return snippet + LOCALIZE_INSTANCE_TEMPLATE
+
 
 # ---------------------------------------------------------------------------
 # Prediction parsing
@@ -319,6 +357,7 @@ def run_localize_task(
     step_limit: int = 30,
     cost_limit: float = 2.0,
     wall_time_limit_seconds: int = 900,
+    force_tool: bool = False,
 ) -> dict[str, Any]:
     from bench.datasets import swe_bench as sb
 
@@ -352,7 +391,7 @@ def run_localize_task(
         ),
         env,
         system_template=load_preamble(config),
-        instance_template=LOCALIZE_INSTANCE_TEMPLATE,
+        instance_template=build_instance_template(config, force_tool=force_tool),
         step_limit=step_limit,
         cost_limit=cost_limit,
         wall_time_limit_seconds=wall_time_limit_seconds,
@@ -381,6 +420,7 @@ def run_localize_task(
         "benchmark": "swe_localize",
         "task_id": inst.instance_id,
         "config": config,
+        "force_tool": force_tool,
         "input_tokens": tm.input_tokens,
         "output_tokens": tm.output_tokens,
         "tool_calls_total": tm.tool_calls_total,
@@ -431,6 +471,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--wall-time", type=int, default=900)
     p.add_argument("--cached-ids", type=Path, default=None,
                    help="JSONL/txt of task_ids to use when --set cached")
+    p.add_argument("--force-tool", action="store_true",
+                   help="forced-workflow ablation: prepend a per-config mandate "
+                        "to invoke the navigation tool (cg/lsp) before any "
+                        "grep/find. Measures the tool's intrinsic value when "
+                        "adoption is guaranteed (free-form adoption is ~0).")
     args = p.parse_args(argv)
 
     configs = args.config or ["baseline", "lsp", "code_graph"]
@@ -493,6 +538,7 @@ def main(argv: list[str] | None = None) -> int:
                         inst, cfg, model_name=args.model,
                         step_limit=args.step_limit, cost_limit=args.cost_limit,
                         wall_time_limit_seconds=args.wall_time,
+                        force_tool=args.force_tool,
                     )
                 except Exception as exc:  # noqa: BLE001
                     print(f"[error] {inst.instance_id}/{cfg}: {exc!r}", flush=True)
