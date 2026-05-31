@@ -93,14 +93,21 @@ def load_instances(
     *,
     split: str = "test",
     cache_dir: Path | None = None,
+    dataset_name: str | None = None,
 ) -> list[SweBenchInstance]:
-    """Load all SWE-bench Verified instances from HuggingFace."""
+    """Load SWE-bench instances from HuggingFace.
+
+    Defaults to `princeton-nlp/SWE-bench_Verified`. Pass `dataset_name` (e.g.
+    `SWE-bench-Live/SWE-bench-Live`, which is schema-compatible and exposes a
+    `verified` split) to evaluate a contamination-free / less-pretraining-
+    saturated corpus.
+    """
     from datasets import load_dataset  # local import — heavy
 
     kwargs: dict[str, Any] = {"split": split}
     if cache_dir is not None:
         kwargs["cache_dir"] = str(cache_dir)
-    ds = load_dataset(DATASET_NAME, **kwargs)
+    ds = load_dataset(dataset_name or DATASET_NAME, **kwargs)
 
     out: list[SweBenchInstance] = []
     for row in ds:
@@ -371,10 +378,26 @@ def select_structural(
     *,
     seed: int = DEFAULT_SEED,
     n: int | None = None,
+    repos: set[str] | None = None,
+    python_only: bool = False,
 ) -> list[SweBenchInstance]:
     """Deterministically sample instances whose gold patch is multi-file/
-    multi-dir (structural-navigation stressors)."""
+    multi-dir (structural-navigation stressors).
+
+    `repos`: if given, restrict to these `owner/name` repos (used to target
+    large, less-pretraining-saturated codebases on the SWE-bench-Live corpus).
+    `python_only`: require at least one `.py` gold source file (the navigation
+    tools — tree-sitter / jedi — are Python-only).
+    """
     pool = [i for i in instances if is_structural(i)]
+    if repos is not None:
+        pool = [i for i in pool if i.repo in repos]
+    if python_only:
+        pool = [
+            i
+            for i in pool
+            if any(f.endswith(".py") for f in gold_changed_files(i.patch, source_only=True))
+        ]
     rng = random.Random(seed)
     rng.shuffle(pool)
     return pool[:n] if n is not None else pool

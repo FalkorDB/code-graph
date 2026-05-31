@@ -476,13 +476,24 @@ def main(argv: list[str] | None = None) -> int:
                         "to invoke the navigation tool (cg/lsp) before any "
                         "grep/find. Measures the tool's intrinsic value when "
                         "adoption is guaranteed (free-form adoption is ~0).")
+    p.add_argument("--dataset", default=None,
+                   help="HF dataset name (default: princeton-nlp/SWE-bench_Verified). "
+                        "Use SWE-bench-Live/SWE-bench-Live for a contamination-free, "
+                        "less-pretraining-saturated corpus.")
+    p.add_argument("--split", default="test",
+                   help="dataset split (SWE-bench-Live exposes test/lite/verified/full)")
+    p.add_argument("--repos", default=None,
+                   help="comma-separated owner/name allowlist for --set structural "
+                        "(target large, less-saturated repos)")
+    p.add_argument("--python-only", action="store_true",
+                   help="require >=1 .py gold file (tools are Python-only)")
     args = p.parse_args(argv)
 
     configs = args.config or ["baseline", "lsp", "code_graph"]
 
     from bench.datasets import swe_bench as sb
 
-    all_insts = sb.load_instances()
+    all_insts = sb.load_instances(split=args.split, dataset_name=args.dataset)
     by_id = {i.instance_id: i for i in all_insts}
 
     if args.set == "cached":
@@ -504,7 +515,14 @@ def main(argv: list[str] | None = None) -> int:
                     ids.append(tid)
         insts = [by_id[i] for i in ids if i in by_id]
     elif args.set == "structural":
-        insts = sb.select_structural(all_insts, n=args.limit)
+        repo_allow = (
+            {r.strip() for r in args.repos.split(",") if r.strip()}
+            if args.repos
+            else None
+        )
+        insts = sb.select_structural(
+            all_insts, n=args.limit, repos=repo_allow, python_only=args.python_only
+        )
     else:
         insts = all_insts
 
