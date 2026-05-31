@@ -475,6 +475,19 @@ def verify_instance(
 
     cmd = [py, "-m", "pytest", "-q", "--no-header", "-p", "no:cacheprovider", *test_ids]
     res = subprocess.run(cmd, cwd=str(repo_path), capture_output=True, text=True)
-    ok = res.returncode == 0
     summary = res.stdout[-500:] + res.stderr[-500:]
+    # Distinguish "tests ran and failed" (authoritative-ish negative) from
+    # "we could not run tests at all" (no pytest in env, collection crash).
+    # The latter must NOT be reported as a real failure — the authoritative
+    # grade comes from the SWE-bench Docker harness (bench.runners.
+    # swebench_verify). pytest uses returncode 2-5 for usage/collection/internal
+    # errors, and 1 for genuine test failures; 0 is pass.
+    could_not_run = (
+        "No module named pytest" in summary
+        or "no tests ran" in summary
+        or res.returncode >= 2
+    )
+    if could_not_run and res.returncode != 1:
+        return False, "UNGRADED: " + summary
+    ok = res.returncode == 0
     return ok, summary

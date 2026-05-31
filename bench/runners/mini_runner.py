@@ -782,7 +782,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 rows.extend(cfg_rows)
                 ok, summary = verify_instance(inst, cfg_wt)
-                cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
+                # Inline verify is a best-effort signal only; the authoritative
+                # grade comes from the SWE-bench Docker harness (run separately
+                # via bench.runners.swebench_verify against the stored patch).
+                # If pytest couldn't even run here (e.g. missing in the launch
+                # env), record `ungraded` rather than a misleading `failed`.
+                if summary.startswith("UNGRADED:"):
+                    cfg_rows[-1]["metrics"].outcome = "ungraded"
+                else:
+                    cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
                 if not ok:
                     cfg_rows[-1]["verify_summary"] = summary[-200:]
                 append_jsonl(args.results, cfg_rows[-1]["metrics"])
