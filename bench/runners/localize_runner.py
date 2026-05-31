@@ -294,7 +294,13 @@ def run_localize_task(
     env_vars = config_env(config, repo_path)
     env = SafeLocalEnvironment(cwd=str(repo_path), env=env_vars, timeout=120)
     agent = DefaultAgent(
-        LitellmModel(model_name=model_name),
+        LitellmModel(
+            model_name=model_name,
+            # Bound each API call so a hung TLS connection (the Azure
+            # passthrough occasionally stalls an ESTABLISHED socket with no
+            # response) fails fast and retries instead of wedging the whole run.
+            model_kwargs={"timeout": 180, "num_retries": 4},
+        ),
         env,
         system_template=load_preamble(config),
         instance_template=LOCALIZE_INSTANCE_TEMPLATE,
