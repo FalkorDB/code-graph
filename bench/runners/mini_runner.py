@@ -692,6 +692,11 @@ def main(argv: list[str] | None = None) -> int:
                         "needs GITHUB_TOKEN with models:read scope); "
                         "'github_copilot/gpt-4o' (uses your Copilot session, "
                         "device-code OAuth on first call).")
+    p.add_argument("--instances-file", type=Path, default=None,
+                   help="Path to a file listing instance_ids to run EXACTLY "
+                        "(one per line, or a results .jsonl with a task_id "
+                        "field). Overrides --stage/--limit sampling so a run "
+                        "can be reproduced against a prior model's exact set.")
     p.add_argument("--step-limit", type=int, default=50)
     p.add_argument("--cost-limit", type=float, default=3.0)
     p.add_argument("--wall-time", type=int, default=1200)
@@ -711,7 +716,28 @@ def main(argv: list[str] | None = None) -> int:
         from bench.metrics import append_jsonl
 
         insts = sample_instances(load_instances(), stage=args.stage)
-        if args.limit is not None:
+        if args.instances_file is not None:
+            wanted: list[str] = []
+            seen: set[str] = set()
+            for line in args.instances_file.read_text().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("{"):
+                    import json as _json
+                    tid = _json.loads(line).get("task_id")
+                else:
+                    tid = line
+                if tid and tid not in seen:
+                    seen.add(tid)
+                    wanted.append(tid)
+            pool = {i.instance_id: i for i in load_instances()}
+            missing = [t for t in wanted if t not in pool]
+            if missing:
+                raise SystemExit(f"instances-file ids not in dataset: {missing[:5]}")
+            insts = [pool[t] for t in wanted]
+            print(f"[swe-bench] instances-file override: {len(insts)} instances")
+        elif args.limit is not None:
             insts = insts[: args.limit]
         print(f"[swe-bench] stage={args.stage} running {len(insts)} instances "
               f"x {len(configs)} configs = {len(insts) * len(configs)} trajectories")
