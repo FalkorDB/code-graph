@@ -380,6 +380,7 @@ def select_structural(
     n: int | None = None,
     repos: set[str] | None = None,
     python_only: bool = False,
+    no_leak: bool = False,
 ) -> list[SweBenchInstance]:
     """Deterministically sample instances whose gold patch is multi-file/
     multi-dir (structural-navigation stressors).
@@ -388,6 +389,9 @@ def select_structural(
     large, less-pretraining-saturated codebases on the SWE-bench-Live corpus).
     `python_only`: require at least one `.py` gold source file (the navigation
     tools — tree-sitter / jedi — are Python-only).
+    `no_leak`: drop instances whose problem statement names a gold file's path
+    or basename (the "structural-hard" gate — forces real multi-hop navigation
+    rather than single-hop lookup of an explicitly-named file).
     """
     pool = [i for i in instances if is_structural(i)]
     if repos is not None:
@@ -398,6 +402,14 @@ def select_structural(
             for i in pool
             if any(f.endswith(".py") for f in gold_changed_files(i.patch, source_only=True))
         ]
+    if no_leak:
+        kept = []
+        for i in pool:
+            gold = gold_changed_files(i.patch, source_only=True)
+            lf = leakage_flags(i, gold)
+            if not lf["mentions_gold_path"] and not lf["mentions_gold_basename"]:
+                kept.append(i)
+        pool = kept
     rng = random.Random(seed)
     rng.shuffle(pool)
     return pool[:n] if n is not None else pool

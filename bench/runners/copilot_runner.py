@@ -35,6 +35,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 import uuid
 from pathlib import Path
 from typing import Any
@@ -293,6 +294,39 @@ def ensure_indexed(repo_path: Path, *, fresh: bool = True) -> float:
 # Copilot invocation
 # ---------------------------------------------------------------------------
 
+COPILOT_MAX_ATTEMPTS = 3
+COPILOT_RETRY_BACKOFF_SEC = 15.0
+
+# Substrings that mark a transient startup/network failure (token validation
+# fetch failed, connection resets) rather than a real model run.
+_TRANSIENT_STARTUP_MARKERS = (
+    "could not be validated",
+    "fetch failed",
+    "econnreset",
+    "etimedout",
+    "enotfound",
+    "socket hang up",
+    "network",
+    "getaddrinfo",
+)
+
+
+def _is_transient_startup_failure(
+    returncode: int | None, stdout: str, stderr: str
+) -> bool:
+    """True when Copilot exited early without producing any result stream.
+
+    A genuine run always emits at least one JSON line on stdout. A transient
+    auth/network failure exits non-zero with empty stdout and a recognizable
+    error on stderr; those rows must be retried, not scored as recall=0.
+    """
+    if returncode in (0, None):
+        return False
+    if stdout and stdout.strip():
+        return False
+    blob = (stderr or "").lower()
+    return any(marker in blob for marker in _TRANSIENT_STARTUP_MARKERS)
+
 
 def run_copilot(
     *,
@@ -309,68 +343,108 @@ def run_copilot(
     # absolute so logs land where the parser reads them.
     log_dir = log_dir.resolve()
     log_dir.mkdir(parents=True, exist_ok=True)
-    session_id = str(uuid.uuid4())
-    cmd = [
-        "copilot", "-p", prompt,
-        "--model", model,
-        "--output-format", "json",
-        "--no-remote",
-        "--disable-builtin-mcps",
-        "--allow-all-tools",
-        "--allow-all-paths",
-        "--add-dir", str(cwd),
-        "--log-level", "debug",
-        "--log-dir", str(log_dir),
-        "--session-id", session_id,
-    ]
-    if mcp_config is not None:
-        cmd += ["--additional-mcp-config", f"@{mcp_config}"]
-
     env = dict(os.environ)
     t0 = time.time()
     timed_out = False
-    # start_new_session=True puts Copilot + its children (MCP server, shells)
-    # in a fresh process group we can signal as a unit on timeout.
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(cwd),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
-        start_new_session=True,
-    )
-    try:
-        stdout, stderr = proc.communicate(timeout=wall_time)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        _kill_group(proc.pid)
+    stdout, stderr, returncode = "", "", None
+    # Transient startup failures (OAuth token validation hitting a network blip,
+    # connection resets) make Copilot exit in ~1s with empty stdout. Those rows
+    # would otherwise be scored as recall=0 false negatives, so retry them.
+    for attempt in range(1, COPILOT_MAX_ATTEMPTS + 1):
+        session_id = str(uuid.uuid4())
+        cmd = [
+            "copilot", "-p", prompt,
+            "--model", model,
+            "--output-format", "json",
+            "--no-remote",
+            "--disable-builtin-mcps",
+            "--allow-all-tools",
+            "--allow-all-paths",
+            "--add-dir", str(cwd),
+            "--log-level", "debug",
+            "--log-dir", str(log_dir),
+            "--session-id", session_id,
+        ]
+        if mcp_config is not None:
+            cmd += ["--additional-mcp-config", f"@{mcp_config}"]
+
+        timed_out = False
+        # start_new_session=True puts Copilot + its children (MCP server, shells)
+        # in a fresh process group we can signal as a unit on timeout.
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+            start_new_session=True,
+        )
         try:
-            stdout, stderr = proc.communicate(timeout=30)
+            stdout, stderr = proc.communicate(timeout=wall_time)
         except subprocess.TimeoutExpired:
-            stdout, stderr = "", ""
+            timed_out = True
+            _kill_group(proc.pid)
+            try:
+                stdout, stderr = proc.communicate(timeout=30)
+            except subprocess.TimeoutExpired:
+                stdout, stderr = "", ""
+        returncode = proc.returncode
+
+        if timed_out or not _is_transient_startup_failure(returncode, stdout, stderr):
+            break
+        if attempt < COPILOT_MAX_ATTEMPTS:
+            print(
+                f"[retry] copilot startup failure (rc={returncode}, attempt "
+                f"{attempt}/{COPILOT_MAX_ATTEMPTS}); backing off "
+                f"{COPILOT_RETRY_BACKOFF_SEC}s. stderr={stderr.strip()[:160]!r}"
+            )
+            time.sleep(COPILOT_RETRY_BACKOFF_SEC)
+
     wall = time.time() - t0
     (log_dir / "stdout.jsonl").write_text(stdout or "")
     (log_dir / "stderr.txt").write_text(stderr or "")
+    startup_failed = _is_transient_startup_failure(returncode, stdout, stderr) and not timed_out
     return {
         "stdout": stdout or "",
-        "returncode": proc.returncode,
+        "stderr": stderr or "",
+        "returncode": returncode,
         "timed_out": timed_out,
+        "startup_failed": startup_failed,
         "wall": wall,
     }
 
 
 def _kill_group(pid: int) -> None:
+    """Best-effort terminate a process and its group.
+
+    On macOS ``os.killpg`` can raise ``PermissionError`` (EPERM) when a child
+    has changed session/owner or is mid-reap. That must never turn a recoverable
+    timeout into a fatal exception, so all signalling errors are swallowed and we
+    fall back to signalling the direct pid.
+    """
     try:
         pgid = os.getpgid(pid)
-    except ProcessLookupError:
-        return
+    except (ProcessLookupError, PermissionError, OSError):
+        pgid = None
     for sig in (signal.SIGTERM, signal.SIGKILL):
-        try:
-            os.killpg(pgid, sig)
-        except ProcessLookupError:
-            return
+        signalled = False
+        if pgid is not None:
+            try:
+                os.killpg(pgid, sig)
+                signalled = True
+            except ProcessLookupError:
+                return
+            except (PermissionError, OSError):
+                pgid = None
+        if not signalled:
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                return
+            except (PermissionError, OSError):
+                pass
         time.sleep(2)
 
 
@@ -756,6 +830,23 @@ def run_one(
     compliance = nudge_compliance(result["stdout"])
     patch_info = extract_patch(repo_path, inst.base_commit)
 
+    if result.get("startup_failed"):
+        print(
+            f"[error] {inst.instance_id} [{track}] copilot startup failed after "
+            f"{COPILOT_MAX_ATTEMPTS} attempts (rc={result['returncode']}); "
+            f"marking incomplete for re-run"
+        )
+        return {
+            **base_row,
+            "index_sec": index_sec,
+            "timed_out": result["timed_out"],
+            "returncode": result["returncode"],
+            "outcome": "error",
+            "error": f"copilot_startup_failed: {result.get('stderr', '').strip()[:200]}",
+            "wall_clock_sec": round(result["wall"], 2),
+            "completed": False,
+        }
+
     row = {
         **base_row,
         "input_tokens": tokens["input_tokens"],
@@ -852,6 +943,26 @@ def _run_localize(
     pred, parse_error, fallback = parse_localization(agent_text)
     scores = score_localization(pred, gold)
     leak = swe_bench.leakage_flags(inst, gold)
+
+    # A transient startup/network failure produces no model output; record it as
+    # an error (completed=False) so it is re-run rather than scored as recall=0.
+    if result.get("startup_failed"):
+        print(
+            f"[error] {inst.instance_id} [{track}] copilot startup failed after "
+            f"{COPILOT_MAX_ATTEMPTS} attempts (rc={result['returncode']}); "
+            f"marking incomplete for re-run"
+        )
+        return {
+            **base_row,
+            "index_sec": index_sec,
+            "index_fresh": track == CODE_GRAPH,
+            "timed_out": result["timed_out"],
+            "returncode": result["returncode"],
+            "outcome": "error",
+            "error": f"copilot_startup_failed: {result.get('stderr', '').strip()[:200]}",
+            "wall_clock_sec": round(result["wall"], 2),
+            "completed": False,
+        }
 
     row = {
         **base_row,
@@ -973,6 +1084,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--server-root", default=str(DEFAULT_MCP_SERVER_ROOT))
     p.add_argument("--run-idx", type=int, default=0)
     p.add_argument("--seed", type=int, default=swe_bench.DEFAULT_SEED, help="seed for --select-structural")
+    p.add_argument(
+        "--no-leak", action="store_true",
+        help="with --select-structural: drop instances whose problem statement names a gold file (structural-hard gate)",
+    )
     args = p.parse_args(argv)
 
     tracks = args.track or list(VALID_TRACKS)
@@ -995,7 +1110,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         insts = swe_bench.select_structural(
             list(all_insts.values()), seed=args.seed, n=args.select_structural,
-            python_only=True,
+            python_only=True, no_leak=args.no_leak,
         )
         print(f"[plan] selected {len(insts)} structural instances: "
               f"{[i.instance_id for i in insts]}")
@@ -1024,6 +1139,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"[error] {inst.instance_id} [{track}]: {exc!r}", file=sys.stderr)
+                traceback.print_exc()
                 row = {
                     "benchmark": "swe_bench_verified",
                     "task_id": inst.instance_id,
