@@ -81,6 +81,13 @@ DEFAULT_MCP_SERVER_ROOT = Path(
 # Prompt assembly (symmetric across tracks; only the capability note differs)
 # ---------------------------------------------------------------------------
 
+FIX = "fix"
+LOCALIZE = "localize"
+VALID_MODES = (FIX, LOCALIZE)
+
+# The strict line the localization agent must end on. Re-used by the parser.
+LOCALIZE_SENTINEL = "FINAL_LOCALIZATION_JSON:"
+
 _BASE_PROMPT = """\
 You are fixing a bug in the Python repository checked out at {cwd}.
 
@@ -91,8 +98,34 @@ make the minimal source change that fixes the issue. Do not modify test files.
 {capability}
 When you are done, stop and give a one-line summary of what you changed."""
 
+_LOCALIZE_PROMPT = """\
+You are localizing (not fixing) a bug in the Python repository checked out at {cwd}.
+
+{problem}
+
+Investigate the repository to determine which SOURCE files must be edited to fix
+this issue. Do NOT modify any files. Do NOT run or edit tests.
+{capability}
+When you are confident, finish your FINAL assistant message with a single line in
+EXACTLY this format (most-likely file first, repo-root-relative paths, Python
+source files only, no test or doc files):
+
+{sentinel} ["pkg/module_a.py", "pkg/module_b.py"]
+
+Write that line as plain text in your own final message. Do NOT emit it through a
+shell command, `echo`, a file write, or any tool call."""
+
 _CAP_NO_MCP = (
     "No external MCP tools are available; use Copilot's built-in file, search "
+    "and edit tools."
+)
+# Matched no-MCP nudge: parallels the code_graph search-first mandate without
+# naming any specific tool, so the comparison isolates the graph, not the
+# "search before grep" instruction.
+_CAP_NO_MCP_NUDGE = (
+    "No external MCP tools are available. Before resorting to plain text search "
+    "(grep/rg), begin by broadly mapping the repository structure to locate the "
+    "relevant symbols and how they relate; use Copilot's built-in file, search "
     "and edit tools."
 )
 _CAP_CODE_GRAPH = (
@@ -102,13 +135,42 @@ _CAP_CODE_GRAPH = (
     "code-navigation tools over plain text search when they help. Do not use the "
     "`ask` tool."
 )
+# Nudged code_graph: mandate an initial search_code call to measure the tool's
+# value when the model is forced to engage it (the neutral prompt yields ~0%
+# spontaneous adoption on strong models).
+_CAP_CODE_GRAPH_NUDGE = (
+    "A code-graph MCP server is available exposing code-navigation tools "
+    "(search_code, get_callers, get_callees, get_dependencies, impact_analysis, "
+    "find_path). You MUST begin by calling search_code(project=\"{project}\") to "
+    "locate the relevant symbols BEFORE any plain text search, and prefer these "
+    "graph tools over grep throughout your investigation. Do not use the `ask` tool."
+)
 
 
-def build_prompt(track: str, cwd: Path, problem: str, project: str) -> str:
+def _capability(track: str, project: str, *, nudge: bool) -> str:
     if track == CODE_GRAPH:
-        capability = _CAP_CODE_GRAPH.format(project=project)
-    else:
-        capability = _CAP_NO_MCP
+        tmpl = _CAP_CODE_GRAPH_NUDGE if nudge else _CAP_CODE_GRAPH
+        return tmpl.format(project=project)
+    return _CAP_NO_MCP_NUDGE if nudge else _CAP_NO_MCP
+
+
+def build_prompt(
+    track: str,
+    cwd: Path,
+    problem: str,
+    project: str,
+    *,
+    nudge: bool = False,
+    mode: str = FIX,
+) -> str:
+    capability = _capability(track, project, nudge=nudge)
+    if mode == LOCALIZE:
+        return _LOCALIZE_PROMPT.format(
+            cwd=cwd,
+            problem=problem.strip(),
+            capability=capability,
+            sentinel=LOCALIZE_SENTINEL,
+        )
     return _BASE_PROMPT.format(cwd=cwd, problem=problem.strip(), capability=capability)
 
 
@@ -423,6 +485,164 @@ def parse_tool_calls(stdout: str) -> tuple[int, dict[str, int]]:
     return total, by_name
 
 
+# A code-graph MCP tool call shows up with this prefix in the tool name
+# (e.g. ``code-graph-search_code``). Used for nudge-compliance metrics.
+_GRAPH_TOOL_PREFIX = "code-graph"
+
+
+def parse_tool_sequence(stdout: str) -> list[str]:
+    """Return tool names in invocation order (for first-tool / compliance)."""
+    seq: list[str] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not ev.get("type", "").startswith("tool.execution_start"):
+            continue
+        data = ev.get("data", {})
+        name = data.get("name") or data.get("toolName") or "unknown"
+        seq.append(name or "unknown")
+    return seq
+
+
+def _is_graph_tool(name: str) -> bool:
+    return bool(name) and name.startswith(_GRAPH_TOOL_PREFIX)
+
+
+def nudge_compliance(stdout: str) -> dict[str, Any]:
+    """Measure whether/how the agent engaged the graph tools."""
+    seq = parse_tool_sequence(stdout)
+    first = seq[0] if seq else None
+    graph_calls = sum(1 for n in seq if _is_graph_tool(n))
+    return {
+        "first_tool": first,
+        "first_is_graph": bool(first and _is_graph_tool(first)),
+        "graph_calls": graph_calls,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Localization (LocAgent-style): extract the agent's predicted files
+# ---------------------------------------------------------------------------
+
+
+def extract_agent_text(stdout: str) -> str:
+    """Concatenate the agent's own message text (not tool output) in order.
+
+    Scans both ``assistant.message`` (finalized) and ``assistant.message_delta``
+    (streaming) so the sentinel is recoverable across CLI versions. Finalized
+    messages stream after their deltas, so the last sentinel occurrence (which
+    the parser keys on) lands in a complete message.
+    """
+    parts: list[str] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("type") in ("assistant.message", "assistant.message_delta"):
+            content = ev.get("data", {}).get("content")
+            if isinstance(content, str) and content.strip():
+                parts.append(content)
+    return "\n".join(parts)
+
+
+def _norm_path(path: str) -> str:
+    """Normalize a predicted path to a repo-root-relative posix form."""
+    p = path.strip().strip("'\"").strip()
+    p = p.replace("\\", "/")
+    while p.startswith("./"):
+        p = p[2:]
+    for prefix in ("a/", "b/"):
+        if p.startswith(prefix):
+            p = p[len(prefix):]
+    return p.lstrip("/")
+
+
+def parse_localization(text: str) -> tuple[list[str], str | None, bool]:
+    """Parse the predicted file list from the agent's final message.
+
+    Returns ``(pred_files, parse_error, fallback)``. The strict path looks for
+    the ``FINAL_LOCALIZATION_JSON:`` sentinel followed by a JSON array. If the
+    sentinel is missing/malformed, ``fallback`` is True and ``parse_error``
+    carries the reason (headline numbers should drop / stratify these).
+    """
+    idx = text.rfind(LOCALIZE_SENTINEL)
+    if idx == -1:
+        return [], "sentinel_missing", True
+    tail = text[idx + len(LOCALIZE_SENTINEL):]
+    start = tail.find("[")
+    if start == -1:
+        return [], "no_array", True
+    depth = 0
+    end = -1
+    for i in range(start, len(tail)):
+        c = tail[i]
+        if c == "[":
+            depth += 1
+        elif c == "]":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end == -1:
+        return [], "unbalanced_array", True
+    blob = tail[start:end + 1]
+    try:
+        arr = json.loads(blob)
+    except json.JSONDecodeError as exc:
+        return [], f"json_error:{exc.msg}", True
+    if not isinstance(arr, list):
+        return [], "not_a_list", True
+    pred: list[str] = []
+    for item in arr:
+        if not isinstance(item, str):
+            continue
+        norm = _norm_path(item)
+        if norm and norm not in pred:
+            pred.append(norm)
+    return pred, None, False
+
+
+def score_localization(pred: list[str], gold: list[str]) -> dict[str, Any]:
+    """Score predicted files vs gold (order-sensitive for acc@k / MRR)."""
+    gold_set = {_norm_path(g) for g in gold}
+    pred_norm = [_norm_path(p) for p in pred]
+    pred_set = set(pred_norm)
+    hits = gold_set & pred_set
+    recall = len(hits) / len(gold_set) if gold_set else 0.0
+    precision = len(hits) / len(pred_set) if pred_set else 0.0
+    all_found = bool(gold_set) and gold_set.issubset(pred_set)
+
+    def acc_at(k: int) -> float:
+        topk = set(pred_norm[:k])
+        return 1.0 if gold_set and (gold_set & topk) else 0.0
+
+    mrr = 0.0
+    for rank, path in enumerate(pred_norm, start=1):
+        if path in gold_set:
+            mrr = 1.0 / rank
+            break
+    return {
+        "gold_files": sorted(gold_set),
+        "pred_files": pred_norm,
+        "file_recall": round(recall, 4),
+        "file_precision": round(precision, 4),
+        "file_all_found": all_found,
+        "acc_at_1": acc_at(1),
+        "acc_at_3": acc_at(3),
+        "acc_at_5": acc_at(5),
+        "file_mrr": round(mrr, 4),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Patch extraction
 # ---------------------------------------------------------------------------
@@ -473,15 +693,37 @@ def run_one(
     wall_time: float,
     server_root: Path,
     run_idx: int = 0,
+    nudge: bool = False,
+    mode: str = FIX,
 ) -> dict[str, Any]:
+    prompt_mode = "nudged" if nudge else "neutral"
     work_root = cache_dir / "worktrees" / track
     work_root.mkdir(parents=True, exist_ok=True)
-    run_dir = cache_dir / "runs" / model / track / inst.instance_id
+    run_dir = cache_dir / "runs" / model / mode / prompt_mode / track / inst.instance_id
     if run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n=== {inst.instance_id} [{track}] model={model} ===")
+    print(f"\n=== {inst.instance_id} [{track}] model={model} mode={mode} prompt={prompt_mode} ===")
+
+    # Common base row fields (identity).
+    base_row = {
+        "benchmark": "swe_bench_verified",
+        "task_id": inst.instance_id,
+        "config": track,
+        "model": model,
+        "mode": mode,
+        "prompt_mode": prompt_mode,
+        "run_idx": run_idx,
+        "runner": RUNNER_VERSION,
+    }
+
+    if mode == LOCALIZE:
+        return _run_localize(
+            inst, track=track, model=model, run_dir=run_dir, work_root=work_root,
+            wall_time=wall_time, server_root=server_root, nudge=nudge, base_row=base_row,
+        )
+
     repo_path = swe_bench.prepare_worktree(
         inst, worktrees_dir=work_root.resolve(), apply_test_patch=True
     )
@@ -494,7 +736,9 @@ def run_one(
         wrapper = _write_mcp_wrapper(run_dir, server_root)
         mcp_config = _write_mcp_config(run_dir, wrapper, host, port)
 
-    prompt = build_prompt(track, repo_path, inst.problem_statement, inst.instance_id)
+    prompt = build_prompt(
+        track, repo_path, inst.problem_statement, repo_path.name, nudge=nudge, mode=mode
+    )
     (run_dir / "prompt.txt").write_text(prompt)
 
     result = run_copilot(
@@ -509,15 +753,11 @@ def run_one(
     tokens = parse_tokens_from_logs(run_dir / "logs")
     result_ev = parse_result_event(result["stdout"])
     tool_total, tool_by_name = parse_tool_calls(result["stdout"])
+    compliance = nudge_compliance(result["stdout"])
     patch_info = extract_patch(repo_path, inst.base_commit)
 
     row = {
-        "benchmark": "swe_bench_verified",
-        "task_id": inst.instance_id,
-        "config": track,
-        "model": model,
-        "run_idx": run_idx,
-        "runner": RUNNER_VERSION,
+        **base_row,
         "input_tokens": tokens["input_tokens"],
         "output_tokens": tokens["output_tokens"],
         "total_tokens": tokens["total_tokens"],
@@ -527,6 +767,9 @@ def run_one(
         "premium_requests": result_ev["premium_requests"],
         "tool_calls_total": tool_total,
         "tool_calls_by_name": tool_by_name,
+        "first_tool": compliance["first_tool"],
+        "first_is_graph": compliance["first_is_graph"],
+        "graph_calls": compliance["graph_calls"],
         "files_modified": result_ev["files_modified"],
         "touched_tests": patch_info["touched_tests"],
         "index_sec": index_sec,
@@ -540,8 +783,111 @@ def run_one(
     print(
         f"[done] {inst.instance_id} [{track}] in={row['input_tokens']} "
         f"out={row['output_tokens']} premium={row['premium_requests']} "
-        f"tools={tool_total} patch_files={len(patch_info['patched_files'])} "
+        f"tools={tool_total} graph={compliance['graph_calls']} "
+        f"patch_files={len(patch_info['patched_files'])} "
         f"timed_out={result['timed_out']} wall={row['wall_clock_sec']}s"
+    )
+    return row
+
+
+def _run_localize(
+    inst: swe_bench.SweBenchInstance,
+    *,
+    track: str,
+    model: str,
+    run_dir: Path,
+    work_root: Path,
+    wall_time: float,
+    server_root: Path,
+    nudge: bool,
+    base_row: dict[str, Any],
+) -> dict[str, Any]:
+    """Localization driver: no edits, no Docker; score predicted files vs gold."""
+    gold = swe_bench.gold_changed_files(inst.patch, source_only=True)
+    if not gold:
+        print(f"[skip] {inst.instance_id} [{track}] no source-only gold files")
+        return {
+            **base_row,
+            "outcome": "skipped_no_gold",
+            "completed": True,
+            "gold_files": [],
+        }
+
+    # Distinct, test-free worktree forces a clean re-index with no test_patch
+    # leakage into the graph.
+    repo_path = swe_bench.prepare_localize_worktree(
+        inst, worktrees_dir=work_root.resolve()
+    )
+
+    index_sec = None
+    mcp_config = None
+    if track == CODE_GRAPH:
+        index_sec = ensure_indexed(repo_path, fresh=True)
+        host, port = _falkor_settings()
+        wrapper = _write_mcp_wrapper(run_dir, server_root)
+        mcp_config = _write_mcp_config(run_dir, wrapper, host, port)
+
+    prompt = build_prompt(
+        track, repo_path, inst.problem_statement, repo_path.name,
+        nudge=nudge, mode=LOCALIZE,
+    )
+    (run_dir / "prompt.txt").write_text(prompt)
+
+    result = run_copilot(
+        prompt=prompt,
+        model=model,
+        cwd=repo_path,
+        log_dir=run_dir / "logs",
+        mcp_config=mcp_config,
+        wall_time=wall_time,
+    )
+
+    tokens = parse_tokens_from_logs(run_dir / "logs")
+    result_ev = parse_result_event(result["stdout"])
+    tool_total, tool_by_name = parse_tool_calls(result["stdout"])
+    compliance = nudge_compliance(result["stdout"])
+
+    agent_text = extract_agent_text(result["stdout"])
+    (run_dir / "agent_text.txt").write_text(agent_text)
+    pred, parse_error, fallback = parse_localization(agent_text)
+    scores = score_localization(pred, gold)
+    leak = swe_bench.leakage_flags(inst, gold)
+
+    row = {
+        **base_row,
+        "input_tokens": tokens["input_tokens"],
+        "output_tokens": tokens["output_tokens"],
+        "total_tokens": tokens["total_tokens"],
+        "cached_input_tokens": tokens["cached_input_tokens"],
+        "cache_creation_tokens": tokens["cache_creation_tokens"],
+        "usage_blocks": tokens["usage_blocks"],
+        "premium_requests": result_ev["premium_requests"],
+        "tool_calls_total": tool_total,
+        "tool_calls_by_name": tool_by_name,
+        "first_tool": compliance["first_tool"],
+        "first_is_graph": compliance["first_is_graph"],
+        "graph_calls": compliance["graph_calls"],
+        "index_sec": index_sec,
+        "index_fresh": track == CODE_GRAPH,
+        "timed_out": result["timed_out"],
+        "returncode": result["returncode"],
+        "parse_error": parse_error,
+        "parse_fallback": fallback,
+        "is_structural": swe_bench.is_structural(inst),
+        "mentions_gold_path": leak.get("mentions_gold_path"),
+        "mentions_gold_basename": leak.get("mentions_gold_basename"),
+        "contains_traceback": leak.get("contains_traceback"),
+        "outcome": "localized",
+        "wall_clock_sec": round(result["wall"], 2),
+        "completed": True,
+        **scores,
+    }
+    print(
+        f"[loc] {inst.instance_id} [{track}] recall={scores['file_recall']} "
+        f"acc@1={scores['acc_at_1']} mrr={scores['file_mrr']} "
+        f"pred={len(pred)} gold={len(scores['gold_files'])} "
+        f"graph={compliance['graph_calls']} parse_err={parse_error} "
+        f"in={row['input_tokens']} wall={row['wall_clock_sec']}s"
     )
     return row
 
@@ -551,8 +897,8 @@ def run_one(
 # ---------------------------------------------------------------------------
 
 
-def _load_done(results_path: Path) -> set[tuple[str, str, int]]:
-    done: set[tuple[str, str, int]] = set()
+def _load_done(results_path: Path) -> set[tuple]:
+    done: set[tuple] = set()
     if not results_path.exists():
         return done
     for line in results_path.read_text().splitlines():
@@ -564,7 +910,14 @@ def _load_done(results_path: Path) -> set[tuple[str, str, int]]:
         except json.JSONDecodeError:
             continue
         if r.get("completed") and r.get("runner") == RUNNER_VERSION:
-            done.add((r["task_id"], r["config"], int(r.get("run_idx", 0))))
+            done.add((
+                r["task_id"],
+                r["config"],
+                r.get("model", ""),
+                r.get("mode", FIX),
+                r.get("prompt_mode", "neutral"),
+                int(r.get("run_idx", 0)),
+            ))
     return done
 
 
@@ -589,7 +942,11 @@ def _load_instance_ids(args) -> list[str]:
         return ids
     if args.instance:
         return list(args.instance)
-    raise SystemExit("provide --instance ID [ID ...] or --instances-file FILE")
+    if args.select_structural:
+        return []  # resolved later against the loaded dataset
+    raise SystemExit(
+        "provide --instance ID [ID ...], --instances-file FILE, or --select-structural N"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -597,15 +954,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--instance", nargs="*", help="explicit instance id(s)")
     p.add_argument("--instances-file", help="file with one instance id per line")
     p.add_argument(
+        "--select-structural", type=int, default=0,
+        help="auto-select N structural instances (>=2 source files/dirs) for localization",
+    )
+    p.add_argument(
         "--track", action="append", choices=VALID_TRACKS, default=None,
         help="track(s) to run (default: both)",
     )
     p.add_argument("--model", default="claude-opus-4.8")
+    p.add_argument("--mode", choices=VALID_MODES, default=FIX, help="fix or localize")
+    p.add_argument(
+        "--nudge", action="store_true",
+        help="use the nudged prompt variant (forces structured search-first)",
+    )
     p.add_argument("--cache-dir", default=str(DEFAULT_CACHE))
     p.add_argument("--results", default=None, help="results jsonl (default: <cache>/<model>/results.jsonl)")
     p.add_argument("--wall-time", type=float, default=1200.0, help="per-run wall-clock seconds")
     p.add_argument("--server-root", default=str(DEFAULT_MCP_SERVER_ROOT))
     p.add_argument("--run-idx", type=int, default=0)
+    p.add_argument("--seed", type=int, default=swe_bench.DEFAULT_SEED, help="seed for --select-structural")
     args = p.parse_args(argv)
 
     tracks = args.track or list(VALID_TRACKS)
@@ -616,21 +983,30 @@ def main(argv: list[str] | None = None) -> int:
         else cache_dir / args.model / "results.jsonl"
     )
     server_root = Path(args.server_root)
+    prompt_mode = "nudged" if args.nudge else "neutral"
 
     ids = _load_instance_ids(args)
     all_insts = {i.instance_id: i for i in swe_bench.load_instances()}
-    missing = [i for i in ids if i not in all_insts]
-    if missing:
-        raise SystemExit(f"unknown instance ids: {missing}")
-    insts = [all_insts[i] for i in ids]
+    if ids:
+        missing = [i for i in ids if i not in all_insts]
+        if missing:
+            raise SystemExit(f"unknown instance ids: {missing}")
+        insts = [all_insts[i] for i in ids]
+    else:
+        insts = swe_bench.select_structural(
+            list(all_insts.values()), seed=args.seed, n=args.select_structural,
+            python_only=True,
+        )
+        print(f"[plan] selected {len(insts)} structural instances: "
+              f"{[i.instance_id for i in insts]}")
 
     done = _load_done(results_path)
-    print(f"[plan] {len(insts)} instances x {len(tracks)} tracks; "
-          f"{len(done)} rows already complete; results -> {results_path}")
+    print(f"[plan] {len(insts)} instances x {len(tracks)} tracks; mode={args.mode} "
+          f"prompt={prompt_mode}; {len(done)} rows already complete; results -> {results_path}")
 
     for inst in insts:
         for track in tracks:
-            key = (inst.instance_id, track, args.run_idx)
+            key = (inst.instance_id, track, args.model, args.mode, prompt_mode, args.run_idx)
             if key in done:
                 print(f"[skip] {inst.instance_id} [{track}] already complete")
                 continue
@@ -643,6 +1019,8 @@ def main(argv: list[str] | None = None) -> int:
                     wall_time=args.wall_time,
                     server_root=server_root,
                     run_idx=args.run_idx,
+                    nudge=args.nudge,
+                    mode=args.mode,
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"[error] {inst.instance_id} [{track}]: {exc!r}", file=sys.stderr)
@@ -651,6 +1029,8 @@ def main(argv: list[str] | None = None) -> int:
                     "task_id": inst.instance_id,
                     "config": track,
                     "model": args.model,
+                    "mode": args.mode,
+                    "prompt_mode": prompt_mode,
                     "run_idx": args.run_idx,
                     "runner": RUNNER_VERSION,
                     "outcome": "error",
