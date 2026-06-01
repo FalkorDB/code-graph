@@ -5,7 +5,7 @@ import { Path, PATH_COLOR } from '@/lib/utils';
 import { Fullscreen } from 'lucide-react';
 import { GraphRef } from '@/lib/utils';
 import ForceGraph from './ForceGraph';
-import { GraphLink, GraphNode } from '@falkordb/canvas';
+import { GraphLink, GraphNode, NODE_SIZE, getContrastTextColor, wrapTextForCircularNode } from '@falkordb/canvas';
 import { useTheme } from './theme-provider';
 
 export interface Position {
@@ -30,14 +30,18 @@ interface Props {
     isPathResponse: boolean | undefined
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
-    cooldownTicks: number | undefined
-    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
+    animation: boolean
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
     zoomedNodes: Node[]
 }
 
-const NODE_SIZE = 6;
 const PADDING = 2;
+const FONT_FAMILY = 'SofiaSans, Arial, sans-serif';
+const FONT_WEIGHT_NORMAL = 400;
+const FONT_WEIGHT_SELECTED = 700;
+const TEXT_FILL_RATIO = 0.85;
+const STROKE_WIDTH_SELECTED = 1.5;
+const STROKE_WIDTH_UNSELECTED = 0.5;
 const LIGHT_CANVAS_BACKGROUND = '#FFFFFF';
 const DARK_CANVAS_BACKGROUND = '#1A1A1A';
 const LIGHT_CANVAS_FOREGROUND = '#000000';
@@ -63,8 +67,7 @@ export default function GraphView({
     isPathResponse,
     selectedPathId,
     setSelectedPathId,
-    cooldownTicks,
-    setCooldownTicks,
+    animation,
     zoomedNodes,
     setZoomedNodes
 }: Props) {
@@ -151,10 +154,12 @@ export default function GraphView({
 
         const isDoubleClick = now.getTime() - date.getTime() < 1000 && name === node.data.name
         lastClick.current = { date: now, name: node.data.name }
-
+        
         if (isDoubleClick) {
+            lastClick.current = { date: now, name: "" }
             handleExpand([node], !node.expand)
         } else if (isShowPath) {
+            lastClick.current = { date: now, name: "" }
             setPath(prev => {
                 if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
                     return ({ start: { id: Number(node.id), name: node.data.name } })
@@ -171,11 +176,7 @@ export default function GraphView({
             canvasRef.current?.zoomToFit(zoomedNodes.length === 1 ? 4 : 1, (n: GraphNode) => zoomedNodes.some(node => node.id === n.id))
             setZoomedNodes([])
         }
-
-        if (cooldownTicks !== -1) return
-
-        setCooldownTicks(0)
-    }, [zoomedNodes, cooldownTicks, canvasRef])
+    }, [zoomedNodes, canvasRef])
 
     const nodeCanvasObject = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D) => {
         if (node.x === undefined || node.y === undefined) {
@@ -185,66 +186,111 @@ export default function GraphView({
 
         const isHovered = !!hoverElement && !('source' in hoverElement) && hoverElement.id === node.id
         const isSelected = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id
+        const nodeSelected = isSelected || isHovered
 
+        // --- Determine colors based on path state ---
         if (isPathResponse) {
             if (node.data.isPathSelected) {
                 ctx.fillStyle = node.color;
                 ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1.5
+                ctx.lineWidth = STROKE_WIDTH_SELECTED;
             } else if (node.data.isPath) {
                 ctx.fillStyle = node.color;
                 ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1
+                ctx.lineWidth = STROKE_WIDTH_UNSELECTED;
             } else {
                 ctx.fillStyle = dimmedNodeFillColor;
                 ctx.strokeStyle = dimmedNodeStrokeColor;
-                ctx.lineWidth = 1
+                ctx.lineWidth = STROKE_WIDTH_UNSELECTED;
             }
         } else if (isPathResponse === undefined) {
             if (node.data.isPathSelected) {
                 ctx.fillStyle = node.color;
                 ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1.5
+                ctx.lineWidth = STROKE_WIDTH_SELECTED;
             } else if (node.data.isPath) {
                 ctx.fillStyle = node.color;
                 ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1
+                ctx.lineWidth = STROKE_WIDTH_UNSELECTED;
             } else {
                 ctx.fillStyle = node.color;
                 ctx.strokeStyle = canvasForegroundColor;
-                ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
+                ctx.lineWidth = nodeSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH_UNSELECTED;
             }
         } else {
             ctx.fillStyle = node.color;
             ctx.strokeStyle = canvasForegroundColor;
-            ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
+            ctx.lineWidth = nodeSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH_UNSELECTED;
         }
 
+        const radius = NODE_SIZE + ctx.lineWidth / 2;
+
+        // Draw stroke circle
         ctx.beginPath();
-        ctx.arc(node.x, node.y, NODE_SIZE + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
+        ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
         ctx.stroke();
+
+        // Draw fill circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
         ctx.fill();
 
-        ctx.fillStyle = canvasForegroundColor;
+        // Skip labels when zoomed out (large graph optimisation)
+        const zoom = ctx.getTransform().a;
+        if (zoom < 1) return;
+
+        // --- Draw text (matching canvas logic) ---
+        const fillColor = ctx.fillStyle as string;
+        ctx.fillStyle = getContrastTextColor(fillColor);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = '2px Arial';
-        let name = node.data.name || "";
-        const textWidth = ctx.measureText(name).width;
-        const ellipsis = '...';
-        const ellipsisWidth = ctx.measureText(ellipsis).width;
-        const nodeSize = (NODE_SIZE + ctx.lineWidth / 2) * 2 - PADDING;
 
-        // truncate text if it's too long
-        if (textWidth > nodeSize) {
-            while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
-                name = name.slice(0, -1);
+        const textRadius = NODE_SIZE - PADDING / 2;
+        const name = node.data.name || node.data.title || String(node.id);
+        const nodeFontWeight = nodeSelected ? FONT_WEIGHT_SELECTED : FONT_WEIGHT_NORMAL;
+        const baseFontSize = 4;
+
+        // Measure at the base size for line-wrapping decisions
+        ctx.font = `${nodeFontWeight} ${baseFontSize}px ${FONT_FAMILY}`;
+        const [line1, line2] = wrapTextForCircularNode(ctx, name, textRadius);
+
+        let chosenSize = baseFontSize;
+
+        if (TEXT_FILL_RATIO > 0 && !line2) {
+            // Auto-size mode: scale text to fill textFillRatio × nodeRadius
+            const REF = 20;
+            ctx.font = `${nodeFontWeight} ${REF}px ${FONT_FAMILY}`;
+            const refMetrics = ctx.measureText(line1);
+            const visualWidth = (refMetrics.actualBoundingBoxLeft ?? 0)
+                + (refMetrics.actualBoundingBoxRight ?? 0);
+            const refWidth = Math.max(visualWidth, refMetrics.width);
+            const refHeight = (refMetrics.actualBoundingBoxAscent ?? 0)
+                + (refMetrics.actualBoundingBoxDescent ?? 0);
+
+            const r = TEXT_FILL_RATIO * textRadius;
+            if (refWidth > 0 && refHeight > 0) {
+                const diagonal = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
+                chosenSize = REF * (2 * r / diagonal);
+            } else if (refWidth > 0) {
+                chosenSize = REF * (2 * r / refWidth);
             }
-            name += ellipsis;
         }
 
-        // add label
-        ctx.fillText(name, node.x, node.y);
+        ctx.font = `${nodeFontWeight} ${chosenSize}px ${FONT_FAMILY}`;
+
+        const textMetrics = ctx.measureText(line1);
+        const textHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+        const halfTextHeight = (textHeight / 2) * 1.5;
+
+        if (line1) {
+            const yCorrection = line2
+                ? 0
+                : (textMetrics.actualBoundingBoxAscent - textMetrics.actualBoundingBoxDescent) / 2;
+            ctx.fillText(line1, node.x, line2 ? node.y - halfTextHeight : node.y + yCorrection);
+        }
+        if (line2) {
+            ctx.fillText(line2, node.x, node.y + halfTextHeight);
+        }
     }, [
         selectedObj,
         selectedObjects,
@@ -302,7 +348,7 @@ export default function GraphView({
                 nodeCanvasObject={nodeCanvasObject}
                 nodePointerAreaPaint={nodePointerAreaPaint}
                 linkLineDash={linkLineDash}
-                cooldownTicks={cooldownTicks}
+                animation={animation}
                 backgroundColor={canvasBackgroundColor}
                 foregroundColor={canvasForegroundColor}
             />

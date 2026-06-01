@@ -1,7 +1,7 @@
 import { toast } from "@/components/ui/use-toast";
 import { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState } from "react";
 import { AlignLeft, ArrowRight, ChevronDown, Lightbulb, Loader2, Undo2 } from "lucide-react";
-import { Message, MessageTypes, Path, PathData, PATH_COLOR } from "@/lib/utils";
+import { Message, MessageTypes, Path, PathData, PATH_COLOR, createMessage } from "@/lib/utils";
 import Input from "./Input";
 import { Graph, GraphData, Node } from "./model";
 import { cn, GraphRef } from "@/lib/utils";
@@ -10,9 +10,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/compon
 import { Button } from "@/components/ui/button";
 
 const AUTH_HEADERS: HeadersInit = import.meta.env.VITE_SECRET_TOKEN
-  ? { 'Authorization': `Bearer ${import.meta.env.VITE_SECRET_TOKEN}` }
-  : {};
-import { dataToGraphData, GraphLink, GraphNode } from "@falkordb/canvas";
+    ? { 'Authorization': `Bearer ${import.meta.env.VITE_SECRET_TOKEN}` }
+    : {};
+import { dataToGraphData, graphDataToData, GraphLink, GraphNode } from "@falkordb/canvas";
 
 interface Props {
     repo: string
@@ -29,7 +29,6 @@ interface Props {
     setQuery: Dispatch<SetStateAction<string>>
     selectedPath: PathData | undefined
     setSelectedPath: Dispatch<SetStateAction<PathData | undefined>>
-    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     setChatOpen?: Dispatch<SetStateAction<boolean>>
     paths: PathData[]
     setPaths: Dispatch<SetStateAction<PathData[]>>
@@ -48,29 +47,30 @@ type RemoveLastPathResult = {
     insertIndex: number
 }
 
-const RemoveLastPath = (messages: Message[]): RemoveLastPathResult => {
-    // Find the last Path message so we know where the user was in the conversation
+const RemoveLastPath = (messages: Message[], includeQuery = false): RemoveLastPathResult => {
+    // Find the last Path marker (the pending "select start/end" state)
     const index = messages.findLastIndex((m) => m.type === MessageTypes.Path)
 
     if (index === -1) {
         return { messages, insertIndex: messages.length }
     }
 
-    const groupStart = Math.max(0, index - 2)
-    const hasMessagesAfter = index < messages.length - 1
+    // The Path marker is always preceded by Response("Please select...").
+    // Optionally also remove the Query("Create a path") before it.
+    let groupStart = index;
+    if (index > 0 && messages[index - 1].type === MessageTypes.Response) {
+        groupStart = index - 1;
+        if (includeQuery && groupStart > 0 && messages[groupStart - 1].type === MessageTypes.Query) {
+            groupStart = groupStart - 1;
+        }
+    }
+
     const cleaned = [...messages.slice(0, groupStart), ...messages.slice(index + 1)]
 
-    // Recurse to strip any remaining Path groups
-    const { messages: finalMessages } = RemoveLastPath(cleaned)
-
-    // If there were messages after the Path group, inject the answer there;
-    // otherwise just append at the end
-    const insertIndex = hasMessagesAfter ? groupStart : finalMessages.length
-
-    return { messages: finalMessages, insertIndex }
+    return { messages: cleaned, insertIndex: cleaned.length }
 }
 
-export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, setCooldownTicks, canvasRef, paths, setPaths }: Props) {
+export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, canvasRef, paths, setPaths }: Props) {
 
     const [sugOpen, setSugOpen] = useState(false);
 
@@ -225,11 +225,14 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
             }
         });
 
-        canvas.setGraphData(currentData)
+        canvas.setGraphData(graphDataToData(currentData))
 
         setTimeout(() => {
+            const filteredNodes = currentData.nodes.filter((n: any) => pNodeIds.has(n.id));
+            console.log('[zoomToFit] filtered nodes:', filteredNodes.map((n: any) => ({ id: n.id, x: n.x, y: n.y })));
+            console.log('[zoomToFit] pNodeIds:', [...pNodeIds]);
             canvas.zoomToFit(2, (n: GraphNode) => pNodeIds.has(n.id));
-        }, 0)
+        }, 300)
         setChatOpen && setChatOpen(false)
     }
 
@@ -263,7 +266,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         setQuery("")
 
-        setMessages((messages) => [...messages, { text: q, type: MessageTypes.Query }, { type: MessageTypes.Pending }]);
+        setMessages((messages) => [...messages, createMessage({ text: q, type: MessageTypes.Query }), createMessage({ type: MessageTypes.Pending })]);
 
         const result = await fetch(`/api/chat`, {
             method: 'POST',
@@ -277,7 +280,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         if (!result.ok) {
             setMessages((prev) => {
                 prev = [...prev.slice(0, -1)];
-                return [...prev, { type: MessageTypes.Response, text: "Sorry but I couldn't answer your question, please try rephrasing." }];
+                return [...prev, createMessage({ type: MessageTypes.Response, text: "Sorry but I couldn't answer your question, please try rephrasing." })];
             });
             return
         }
@@ -286,7 +289,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         setMessages((prev) => {
             prev = prev.slice(0, -1);
-            return [...prev, { text: json.response, type: MessageTypes.Response }];
+            return [...prev, createMessage({ text: json.response, type: MessageTypes.Response })];
         });
 
     }
@@ -300,17 +303,17 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         if (!path?.start?.id || !path.end?.id) return
 
-        const pathMessage = [{
+        const pathMessage = [createMessage({
             type: MessageTypes.Response,
             text: "Please select a starting point and the end point. Select or press relevant item on the graph"
-        }, { type: MessageTypes.Path }]
+        }), createMessage({ type: MessageTypes.Path })]
 
         setPath(undefined)
         let insertIndex = 0
         setMessages((prev) => {
             const { messages, insertIndex: idx } = RemoveLastPath(prev)
             insertIndex = idx
-            const pending: Message = { type: MessageTypes.Pending }
+            const pending: Message = createMessage({ type: MessageTypes.Pending })
             return [...messages.slice(0, insertIndex), pending, ...messages.slice(insertIndex)]
         })
 
@@ -367,7 +370,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         setPaths(formattedPaths)
         setMessages((prev) => [
             ...prev.slice(0, insertIndex),
-            { type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id },
+            createMessage({ type: MessageTypes.PathResponse, paths: formattedPaths, graphName: graph.Id }),
             ...prev.slice(insertIndex + 1),
         ]);
         setIsPathResponse(true)
@@ -430,14 +433,10 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         )
 
         // Merge with existing data
-        canvasRef.current?.setGraphData({
+        canvasRef.current?.setGraphData(graphDataToData({
             nodes: [...currentData.nodes, ...newGraphData.nodes],
             links: [...currentData.links, ...newGraphData.links]
-        })
-
-        if (elements.nodes.length !== 0 || elements.links.length !== 0) {
-            setCooldownTicks(-1)
-        }
+        }))
 
         setTimeout(() => {
             const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
@@ -457,9 +456,9 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
                     setSugOpen(false)
                     setMessages(prev => {
-                        const { messages, insertIndex } = RemoveLastPath(prev)
-                        const queryMsg: Message = { type: MessageTypes.Query, text: "Create a path" }
-                        return [...messages.slice(0, insertIndex), queryMsg, ...messages.slice(insertIndex)]
+                        const { messages } = RemoveLastPath(prev, true)
+                        const queryMsg: Message = createMessage({ type: MessageTypes.Query, text: "Create a path" })
+                        return [...messages, queryMsg]
                     })
 
                     if (isPathResponse) {
@@ -480,13 +479,13 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                             }
                         })
 
-                        canvas.setGraphData(currentData)
+                        canvas.setGraphData(graphDataToData(currentData))
                     }
 
-                    setMessages(prev => [...prev, {
+                    setMessages(prev => [...prev, createMessage({
                         type: MessageTypes.Response,
                         text: "Please select a starting point and the end point. Select or press relevant item on the graph"
-                    }, { type: MessageTypes.Path }])
+                    }), createMessage({ type: MessageTypes.Path })])
                     setPath({})
                 }}
             >
@@ -513,7 +512,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
     const getMessage = (message: Message, index?: number) => {
         switch (message.type) {
             case MessageTypes.Query: return (
-                <div key={index} className="flex flex-col gap-2">
+                <div key={message.id} className="flex flex-col gap-2">
                     <div className="flex gap-2">
                         <AlignLeft />
                         <h1 className="text-lg font-medium">You</h1>
@@ -522,13 +521,12 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 </div>
             )
             case MessageTypes.Response: return (
-                <div key={index} className="flex flex-col gap-2">
+                <div key={message.id} className="flex flex-col gap-2">
                     <div className="flex gap-2">
                         <Undo2 className="rotate-180" />
                         <h1 className="text-lg font-medium break-words whitespace-pre-wrap">Answer</h1>
                     </div>
                     <TypeAnimation
-                        key={message.text}
                         sequence={[message.text!]}
                         speed={60}
                         wrapper="span"
@@ -537,11 +535,11 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 </div>
             )
             case MessageTypes.Text: return (
-                <p key={index} >{message.text}</p>
+                <p key={message.id} >{message.text}</p>
             )
             case MessageTypes.Path: {
                 return (
-                    <div className="flex flex-col gap-4" key={index}>
+                    <div className="flex flex-col gap-4" key={message.id}>
                         <Input
                             parentClassName="w-full"
                             graph={graph}
@@ -568,7 +566,11 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 )
             }
             case MessageTypes.PathResponse: return (
-                <div key={index} className="flex flex-col gap-2">
+                <div key={message.id} className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                        <Undo2 className="rotate-180" />
+                        <h1 className="text-lg font-medium break-words whitespace-pre-wrap">Answer</h1>
+                    </div>
                     {
                         message.paths &&
                         message.paths.map((p, i: number) => (
@@ -577,7 +579,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                                 className={cn(
                                     "flex text-wrap border p-2 gap-2 rounded-md",
                                     p.nodes.length === selectedPath?.nodes.length &&
-                                    selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) &&
+                                    selectedPath?.nodes.every((node, i) => p?.nodes[i]?.id === node.id) &&
                                     "border-[#ffde21] bg-[#ffde2133]",
                                     message.graphName !== graph.Id && "opacity-50 bg-secondary"
                                 )}
@@ -592,7 +594,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                                         return;
                                     }
 
-                                    if (selectedPath?.nodes.every(node => p?.nodes.some((n) => n.id === node.id)) && selectedPath.nodes.length === p.nodes.length) return
+                                    if (selectedPath?.nodes.every((node, i) => p?.nodes[i]?.id === node.id) && selectedPath.nodes.length === p.nodes.length) return
 
                                     if (!isPathResponse) {
                                         setIsPathResponse(undefined)
@@ -615,7 +617,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 </div>
             )
             default: return (
-                <div key={index} className="flex gap-2">
+                <div key={message.id} className="flex gap-2">
                     <div className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Thinking...</span>

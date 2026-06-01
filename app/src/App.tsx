@@ -15,6 +15,7 @@ import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
 import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
 import type { GraphNode } from '@falkordb/canvas';
+import { graphDataToData } from '@falkordb/canvas';
 import { Toaster } from '@/components/ui/toaster';
 import GTM from './GTM';
 import { Button } from '@/components/ui/button';
@@ -79,7 +80,8 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [searchNode, setSearchNode] = useState<PathNode>({});
-  const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(0)
+  const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(undefined)
+  const [animation, setAnimation] = useState(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([]);
   const [query, setQuery] = useState('');
@@ -174,8 +176,6 @@ export default function App() {
       const g = Graph.create(json.entities, graphName)
       setGraph(g)
 
-      if (cooldownTicks === 0) setCooldownTicks(-1)
-
       setIsPathResponse(false)
       chatPanel.current?.expand()
       // @ts-ignore
@@ -225,8 +225,6 @@ export default function App() {
         if (!chartNode) {
           chartNode = graph.extend({ nodes: [node], edges: [] }).nodes[0]
 
-          if (cooldownTicks === 0) setCooldownTicks(-1)
-
           setZoomedNodes([chartNode])
           graph.visibleLinks(true, [chartNode!.id])
 
@@ -251,7 +249,7 @@ export default function App() {
             currentData.nodes.push(graphNode)
           }
 
-          canvas.setGraphData(currentData)
+          canvas.setGraphData(graphDataToData(currentData))
 
 
           setTimeout(() => {
@@ -280,7 +278,7 @@ export default function App() {
           }
         })
 
-        canvas.setGraphData(currentData)
+        canvas.setGraphData(graphDataToData(currentData))
       }
 
       setTimeout(() => {
@@ -324,9 +322,8 @@ export default function App() {
       }
     });
 
-    canvas.setGraphData(currentData);
+    canvas.setGraphData(graphDataToData(currentData));
 
-    setCooldownTicks(cooldownTicks === undefined ? undefined : -1);
     setHasHiddenElements(graph.getElements().some(element => !element.visible));
   }
 
@@ -540,6 +537,8 @@ export default function App() {
                   setSearchNode={setSearchNode}
                   cooldownTicks={cooldownTicks}
                   setCooldownTicks={setCooldownTicks}
+                  animation={animation}
+                  setAnimation={setAnimation}
                   onCategoryClick={(name, show) => onCategoryClick(name, show, desktopChartRef)}
                   handleDownloadImage={handleDownloadImage}
                   zoomedNodes={zoomedNodes}
@@ -574,7 +573,6 @@ export default function App() {
                   setIsPathResponse={setIsPathResponse}
                   paths={paths}
                   setPaths={setPaths}
-                  setCooldownTicks={setCooldownTicks}
                 />
               </Panel>
             </PanelGroup>
@@ -667,6 +665,8 @@ export default function App() {
                 searchNode={searchNode}
                 cooldownTicks={cooldownTicks}
                 setCooldownTicks={setCooldownTicks}
+                animation={animation}
+                setAnimation={setAnimation}
                 onCategoryClick={(name, show) => onCategoryClick(name, show, mobileChartRef)}
                 handleDownloadImage={handleDownloadImage}
                 zoomedNodes={zoomedNodes}
@@ -705,7 +705,6 @@ export default function App() {
                         setChatOpen={setChatOpen}
                         paths={paths}
                         setPaths={setPaths}
-                        setCooldownTicks={setCooldownTicks}
                       />
                     </DrawerContent>
                   </Drawer>
@@ -723,8 +722,8 @@ export default function App() {
                       <Toolbar
                         className='bg-transparent absolute -top-14 left-0 w-full justify-between px-6'
                         canvasRef={mobileChartRef}
-                        setCooldownTicks={setCooldownTicks}
-                        cooldownTicks={cooldownTicks}
+                        animation={animation}
+                        setAnimation={setAnimation}
                       />
                       <Input
                         className='border-2 border-border'

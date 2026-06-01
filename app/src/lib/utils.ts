@@ -27,7 +27,13 @@ export enum MessageTypes {
   Text,
 }
 
+let messageIdCounter = 0;
+export function createMessage(msg: Omit<Message, 'id'>): Message {
+  return { ...msg, id: ++messageIdCounter };
+}
+
 export interface Message {
+  id: number;
   type: MessageTypes;
   text?: string;
   paths?: { nodes: any[], links: any[] }[];

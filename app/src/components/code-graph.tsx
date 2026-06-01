@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { Position } from "./graphView";
 import { prepareArg } from '../utils';
 import { GraphRef } from "@/lib/utils";
-import { dataToGraphData } from "@falkordb/canvas";
+import { dataToGraphData, graphDataToData } from "@falkordb/canvas";
 import type { Node as CanvasNode, Link as CanvasLink, GraphData as CanvasData } from "@falkordb/canvas";
 import GraphView from "./graphView";
 
@@ -44,6 +44,8 @@ interface Props {
     setSearchNode: Dispatch<SetStateAction<any>>
     cooldownTicks: number | undefined
     setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
+    animation: boolean
+    setAnimation: (animation: boolean) => void
     onCategoryClick: (name: string, show: boolean) => void
     handleDownloadImage: () => void
     zoomedNodes: Node[]
@@ -74,6 +76,8 @@ export function CodeGraph({
     setSearchNode,
     cooldownTicks,
     setCooldownTicks,
+    animation,
+    setAnimation,
     onCategoryClick,
     handleDownloadImage,
     zoomedNodes,
@@ -280,12 +284,10 @@ export function CodeGraph({
             )
 
             // Merge with existing data
-            canvasRef.current?.setGraphData({
+            canvasRef.current?.setGraphData(graphDataToData({
                 nodes: [...currentData.nodes, ...newGraphData.nodes],
                 links: [...currentData.links, ...newGraphData.links]
-            })
-
-            setCooldownTicks(-1)
+            }))
         } else {
             const deleteNodes = nodes.filter(n => n.expand)
             if (deleteNodes.length > 0) {
@@ -299,8 +301,7 @@ export function CodeGraph({
                     currentData.nodes = currentData.nodes.filter(node => !deleteIdsMap.has(Number(node.id)))
                     currentData.links = currentData.links.filter(link => !deleteIdsMap.has(Number(link.source.id)) && !deleteIdsMap.has(Number(link.target.id)))
 
-                    canvasRef.current?.setGraphData(currentData)
-                    setCooldownTicks(-1)
+                    canvasRef.current?.setGraphData(graphDataToData(currentData))
                 }
             }
         }
@@ -337,13 +338,12 @@ export function CodeGraph({
             })
         }
 
-        canvas.setGraphData(currentData)
+        canvas.setGraphData(graphDataToData(currentData))
         graph.visibleLinks(false, ids)
         setHasHiddenElements(true)
 
         setSelectedObj(undefined)
         setSelectedObjects([])
-        setCooldownTicks(-1)
     }
 
     return (
@@ -403,9 +403,8 @@ export function CodeGraph({
                                                         }
                                                     })
 
-                                                    canvas.setGraphData(currentData)
+                                                    canvas.setGraphData(graphDataToData(currentData))
                                                     setIsPathResponse(false)
-                                                    setCooldownTicks(-1)
                                                 }}
                                             >
                                                 <X size={15} />
@@ -434,9 +433,8 @@ export function CodeGraph({
                                                         element.visible = true
                                                     });
 
-                                                    canvas.setGraphData(currentData);
+                                                    canvas.setGraphData(graphDataToData(currentData));
                                                     setHasHiddenElements(false);
-                                                    setCooldownTicks(-1);
                                                 }}
                                             >
                                                 <X size={15} />
@@ -475,8 +473,7 @@ export function CodeGraph({
                                     isPathResponse={isPathResponse}
                                     selectedPathId={selectedPathId}
                                     setSelectedPathId={setSelectedPathId}
-                                    cooldownTicks={cooldownTicks}
-                                    setCooldownTicks={setCooldownTicks}
+                                    animation={animation}
                                     setZoomedNodes={setZoomedNodes}
                                     zoomedNodes={zoomedNodes}
                                 />
@@ -510,8 +507,8 @@ export function CodeGraph({
                                             className="gap-4"
                                             canvasRef={canvasRef}
                                             handleDownloadImage={handleDownloadImage}
-                                            setCooldownTicks={setCooldownTicks}
-                                            cooldownTicks={cooldownTicks}
+                                            animation={animation}
+                                            setAnimation={setAnimation}
                                         />
                                     </div>
                                 </div>

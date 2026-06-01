@@ -23,10 +23,11 @@ interface Props {
     linkLineDash: (link: any) => number[]
     onZoom: () => void
     onEngineStop: () => void
-    cooldownTicks: number | undefined
+    animation: boolean
     backgroundColor?: string
     foregroundColor?: string
 }
+
 
 const convertToCanvasData = (graphData: GraphData): Data => ({
     nodes: graphData.nodes.filter(n => n.visible).map(({ id, category, color, visible, isPath, isPathSelected, data }) => ({
@@ -66,7 +67,7 @@ export default function ForceGraph({
     nodeCanvasObject,
     nodePointerAreaPaint,
     linkLineDash,
-    cooldownTicks,
+    animation,
     backgroundColor = "#FFFFFF",
     foregroundColor = "#000000"
 }: Props) {
@@ -94,12 +95,12 @@ export default function ForceGraph({
         canvasRef.current.setForegroundColor(foregroundColor)
     }, [canvasRef, backgroundColor, foregroundColor, canvasLoaded])
 
-    // Update cooldown ticks
+    // Update animation state on canvas
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
 
-        canvasRef.current.setCooldownTicks(cooldownTicks === -1 ? undefined : cooldownTicks)
-    }, [canvasRef, cooldownTicks, canvasLoaded])
+        canvasRef.current.setAnimation(animation)
+    }, [canvasRef, animation, canvasLoaded])
 
     // Map node click handler
     const handleNodeClick = useCallback((node: GraphNode, event: MouseEvent) => {
@@ -158,23 +159,24 @@ export default function ForceGraph({
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
         canvasRef.current.setConfig({
-            autoStopOnSettle: false,
             // nodes will display node.data.captionsKeys in the canvas
             captionsKeys: ["name", "title"],
-            onNodeClick: handleNodeClick,
-            onNodeRightClick: handleNodeRightClick,
-            onNodeHover: handleNodeHover,
             isNodeSelected: isNodeSelected,
-            onLinkClick: handleLinkClick,
-            onLinkRightClick: handleLinkRightClick,
-            onLinkHover: handleLinkHover,
             isLinkSelected: isLinkSelected,
-            onBackgroundClick,
-            onBackgroundRightClick,
-            onEngineStop: handleEngineStop,
             node: { nodeCanvasObject, nodePointerAreaPaint },
             linkLineDash,
-            onZoom
+            eventHandlers: {
+                onNodeClick: handleNodeClick,
+                onNodeRightClick: handleNodeRightClick,
+                onNodeHover: handleNodeHover,
+                onLinkClick: handleLinkClick,
+                onLinkRightClick: handleLinkRightClick,
+                onLinkHover: handleLinkHover,
+                onBackgroundClick,
+                onBackgroundRightClick,
+                onEngineStop: handleEngineStop,
+                onZoom
+            }
         })
     }, [
         handleNodeClick,
