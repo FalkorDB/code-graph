@@ -315,9 +315,33 @@ class SourceAnalyzer():
                             elif key == "parameters":
                                 graph.connect_entities("PARAMETERS", entity.id, resolved.id)
 
+    def link_imports(self, graph: Graph, root: Path) -> None:
+        """Add ``IMPORTS`` edges (File -> File) via per-language resolution.
+
+        Purely syntactic for Python (no LSP), so this runs after ``first_pass``
+        once every file has a graph id. Languages whose analyzer does not
+        implement import resolution are silently skipped.
+        """
+        indices: dict[str, object] = {}
+        for file_path, file in self.files.items():
+            analyzer = analyzers.get(file_path.suffix)
+            if analyzer is None:
+                continue
+            if file_path.suffix not in indices:
+                indices[file_path.suffix] = analyzer.build_import_index(self.files, root)
+            index = indices[file_path.suffix]
+            if not index:
+                continue
+            for target in analyzer.resolve_imports(file, root, index):
+                if getattr(file, "id", None) is None or getattr(target, "id", None) is None:
+                    continue
+                graph.connect_entities("IMPORTS", file.id, target.id)
+
     def analyze_files(self, files: list[Path], path: Path, graph: Graph) -> None:
         self.first_pass(path, files, [], graph)
+        self.link_imports(graph, path)
         self.second_pass(graph, files, path)
+        graph.derive_overrides()
 
     def analyze_sources(self, path: Path, ignore: list[str], graph: Graph) -> None:
         path = path.resolve()
@@ -325,8 +349,14 @@ class SourceAnalyzer():
         # First pass analysis of the source code
         self.first_pass(path, files, ignore, graph)
 
+        # Link import edges (syntactic, language-specific, no LSP)
+        self.link_imports(graph, path)
+
         # Second pass analysis of the source code
         self.second_pass(graph, files, path)
+
+        # Derive override edges from the resolved class hierarchy
+        graph.derive_overrides()
 
     def analyze_local_folder(self, path: str, g: Graph, ignore: Optional[list[str]] = []) -> None:
         """
