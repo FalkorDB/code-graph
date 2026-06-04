@@ -376,6 +376,8 @@ def build_prompt(
             f"adopt_arm={adopt_arm!r} requires track={CODE_GRAPH} and mode={LOCALIZE}; "
             f"got track={track!r} mode={mode!r}"
         )
+    if adopt_arm is not None and adopt_arm not in ADOPT_ARMS:
+        raise ValueError(f"unknown adopt_arm={adopt_arm!r}; expected one of {ADOPT_ARMS}")
     capability = _capability(track, project, nudge=nudge, adopt_arm=adopt_arm)
     if swe_bench.network_block_enabled():
         capability = f"{capability}\n{_HARDEN_PROMPT_LINE}"
@@ -1322,6 +1324,8 @@ def run_one(
             f"adopt_arm={adopt_arm!r} requires track={CODE_GRAPH} and mode={LOCALIZE}; "
             f"got track={track!r} mode={mode!r}"
         )
+    if adopt_arm is not None and adopt_arm not in ADOPT_ARMS:
+        raise ValueError(f"unknown adopt_arm={adopt_arm!r}; expected one of {ADOPT_ARMS}")
     if adopt_arm is not None:
         prompt_mode = f"adopt-{adopt_arm}"
     else:

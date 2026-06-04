@@ -297,6 +297,15 @@ def test_adopt_arm_guard_rejects_non_localize(tmp_path):
         )
 
 
+def test_adopt_arm_guard_rejects_unknown_value(tmp_path):
+    # Programmatic callers bypass argparse choices; an unknown arm must not
+    # silently fall through to CTRL behavior while logging prompt_mode=adopt-bad.
+    with pytest.raises(ValueError):
+        cr.build_prompt(
+            cr.CODE_GRAPH, tmp_path, "Bug.", "proj", mode=cr.LOCALIZE, adopt_arm="bad"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Localization extraction + scoring
 # ---------------------------------------------------------------------------
