@@ -42,12 +42,43 @@ from typing import Any
 
 from bench.datasets import swe_bench
 
-RUNNER_VERSION = "copilot-runner/1"
+RUNNER_VERSION = "copilot-runner/2"
+
+# Marks the measurement epoch for answer-leakage hardening + thinking-on +
+# full-trace capture. Recorded on every row so rows from different harness
+# generations are never silently pooled.
+#
+# harden/2: closed the git-walk-up leak. Stripping the worktree's own ``.git``
+# did NOT stop ``git`` (run by the agent or by the indexer's branch detection)
+# from traversing UP to the enclosing harness repo, which leaked its branch name
+# and commit messages (revealing the benchmark intent) and mis-keyed the index
+# under the parent branch. Fixed by recursively stripping ``.git``, pinning the
+# index to the ``_default`` branch, scrubbing inherited ``GIT_*`` vars, and
+# fencing the agent's git with ``GIT_CEILING_DIRECTORIES``. harden/1 rows where
+# the agent ran git are suspect and must not be pooled with harden/2.
+HARNESS_HARDENING_VERSION = "harden/2"
+
+# Reasoning effort for scored runs. Thinking is now ENABLED by default so the
+# agent's deliberation is captured in the trace; the reasoning-token cost is
+# accounted SEPARATELY (see parse_tokens_from_logs -> reasoning_tokens) so the
+# base token comparison across arms stays interpretable. All arms in an epoch
+# share one effort level. Override with COPILOT_REASONING_EFFORT.
+DEFAULT_REASONING_EFFORT = os.environ.get("BENCH_REASONING_EFFORT", "medium")
+
+
+def _resolve_reasoning_effort() -> str | None:
+    """Effort level to pass to copilot, or None to omit the flag entirely."""
+    effort = os.environ.get("COPILOT_REASONING_EFFORT", DEFAULT_REASONING_EFFORT)
+    if not effort or effort.lower() == "off":
+        return None
+    return effort
+
 
 # Tracks that only need different Copilot MCP wiring.
 NO_MCP = "copilot_no_mcp"
 CODE_GRAPH = "code_graph"
-VALID_TRACKS = (NO_MCP, CODE_GRAPH)
+LSP = "lsp"
+VALID_TRACKS = (NO_MCP, CODE_GRAPH, LSP)
 
 DEFAULT_CACHE = Path(__file__).resolve().parents[1] / "cache" / "copilot"
 
@@ -75,6 +106,18 @@ DEFAULT_MCP_SERVER_ROOT = Path(
         "CGRAPH_MCP_SERVER_ROOT",
         "/Users/dvirdukhan/Code/code-graph/.worktrees/mcp-smoke",
     )
+)
+
+# The LSP-backed MCP server (bench/mcp/lsp_server.py) lives in THIS bench tree
+# (mcp-t17), but must be launched with the mcp-smoke venv python because that is
+# the only environment with BOTH `mcp`/FastMCP AND `multilspy`. Its wrapper also
+# prepends the mcp-smoke venv `bin/` to PATH so the `jedi-language-server`
+# console script multilspy launches by bare name is found.
+LSP_BENCH_ROOT = Path(
+    os.environ.get("LSP_BENCH_ROOT", str(Path(__file__).resolve().parents[2]))
+)
+DEFAULT_LSP_SERVER_PYTHON_ROOT = Path(
+    os.environ.get("LSP_SERVER_PYTHON_ROOT", str(DEFAULT_MCP_SERVER_ROOT))
 )
 
 
@@ -116,6 +159,55 @@ source files only, no test or doc files):
 Write that line as plain text in your own final message. Do NOT emit it through a
 shell command, `echo`, a file write, or any tool call."""
 
+# Lane 1 adoption-calibration frozen text (prereg §5). Do NOT edit without
+# amending the pre-registration; the experiment's validity depends on the exact
+# wording (negative-control / non-overfitting requirement).
+#
+# SEM (lever a): edge-semantics clause appended verbatim to the code_graph
+# capability preamble. NO frequency/benchmark prior (the rejected wording "the
+# edit site is often a caller or a sibling, not the matched symbol" is forbidden).
+_ADOPT_SEM_CLAUSE = (
+    "Graph edges (calls, imports, inheritance, overrides, definitions) are "
+    "evidence that code is RELATED — not evidence that a connected file is the "
+    "location you must change. Treat every graph result as a hypothesis. Keep a "
+    "candidate in your final answer only when the code you have read supports "
+    "that the file participates directly in the behavior the task asks you to "
+    "change; drop it otherwise. Relatedness alone is not a reason to keep or to "
+    "drop."
+)
+# RAT (lever b): mandatory keep/drop-with-reason step injected into the localize
+# prompt body, BEFORE the FINAL sentinel instruction.
+_ADOPT_RAT_STEP = (
+    "Before your final answer, list every file the graph surfaced and, for each, "
+    "write one line: `KEEP <file> — <reason from code you read>` or "
+    "`DROP <file> — <reason>`. Your final answer must be consistent with these "
+    "decisions. You may add files the graph did not surface."
+)
+# RAT localize variant: identical to _LOCALIZE_PROMPT but with _ADOPT_RAT_STEP
+# inserted after the capability note and before the FINAL sentinel instruction.
+_LOCALIZE_PROMPT_RAT = """\
+You are localizing (not fixing) a bug in the Python repository checked out at {cwd}.
+
+{problem}
+
+Investigate the repository to determine which SOURCE files must be edited to fix
+this issue. Do NOT modify any files. Do NOT run or edit tests.
+{capability}
+{rat_step}
+When you are confident, finish your FINAL assistant message with a single line in
+EXACTLY this format (most-likely file first, repo-root-relative paths, Python
+source files only, no test or doc files):
+
+{sentinel} ["pkg/module_a.py", "pkg/module_b.py"]
+
+Write that line as plain text in your own final message. Do NOT emit it through a
+shell command, `echo`, a file write, or any tool call."""
+
+# Valid Lane 1 arm names. CTRL == canonical nudge base (prereg §2 amended: a
+# neutral preamble yields ~0% spontaneous adoption on strong models, leaving
+# nothing to calibrate, so CTRL is pinned to _CAP_CODE_GRAPH_NUDGE).
+ADOPT_ARMS = ("ctrl", "sem", "rat")
+
 _CAP_NO_MCP = (
     "No external MCP tools are available; use Copilot's built-in file, search "
     "and edit tools."
@@ -132,7 +224,9 @@ _CAP_NO_MCP_NUDGE = (
 _CAP_CODE_GRAPH = (
     "A code-graph MCP server is available exposing code-navigation tools "
     "(search_code, get_callers, get_callees, get_dependencies, impact_analysis, "
-    "find_path). When calling them, pass project=\"{project}\". Prefer precise "
+    "find_path). The repository has ALREADY been indexed under project=\"{project}\" "
+    "and is ready to query immediately — do NOT call index_repo; call the "
+    "navigation tools directly with project=\"{project}\". Prefer precise "
     "code-navigation tools over plain text search when they help. Do not use the "
     "`ask` tool."
 )
@@ -142,16 +236,128 @@ _CAP_CODE_GRAPH = (
 _CAP_CODE_GRAPH_NUDGE = (
     "A code-graph MCP server is available exposing code-navigation tools "
     "(search_code, get_callers, get_callees, get_dependencies, impact_analysis, "
-    "find_path). You MUST begin by calling search_code(project=\"{project}\") to "
+    "find_path). The repository has ALREADY been indexed under project=\"{project}\" "
+    "and is ready to query — do NOT call index_repo. You MUST begin by calling "
+    "search_code(project=\"{project}\") to "
     "locate the relevant symbols BEFORE any plain text search, and prefer these "
     "graph tools over grep throughout your investigation. Do not use the `ask` tool."
 )
 
 
-def _capability(track: str, project: str, *, nudge: bool) -> str:
+# Traversal-mandate variant: gated by CGRAPH_TRAVERSE_NUDGE=1 + --nudge. Forces the
+# model to actually traverse (get_callers/get_callees/find_path) from candidate
+# symbols, isolating whether traversal — not just search-first — helps localization.
+_CAP_CODE_GRAPH_TRAVERSE = (
+    "A code-graph MCP server is available exposing code-navigation tools "
+    "(search_code, get_callers, get_callees, get_dependencies, impact_analysis, "
+    "find_path). The repository has ALREADY been indexed under project=\"{project}\" "
+    "— do NOT call index_repo. You MUST follow this workflow: (1) call search_code(project=\"{project}\") "
+    "to locate candidate symbols; (2) for your top candidate symbol(s) you MUST call "
+    "get_callers AND get_callees (and find_path between candidates when relevant), and "
+    "inspect the files those calls surface, BEFORE finalizing your answer; (3) prefer "
+    "these graph tools over grep throughout. Do not use the `ask` tool."
+)
+
+
+# Spike variant (Spike 1a: IMPORTS + OVERRIDES edges): gated by CGRAPH_SPIKE_NUDGE=1
+# + --nudge. Forces the model to exercise the NEW edge types — get_importers
+# (file<-file IMPORTS) and get_overrides (subclass.method->ancestor.method) — which
+# can bridge to gold files that the CALLS/DEFINES/EXTENDS call-graph never reached.
+_CAP_CODE_GRAPH_SPIKE = (
+    "A code-graph MCP server is available exposing code-navigation tools "
+    "(search_code, get_callers, get_callees, get_dependencies, impact_analysis, "
+    "find_path, get_importers, get_overrides). The repository has ALREADY been "
+    "indexed under project=\"{project}\" — do NOT call index_repo. You MUST follow this workflow: "
+    "(1) call search_code(project=\"{project}\") to locate candidate symbols and "
+    "their files; (2) for your top candidate file(s) you MUST call "
+    "get_importers (to find which other source files import them) AND, for any "
+    "candidate class/method, get_overrides (to find ancestor or subclass methods "
+    "that share its behavior); inspect the files those calls surface BEFORE "
+    "finalizing your answer; (3) prefer these graph tools over grep throughout. "
+    "Do not use the `ask` tool."
+)
+
+
+# Substitution+stop variant: gated by CGRAPH_SUBST_NUDGE=1 + --nudge. Targets the
+# observed thrash failure mode (agent ignores a correct high-confidence rank-1 hit,
+# chases a wrong hypothesis with broad grep sweeps, and never stops). Instructs the
+# agent to TRUST the ranked search_code output (the top hits and their
+# likely_related_files) as the candidate answer set, confirm with at most 1-2 file
+# views, then STOP — substituting the graph for grep rather than running both.
+_CAP_CODE_GRAPH_SUBST = (
+    "A code-graph MCP server is available exposing code-navigation tools "
+    "(search_code, get_callers, get_callees, get_dependencies, impact_analysis, "
+    "find_path). The repository has ALREADY been indexed under project=\"{project}\" "
+    "— do NOT call index_repo. You MUST follow this workflow: (1) call "
+    "search_code(project=\"{project}\") with a CONCEPTUAL free-text query describing "
+    "the buggy behavior and area; (2) TRUST the ranked results — the top-ranked files "
+    "and the likely_related_files attached to them ARE your candidate answer set. "
+    "Confirm with AT MOST 1-2 targeted file views; (3) do NOT run broad grep/find "
+    "sweeps to second-guess a confident high-ranked hit, and do NOT keep searching "
+    "once the ranked results plus a quick view agree — STOP and answer. Substitute "
+    "the graph for grep; do not run both. Do not use the `ask` tool."
+)
+
+
+# LSP capability note. The LSP MCP server exposes jedi-backed navigation tools
+# (goto_definition, find_references, hover, document_symbols). Positions are
+# 0-based (LSP convention) while grep/view are 1-based — the agent must adjust.
+_CAP_LSP = (
+    "An LSP MCP server is available exposing jedi-backed Python navigation tools "
+    "(goto_definition, find_references, hover, document_symbols). Paths are "
+    "repo-root-relative; line/character positions are 0-based (subtract 1 from "
+    "the 1-based line numbers grep/view report). Prefer these precise "
+    "navigation tools over plain text search when they help."
+)
+# Nudged LSP: mandate an initial navigation call to measure the tool's value
+# when the model is forced to engage it.
+_CAP_LSP_NUDGE = (
+    "An LSP MCP server is available exposing jedi-backed Python navigation tools "
+    "(goto_definition, find_references, hover, document_symbols). Paths are "
+    "repo-root-relative; line/character positions are 0-based (subtract 1 from "
+    "the 1-based line numbers grep/view report). You MUST begin by calling "
+    "document_symbols on a likely-relevant file (or goto_definition on a symbol "
+    "from the problem statement) BEFORE any plain text search, and prefer these "
+    "LSP tools over grep throughout your investigation."
+)
+
+
+# Appended to the prompt under hardening (default ON; BENCH_BLOCK_NETWORK=0 to opt out). Tells the agent
+# to derive the answer from the code only — not from the network, GitHub, the
+# issue/PR number, git remotes, or the harness's own files.
+_HARDEN_PROMPT_LINE = (
+    "IMPORTANT: Determine the answer ONLY from the source code in the working "
+    "directory. Do NOT access the network or fetch any URL; do NOT consult "
+    "GitHub, pull requests, commits, patches, or diffs; do NOT read or infer "
+    "anything from a git remote, `origin`, the issue/PR number, or files "
+    "outside the working directory. Any attempt to look up the fix externally "
+    "invalidates the result."
+)
+
+
+def _capability(track: str, project: str, *, nudge: bool, adopt_arm: str | None = None) -> str:
     if track == CODE_GRAPH:
-        tmpl = _CAP_CODE_GRAPH_NUDGE if nudge else _CAP_CODE_GRAPH
+        if adopt_arm is not None:
+            # Lane 1 arms bypass the env-gated nudge variants entirely. CTRL,
+            # SEM and RAT all share the canonical nudge base (prereg §2 amended);
+            # SEM additionally appends the frozen edge-semantics clause.
+            cap = _CAP_CODE_GRAPH_NUDGE.format(project=project)
+            if adopt_arm == "sem":
+                cap = f"{cap} {_ADOPT_SEM_CLAUSE}"
+            return cap
+        if nudge and os.environ.get("CGRAPH_SUBST_NUDGE") == "1":
+            tmpl = _CAP_CODE_GRAPH_SUBST
+        elif nudge and os.environ.get("CGRAPH_SPIKE_NUDGE") == "1":
+            tmpl = _CAP_CODE_GRAPH_SPIKE
+        elif nudge and os.environ.get("CGRAPH_TRAVERSE_NUDGE") == "1":
+            tmpl = _CAP_CODE_GRAPH_TRAVERSE
+        elif nudge:
+            tmpl = _CAP_CODE_GRAPH_NUDGE
+        else:
+            tmpl = _CAP_CODE_GRAPH
         return tmpl.format(project=project)
+    if track == LSP:
+        return _CAP_LSP_NUDGE if nudge else _CAP_LSP
     return _CAP_NO_MCP_NUDGE if nudge else _CAP_NO_MCP
 
 
@@ -163,9 +369,25 @@ def build_prompt(
     *,
     nudge: bool = False,
     mode: str = FIX,
+    adopt_arm: str | None = None,
 ) -> str:
-    capability = _capability(track, project, nudge=nudge)
+    if adopt_arm is not None and (track != CODE_GRAPH or mode != LOCALIZE):
+        raise ValueError(
+            f"adopt_arm={adopt_arm!r} requires track={CODE_GRAPH} and mode={LOCALIZE}; "
+            f"got track={track!r} mode={mode!r}"
+        )
+    capability = _capability(track, project, nudge=nudge, adopt_arm=adopt_arm)
+    if swe_bench.network_block_enabled():
+        capability = f"{capability}\n{_HARDEN_PROMPT_LINE}"
     if mode == LOCALIZE:
+        if adopt_arm == "rat":
+            return _LOCALIZE_PROMPT_RAT.format(
+                cwd=cwd,
+                problem=problem.strip(),
+                capability=capability,
+                rat_step=_ADOPT_RAT_STEP,
+                sentinel=LOCALIZE_SENTINEL,
+            )
         return _LOCALIZE_PROMPT.format(
             cwd=cwd,
             problem=problem.strip(),
@@ -223,6 +445,52 @@ def _write_mcp_config(run_dir: Path, wrapper: Path, falkor_host: str, falkor_por
     return cfg
 
 
+def _write_lsp_wrapper(run_dir: Path, repo_path: Path) -> Path:
+    """Write the stdio launcher for the LSP MCP server (bench/mcp/lsp_server.py).
+
+    The server module lives in this bench tree (LSP_BENCH_ROOT) but must run on
+    the mcp-smoke venv python (the only env with both `mcp` and `multilspy`). The
+    wrapper also prepends that venv's `bin/` to PATH so multilspy can exec the
+    `jedi-language-server` console script by bare name, and points the adapter at
+    the target repo via LSP_REPO_ROOT.
+    """
+    py = DEFAULT_LSP_SERVER_PYTHON_ROOT / ".venv" / "bin" / "python"
+    if not py.exists():
+        raise FileNotFoundError(f"lsp-mcp server python not found: {py}")
+    venv_bin = DEFAULT_LSP_SERVER_PYTHON_ROOT / ".venv" / "bin"
+    wrapper = run_dir / "lsp-mcp-wrapper.sh"
+    wrapper.write_text(
+        "#!/bin/bash\n"
+        f'cd "{LSP_BENCH_ROOT}"\n'
+        f'export PATH="{venv_bin}:$PATH"\n'
+        f'export PYTHONPATH="{LSP_BENCH_ROOT}:$PYTHONPATH"\n'
+        f'export LSP_REPO_ROOT="{repo_path}"\n'
+        'export LSP_LANGUAGE="python"\n'
+        f'exec "{py}" -c "from bench.mcp.lsp_server import main; main()"\n'
+    )
+    wrapper.chmod(0o755)
+    return wrapper
+
+
+def _write_lsp_mcp_config(run_dir: Path, wrapper: Path) -> Path:
+    cfg = run_dir / "lsp-mcp-config.json"
+    cfg.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "lsp": {
+                        "command": str(wrapper),
+                        "args": [],
+                        "env": {},
+                    }
+                }
+            },
+            indent=2,
+        )
+    )
+    return cfg
+
+
 def _falkor_settings() -> tuple[str, int]:
     return (
         os.environ.get("FALKORDB_HOST", "127.0.0.1"),
@@ -237,6 +505,13 @@ def ensure_indexed(repo_path: Path, *, fresh: bool = True) -> float:
     HTTP API (``/api/analyze_folder``); the agent's cgraph-mcp reads the same
     FalkorDB instance, so the graph ``code:{repo_path.name}:_default`` is what
     the agent will query with ``project=repo_path.name``.
+
+    ``branch="_default"`` is passed EXPLICITLY so the index lands on the exact
+    key the agent (which omits ``branch``) reads. Without it the API falls back
+    to ``detect_branch(worktree)`` = ``git rev-parse``; when the hardened path
+    has stripped the worktree's ``.git``, git walks UP to the enclosing harness
+    repo and returns ITS branch, so the index would land under that branch key
+    while the agent queries an empty ``_default`` graph.
     """
     import httpx
     import redis
@@ -278,7 +553,7 @@ def ensure_indexed(repo_path: Path, *, fresh: bool = True) -> float:
             pass  # _health is best-effort
         resp = c.post(
             f"{base}/api/analyze_folder",
-            json={"path": str(repo_path), "ignore": default_ignore},
+            json={"path": str(repo_path), "ignore": default_ignore, "branch": "_default"},
         )
         if resp.status_code != 200:
             raise RuntimeError(
@@ -328,6 +603,209 @@ def _is_transient_startup_failure(
     return any(marker in blob for marker in _TRANSIENT_STARTUP_MARKERS)
 
 
+# ---------------------------------------------------------------------------
+# Answer-leakage hardening (default ON; opt out with BENCH_BLOCK_NETWORK=0)
+# ---------------------------------------------------------------------------
+# Shell commands that can exfiltrate the gold answer from the network or from a
+# git remote. Denied as ``shell(<cmd>:*)`` so the agent's tool layer refuses
+# them outright (deny takes precedence over --allow-all-tools). These are a
+# defense-in-depth layer, NOT a hermetic jail: a determined agent can still
+# reach the network via python/node/etc., which is why detect_network_leak()
+# backstops every run and trips signals are quarantined from scored numbers.
+_DENY_SHELL_CMDS = (
+    "curl", "wget", "gh", "nc", "ncat", "ssh", "scp", "telnet",
+    "git fetch", "git pull", "git clone", "git remote",
+    "git ls-remote", "git push",
+)
+
+# GitHub domains that serve merged-PR file lists / patches / commits. Denied via
+# --deny-url (precedence over allow). The model endpoint (*.githubcopilot.com)
+# and localhost (code-graph API :5000, FalkorDB) are deliberately NOT blocked.
+_DENY_URLS = (
+    "github.com",
+    "*.github.com",
+    "api.github.com",
+    "raw.githubusercontent.com",
+    "*.githubusercontent.com",
+    "codeload.github.com",
+    "patch-diff.githubusercontent.com",
+    "objects.githubusercontent.com",
+)
+
+
+def _network_deny_flags() -> list[str]:
+    """copilot CLI flags that block network/remote exfiltration of the gold answer."""
+    flags = ["--excluded-tools=web_fetch"]
+    for cmd in _DENY_SHELL_CMDS:
+        flags.append(f"--deny-tool=shell({cmd}:*)")
+    for url in _DENY_URLS:
+        flags.append(f"--deny-url={url}")
+    return flags
+
+
+def _git_ceiling_dirs(cwd: Path) -> str:
+    """``GIT_CEILING_DIRECTORIES`` value that fences git inside the worktree.
+
+    Lists the worktree's parent (both resolved and lexical, to defeat symlinked
+    paths) so git's upward repo discovery stops there: from inside the
+    history-free worktree it then finds no repository instead of walking up to
+    the enclosing harness repo. Listed dirs are NOT themselves crossed.
+    """
+    cwd_resolved = cwd.resolve()
+    ceilings = {str(cwd_resolved.parent), str(cwd.parent)}
+    return os.pathsep.join(sorted(ceilings))
+
+
+def _harden_env(env: dict[str, str]) -> dict[str, str]:
+    """Strip leak-enabling vars (opaque-name salt, GitHub creds) from the agent env.
+
+    Also removes inherited ``GIT_*`` discovery overrides (``GIT_DIR``,
+    ``GIT_WORK_TREE``, ``GIT_COMMON_DIR``, ``GIT_CONFIG``) which would otherwise
+    let the agent's git escape the worktree regardless of ``GIT_CEILING_DIRECTORIES``,
+    and sets ``GIT_CONFIG_NOSYSTEM=1`` so host git config can't re-point discovery.
+    The actual upward fence (``GIT_CEILING_DIRECTORIES``) is set in ``run_copilot``
+    where the worktree path is known.
+    """
+    for var in swe_bench.LEAK_SCRUB_ENV_VARS:
+        env.pop(var, None)
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CONFIG"):
+        env.pop(var, None)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return env
+
+
+# Substrings in a bash command that indicate an attempt to reach the gold answer
+# via the network or a git remote / the cloned-repo offline oracle.
+# NOTE: "/.git/" is handled separately (see _git_read_is_suspicious) because it
+# legitimately appears in benign `find -not -path '*/.git/*'` / grep
+# `--exclude-dir=.git` exclusions, which must NOT be flagged.
+_LEAK_CMD_PATTERNS = (
+    "github.com", "githubusercontent", "/pull/", "pull/", "/commit/",
+    ".patch", ".diff", "curl", "wget", " gh ", "gh pr", "gh api",
+    "git fetch", "git pull", "git ls-remote", "git remote",
+    "log origin", "diff origin", "rev-parse origin", "show origin",
+    # git-escape attempts: explicitly re-pointing git past the GIT_CEILING
+    # fence to reach the enclosing harness repo (branch name + commit messages).
+    "git -c ", "git --git-dir", "--git-dir=", "--work-tree",
+    "env -u git", "git_ceiling", "git_dir=", "git_work_tree",
+    "cache/repos", "urllib", "requests.get", "http.client",
+    "socket.", "urlopen", "httpx", "fetch(",
+)
+# Regexes that strip BENIGN ``.git`` references (path-exclusion filters) from a
+# command before we test for a genuine ``.git`` *read*. Without this, every
+# ``find . -not -path '*/.git/*'`` directory listing trips a false leak.
+_GIT_EXCLUSION_RE = re.compile(
+    r"""(?:!\s*)?-?-?(?:not\s+)?              # optional ! / - / --not
+        (?:-path|-ipath|exclude(?:-dir)?)\s*  # find -path / grep --exclude-dir
+        =?\s*['"]?[^'"\s]*\.git[^'"\s]*['"]?  # a token containing .git
+     """,
+    re.VERBOSE,
+)
+# Verbs/redirections that indicate an actual READ of git internals (the oracle).
+# Deliberately excludes grep/rg/sed/awk: those are directory searchers that take
+# benign ``.git`` exclusion globs (e.g. ``rg --glob '!**/.git/**'``); a genuine
+# git-internal read through them is still caught by the specific-file alternative
+# below (``.git/HEAD`` etc.).
+_GIT_READ_RE = re.compile(
+    r"(?:cat|less|more|head|tail|strings|xxd|od|"
+    r"open\(|cp|rsync)\b[^|;&]*\.git/"
+    r"|<\s*[^|;&]*\.git/"          # input redirection from a .git file
+    r"|\.git/(?:HEAD|refs|logs|objects|COMMIT_EDITMSG|ORIG_HEAD|packed-refs)"
+)
+# Path substrings whose READ would leak the answer or the harness's own state.
+_LEAK_PATH_PATTERNS = (
+    "cache/repos", "/.git/", "results.jsonl", "gold", "mapping",
+    "trace.jsonl", "trace.md",
+)
+
+
+def _scan_leak_arguments(name: str, args: dict[str, Any]) -> list[str]:
+    """Return leak signals for a single tool-execution-start event."""
+    signals: list[str] = []
+    lname = (name or "").lower()
+    if lname in ("web_fetch", "fetch") or lname.endswith("-fetch"):
+        url = str(args.get("url") or args.get("uri") or "")
+        signals.append(f"{name}:url={url[:120]}")
+        return signals
+    # Shell / bash: inspect the command string.
+    cmd = args.get("command") or args.get("cmd") or args.get("script")
+    if isinstance(cmd, str) and cmd:
+        low = cmd.lower()
+        for pat in _LEAK_CMD_PATTERNS:
+            if pat in low:
+                signals.append(f"bash:{pat.strip()}")
+        # ".git" needs context: ignore benign path-exclusion filters
+        # (find -not -path '*/.git/*', grep --exclude-dir=.git) and only flag a
+        # genuine READ of git internals (the offline gold oracle).
+        if ".git" in low:
+            stripped = _GIT_EXCLUSION_RE.sub(" ", low)
+            if _GIT_READ_RE.search(stripped):
+                signals.append("bash:.git-read")
+    # File-reader tools: inspect the path. Skip benign .github/.gitignore.
+    path = args.get("path") or args.get("file") or args.get("filename")
+    if isinstance(path, str) and path:
+        low = path.lower()
+        for pat in _LEAK_PATH_PATTERNS:
+            if pat in low:
+                signals.append(f"path:{pat.strip()}")
+    return signals
+
+
+def detect_network_leak(stdout: str) -> dict[str, Any]:
+    """Scan the event stream for attempts to reach the gold answer off-task.
+
+    Inspects every ``tool.execution_start`` event (both ``data.*`` and flat
+    top-level shapes; ``arguments`` is a dict). Flags web_fetch, GitHub/PR/
+    commit/patch URLs, network shell commands, git-remote / origin reads, and
+    reads of the cloned ``.git`` oracle, the shared repos cache, or the
+    harness's own results/gold/trace files. Returns a bool + de-duplicated
+    signal list recorded on the row so tripped runs can be quarantined.
+    """
+    signals: list[str] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not str(ev.get("type", "")).startswith("tool.execution_start"):
+            continue
+        data = ev.get("data") if isinstance(ev.get("data"), dict) else {}
+        name = data.get("name") or data.get("toolName") or ev.get("toolName") or ""
+        args = data.get("arguments")
+        if not isinstance(args, dict):
+            top = ev.get("arguments")
+            args = top if isinstance(top, dict) else {}
+        signals.extend(_scan_leak_arguments(name, args))
+    deduped = sorted(set(signals))
+    return {"network_leak": bool(deduped), "leak_signals": deduped}
+
+
+def hardening_meta(repo_path: Path, stdout: str, reasoning_tokens: int) -> dict[str, Any]:
+    """Per-row leak-hardening + thinking provenance, recorded on every run.
+
+    Marks which harness generation produced the row (so generations are never
+    pooled), whether the network/opaque-path/.git defenses were active, the
+    reasoning effort + separately-accounted thinking tokens, and any leak
+    signals the detector tripped (so contaminated runs can be quarantined).
+    """
+    hardened = swe_bench.network_block_enabled()
+    leak = detect_network_leak(stdout)
+    return {
+        "harness_hardening_version": HARNESS_HARDENING_VERSION,
+        "network_block_mode": hardened,
+        "opaque_path_mode": hardened,
+        "git_sanitized": hardened and not (repo_path / ".git").exists(),
+        "git_walk_up_blocked": hardened,
+        "reasoning_effort": _resolve_reasoning_effort(),
+        "reasoning_tokens": int(reasoning_tokens or 0),
+        "network_leak": leak["network_leak"],
+        "leak_signals": leak["leak_signals"],
+    }
+
+
 def run_copilot(
     *,
     prompt: str,
@@ -344,6 +822,19 @@ def run_copilot(
     log_dir = log_dir.resolve()
     log_dir.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
+    hardened = swe_bench.network_block_enabled()
+    if hardened:
+        # Remove the opaque-name salt and any GitHub credentials so the agent
+        # process cannot recover them.
+        env = _harden_env(env)
+        # Fence the agent's git: with the worktree's own .git stripped, a bare
+        # `git log`/`git status` would otherwise walk UP to the enclosing harness
+        # repo and leak its branch name + commit messages (which reveal the
+        # benchmark intent). GIT_CEILING_DIRECTORIES stops the upward search at
+        # the worktree's parent. Listed dirs are NOT crossed, so git sees no
+        # repository from inside the (history-free) worktree. Both the resolved
+        # and lexical parent are listed to defeat symlinked paths.
+        env["GIT_CEILING_DIRECTORIES"] = _git_ceiling_dirs(cwd)
     t0 = time.time()
     timed_out = False
     stdout, stderr, returncode = "", "", None
@@ -359,12 +850,30 @@ def run_copilot(
             "--no-remote",
             "--disable-builtin-mcps",
             "--allow-all-tools",
-            "--allow-all-paths",
+        ]
+        # Under hardening, confine the `view` file tool to the worktree (via
+        # --add-dir alone) instead of --allow-all-paths, so it cannot read the
+        # sibling cloned-repo `.git` oracle or the harness's own results/gold
+        # files. Shell reads are backstopped by deny-globs + the leak detector.
+        if not hardened:
+            cmd.append("--allow-all-paths")
+        cmd += [
             "--add-dir", str(cwd),
             "--log-level", "debug",
             "--log-dir", str(log_dir),
             "--session-id", session_id,
         ]
+        # Thinking is ENABLED for scored runs so the agent's tool-choice
+        # deliberation is captured in the trace. The reasoning-token cost is
+        # accounted separately (parse_tokens_from_logs -> reasoning_tokens) so
+        # the base token comparison across arms stays interpretable. Set
+        # COPILOT_REASONING_EFFORT=off to disable.
+        _effort = _resolve_reasoning_effort()
+        if _effort:
+            cmd += ["--effort", _effort]
+        # Network/remote exfiltration block (defense-in-depth; detector backstops).
+        if hardened:
+            cmd += _network_deny_flags()
         if mcp_config is not None:
             cmd += ["--additional-mcp-config", f"@{mcp_config}"]
 
@@ -471,6 +980,7 @@ def parse_tokens_from_logs(log_dir: Path) -> dict[str, int]:
         "total_tokens": 0,
         "cached_input_tokens": 0,
         "cache_creation_tokens": 0,
+        "reasoning_tokens": 0,
         "usage_blocks": 0,
     }
     for log in sorted(log_dir.glob("process-*.log")):
@@ -484,6 +994,11 @@ def parse_tokens_from_logs(log_dir: Path) -> dict[str, int]:
             details = block.get("prompt_tokens_details") or {}
             totals["cached_input_tokens"] += int(details.get("cached_tokens", 0))
             totals["cache_creation_tokens"] += int(details.get("cache_creation_tokens", 0))
+            # Thinking tokens are a subset of completion_tokens; surfaced
+            # separately so the base (non-reasoning) output is comparable across
+            # arms even with thinking enabled.
+            cdetails = block.get("completion_tokens_details") or {}
+            totals["reasoning_tokens"] += int(cdetails.get("reasoning_tokens", 0) or 0)
             totals["usage_blocks"] += 1
     return totals
 
@@ -583,18 +1098,26 @@ def parse_tool_sequence(stdout: str) -> list[str]:
     return seq
 
 
-def _is_graph_tool(name: str) -> bool:
-    return bool(name) and name.startswith(_GRAPH_TOOL_PREFIX)
+def _tool_prefix_for_track(track: str) -> str:
+    """The MCP server name prefix that identifies the track's nav tool calls."""
+    if track == LSP:
+        return "lsp"
+    return _GRAPH_TOOL_PREFIX
 
 
-def nudge_compliance(stdout: str) -> dict[str, Any]:
-    """Measure whether/how the agent engaged the graph tools."""
+def _is_graph_tool(name: str, prefix: str = _GRAPH_TOOL_PREFIX) -> bool:
+    return bool(name) and name.startswith(prefix)
+
+
+def nudge_compliance(stdout: str, track: str = CODE_GRAPH) -> dict[str, Any]:
+    """Measure whether/how the agent engaged the track's MCP nav tools."""
+    prefix = _tool_prefix_for_track(track)
     seq = parse_tool_sequence(stdout)
     first = seq[0] if seq else None
-    graph_calls = sum(1 for n in seq if _is_graph_tool(n))
+    graph_calls = sum(1 for n in seq if _is_graph_tool(n, prefix))
     return {
         "first_tool": first,
-        "first_is_graph": bool(first and _is_graph_tool(first)),
+        "first_is_graph": bool(first and _is_graph_tool(first, prefix)),
         "graph_calls": graph_calls,
     }
 
@@ -758,6 +1281,29 @@ def _patched_files(patch: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_run_dir(
+    cache_dir: Path,
+    *,
+    model: str,
+    mode: str,
+    prompt_mode: str,
+    track: str,
+    instance_id: str,
+    run_idx: int,
+) -> Path:
+    """Build the run_dir for one trajectory.
+
+    For multi-run pilots (run_idx>0) each repeat is nested under ``run<idx>`` so
+    logs are not overwritten; run_idx==0 keeps the bare layout for
+    backwards-compat with existing single-run caches. ``row_stdout_path()``
+    resolves both layouts.
+    """
+    run_dir = cache_dir / "runs" / model / mode / prompt_mode / track / instance_id
+    if run_idx > 0:
+        run_dir = run_dir / f"run{run_idx}"
+    return run_dir
+
+
 def run_one(
     inst: swe_bench.SweBenchInstance,
     *,
@@ -769,11 +1315,28 @@ def run_one(
     run_idx: int = 0,
     nudge: bool = False,
     mode: str = FIX,
+    adopt_arm: str | None = None,
 ) -> dict[str, Any]:
-    prompt_mode = "nudged" if nudge else "neutral"
+    if adopt_arm is not None and (track != CODE_GRAPH or mode != LOCALIZE):
+        raise ValueError(
+            f"adopt_arm={adopt_arm!r} requires track={CODE_GRAPH} and mode={LOCALIZE}; "
+            f"got track={track!r} mode={mode!r}"
+        )
+    if adopt_arm is not None:
+        prompt_mode = f"adopt-{adopt_arm}"
+    else:
+        prompt_mode = "nudged" if nudge else "neutral"
     work_root = cache_dir / "worktrees" / track
     work_root.mkdir(parents=True, exist_ok=True)
-    run_dir = cache_dir / "runs" / model / mode / prompt_mode / track / inst.instance_id
+    run_dir = _resolve_run_dir(
+        cache_dir,
+        model=model,
+        mode=mode,
+        prompt_mode=prompt_mode,
+        track=track,
+        instance_id=inst.instance_id,
+        run_idx=run_idx,
+    )
     if run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -796,6 +1359,7 @@ def run_one(
         return _run_localize(
             inst, track=track, model=model, run_dir=run_dir, work_root=work_root,
             wall_time=wall_time, server_root=server_root, nudge=nudge, base_row=base_row,
+            adopt_arm=adopt_arm,
         )
 
     repo_path = swe_bench.prepare_worktree(
@@ -809,6 +1373,9 @@ def run_one(
         host, port = _falkor_settings()
         wrapper = _write_mcp_wrapper(run_dir, server_root)
         mcp_config = _write_mcp_config(run_dir, wrapper, host, port)
+    elif track == LSP:
+        wrapper = _write_lsp_wrapper(run_dir, repo_path)
+        mcp_config = _write_lsp_mcp_config(run_dir, wrapper)
 
     prompt = build_prompt(
         track, repo_path, inst.problem_statement, repo_path.name, nudge=nudge, mode=mode
@@ -827,7 +1394,7 @@ def run_one(
     tokens = parse_tokens_from_logs(run_dir / "logs")
     result_ev = parse_result_event(result["stdout"])
     tool_total, tool_by_name = parse_tool_calls(result["stdout"])
-    compliance = nudge_compliance(result["stdout"])
+    compliance = nudge_compliance(result["stdout"], track)
     patch_info = extract_patch(repo_path, inst.base_commit)
 
     if result.get("startup_failed"):
@@ -870,7 +1437,9 @@ def run_one(
         "patch": patch_info["patch"],
         "wall_clock_sec": round(result["wall"], 2),
         "completed": True,
+        **hardening_meta(repo_path, result["stdout"], tokens["reasoning_tokens"]),
     }
+    _maybe_write_trace(run_dir, row)
     print(
         f"[done] {inst.instance_id} [{track}] in={row['input_tokens']} "
         f"out={row['output_tokens']} premium={row['premium_requests']} "
@@ -892,6 +1461,7 @@ def _run_localize(
     server_root: Path,
     nudge: bool,
     base_row: dict[str, Any],
+    adopt_arm: str | None = None,
 ) -> dict[str, Any]:
     """Localization driver: no edits, no Docker; score predicted files vs gold."""
     gold = swe_bench.gold_changed_files(inst.patch, source_only=True)
@@ -917,10 +1487,13 @@ def _run_localize(
         host, port = _falkor_settings()
         wrapper = _write_mcp_wrapper(run_dir, server_root)
         mcp_config = _write_mcp_config(run_dir, wrapper, host, port)
+    elif track == LSP:
+        wrapper = _write_lsp_wrapper(run_dir, repo_path)
+        mcp_config = _write_lsp_mcp_config(run_dir, wrapper)
 
     prompt = build_prompt(
         track, repo_path, inst.problem_statement, repo_path.name,
-        nudge=nudge, mode=LOCALIZE,
+        nudge=nudge, mode=LOCALIZE, adopt_arm=adopt_arm,
     )
     (run_dir / "prompt.txt").write_text(prompt)
 
@@ -936,7 +1509,7 @@ def _run_localize(
     tokens = parse_tokens_from_logs(run_dir / "logs")
     result_ev = parse_result_event(result["stdout"])
     tool_total, tool_by_name = parse_tool_calls(result["stdout"])
-    compliance = nudge_compliance(result["stdout"])
+    compliance = nudge_compliance(result["stdout"], track)
 
     agent_text = extract_agent_text(result["stdout"])
     (run_dir / "agent_text.txt").write_text(agent_text)
@@ -992,7 +1565,9 @@ def _run_localize(
         "wall_clock_sec": round(result["wall"], 2),
         "completed": True,
         **scores,
+        **hardening_meta(repo_path, result["stdout"], tokens["reasoning_tokens"]),
     }
+    _maybe_write_trace(run_dir, row)
     print(
         f"[loc] {inst.instance_id} [{track}] recall={scores['file_recall']} "
         f"acc@1={scores['acc_at_1']} mrr={scores['file_mrr']} "
@@ -1001,6 +1576,16 @@ def _run_localize(
         f"in={row['input_tokens']} wall={row['wall_clock_sec']}s"
     )
     return row
+
+
+def _maybe_write_trace(run_dir: Path, row: dict[str, Any]) -> None:
+    """Best-effort decision-loop trace extraction; never break a run on error."""
+    try:
+        from bench.analysis.trace import extract_run
+
+        extract_run(run_dir, row=row, write=True)
+    except Exception as exc:  # noqa: BLE001 - trace is diagnostic, not critical
+        print(f"[trace] extraction failed for {run_dir.name}: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -1078,6 +1663,11 @@ def main(argv: list[str] | None = None) -> int:
         "--nudge", action="store_true",
         help="use the nudged prompt variant (forces structured search-first)",
     )
+    p.add_argument(
+        "--adopt-arm", choices=ADOPT_ARMS, default=None,
+        help="Lane 1 adoption-calibration arm (code_graph + localize only): "
+             "ctrl (=nudge base), sem (edge-semantics clause), rat (keep/drop step)",
+    )
     p.add_argument("--cache-dir", default=str(DEFAULT_CACHE))
     p.add_argument("--results", default=None, help="results jsonl (default: <cache>/<model>/results.jsonl)")
     p.add_argument("--wall-time", type=float, default=1200.0, help="per-run wall-clock seconds")
@@ -1085,12 +1675,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--run-idx", type=int, default=0)
     p.add_argument("--seed", type=int, default=swe_bench.DEFAULT_SEED, help="seed for --select-structural")
     p.add_argument(
+        "--dataset", default=None,
+        help="HuggingFace dataset name (default: SWE-bench_Verified). "
+             "Use 'loc-bench' shorthand or a full id like czlll/Loc-Bench_V1.",
+    )
+    p.add_argument(
         "--no-leak", action="store_true",
         help="with --select-structural: drop instances whose problem statement names a gold file (structural-hard gate)",
     )
     args = p.parse_args(argv)
 
     tracks = args.track or list(VALID_TRACKS)
+    if args.adopt_arm is not None:
+        # Lane 1 arms are code_graph + localize only; pin the track/mode so the
+        # dedup key, run_dir and prompt all agree with run_one's guard.
+        if args.mode != LOCALIZE:
+            raise SystemExit(f"--adopt-arm requires --mode {LOCALIZE}")
+        if tracks != [CODE_GRAPH]:
+            raise SystemExit(f"--adopt-arm requires --track {CODE_GRAPH} (only)")
     cache_dir = Path(args.cache_dir).resolve()
     results_path = (
         Path(args.results)
@@ -1098,10 +1700,16 @@ def main(argv: list[str] | None = None) -> int:
         else cache_dir / args.model / "results.jsonl"
     )
     server_root = Path(args.server_root)
-    prompt_mode = "nudged" if args.nudge else "neutral"
+    if args.adopt_arm is not None:
+        prompt_mode = f"adopt-{args.adopt_arm}"
+    else:
+        prompt_mode = "nudged" if args.nudge else "neutral"
 
     ids = _load_instance_ids(args)
-    all_insts = {i.instance_id: i for i in swe_bench.load_instances()}
+    dataset_name = args.dataset
+    if dataset_name and dataset_name.lower() in ("loc-bench", "locbench"):
+        dataset_name = swe_bench.LOC_BENCH_DATASET
+    all_insts = {i.instance_id: i for i in swe_bench.load_instances(dataset_name=dataset_name)}
     if ids:
         missing = [i for i in ids if i not in all_insts]
         if missing:
@@ -1136,6 +1744,7 @@ def main(argv: list[str] | None = None) -> int:
                     run_idx=args.run_idx,
                     nudge=args.nudge,
                     mode=args.mode,
+                    adopt_arm=args.adopt_arm,
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"[error] {inst.instance_id} [{track}]: {exc!r}", file=sys.stderr)
