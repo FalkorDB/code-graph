@@ -307,6 +307,86 @@ def test_adopt_arm_guard_rejects_unknown_value(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# NOISY/GRAPH-WRONG distractor injection wiring
+# ---------------------------------------------------------------------------
+
+
+class _Inst:
+    def __init__(self, instance_id):
+        self.instance_id = instance_id
+
+
+def test_compute_prompt_mode_suffixes_only_when_injecting():
+    assert cr._compute_prompt_mode(adopt_arm="sem", nudge=True, inject_label=None) == "adopt-sem"
+    assert (
+        cr._compute_prompt_mode(adopt_arm="sem", nudge=True, inject_label="noisy")
+        == "adopt-sem-noisy"
+    )
+    assert cr._compute_prompt_mode(adopt_arm=None, nudge=True, inject_label=None) == "nudged"
+    assert (
+        cr._compute_prompt_mode(adopt_arm=None, nudge=False, inject_label="gwrong")
+        == "neutral-gwrong"
+    )
+
+
+def test_inject_env_pins_task_and_manifest():
+    inst = _Inst("django__django-1")
+    env = cr._inject_env(inst, inject_manifest=Path("/tmp/m.json"), inject_k=3)
+    assert env == {
+        "BENCH_NOISY_MANIFEST": "/tmp/m.json",
+        "BENCH_NOISY_TASK": "django__django-1",
+        "BENCH_NOISY_K": "3",
+    }
+
+
+def test_inject_env_omits_k_when_unset():
+    env = cr._inject_env(_Inst("t1"), inject_manifest=Path("/tmp/m.json"), inject_k=None)
+    assert "BENCH_NOISY_K" not in env
+    assert env["BENCH_NOISY_TASK"] == "t1"
+
+
+def test_inject_env_none_when_disabled():
+    assert cr._inject_env(_Inst("t1"), inject_manifest=None, inject_k=None) is None
+
+
+def test_write_mcp_config_clean_is_falkor_only(tmp_path):
+    w = tmp_path / "wrap.sh"
+    w.write_text("#!/bin/bash\n")
+    cfg = cr._write_mcp_config(tmp_path, w, "h", 6379)
+    env = json.loads(cfg.read_text())["mcpServers"]["code-graph"]["env"]
+    assert env == {"FALKORDB_HOST": "h", "FALKORDB_PORT": "6379"}
+
+
+def test_write_mcp_config_threads_extra_env(tmp_path):
+    w = tmp_path / "wrap.sh"
+    w.write_text("#!/bin/bash\n")
+    cfg = cr._write_mcp_config(
+        tmp_path, w, "h", 6379, extra_env={"BENCH_NOISY_TASK": "t1"}
+    )
+    env = json.loads(cfg.read_text())["mcpServers"]["code-graph"]["env"]
+    assert env["FALKORDB_HOST"] == "h"
+    assert env["BENCH_NOISY_TASK"] == "t1"
+
+
+def test_run_one_inject_guard_rejects_non_localize(tmp_path):
+    with pytest.raises(ValueError):
+        cr.run_one(
+            _Inst("x"), track=cr.CODE_GRAPH, model="m", cache_dir=tmp_path,
+            wall_time=1.0, server_root=tmp_path, mode=cr.FIX,
+            inject_manifest=Path("/tmp/m.json"), inject_label="noisy",
+        )
+
+
+def test_run_one_inject_guard_requires_label(tmp_path):
+    with pytest.raises(ValueError):
+        cr.run_one(
+            _Inst("x"), track=cr.CODE_GRAPH, model="m", cache_dir=tmp_path,
+            wall_time=1.0, server_root=tmp_path, mode=cr.LOCALIZE,
+            inject_manifest=Path("/tmp/m.json"), inject_label=None,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Localization extraction + scoring
 # ---------------------------------------------------------------------------
 

@@ -425,8 +425,20 @@ def _write_mcp_wrapper(run_dir: Path, server_root: Path) -> Path:
     return wrapper
 
 
-def _write_mcp_config(run_dir: Path, wrapper: Path, falkor_host: str, falkor_port: int) -> Path:
+def _write_mcp_config(
+    run_dir: Path,
+    wrapper: Path,
+    falkor_host: str,
+    falkor_port: int,
+    extra_env: dict[str, str] | None = None,
+) -> Path:
     cfg = run_dir / "cg-mcp-config.json"
+    env = {
+        "FALKORDB_HOST": falkor_host,
+        "FALKORDB_PORT": str(falkor_port),
+    }
+    if extra_env:
+        env.update(extra_env)
     cfg.write_text(
         json.dumps(
             {
@@ -434,10 +446,7 @@ def _write_mcp_config(run_dir: Path, wrapper: Path, falkor_host: str, falkor_por
                     "code-graph": {
                         "command": str(wrapper),
                         "args": [],
-                        "env": {
-                            "FALKORDB_HOST": falkor_host,
-                            "FALKORDB_PORT": str(falkor_port),
-                        },
+                        "env": env,
                     }
                 }
             },
@@ -1306,6 +1315,47 @@ def _resolve_run_dir(
     return run_dir
 
 
+def _compute_prompt_mode(
+    *, adopt_arm: str | None, nudge: bool, inject_label: str | None = None
+) -> str:
+    """Single source of truth for prompt_mode so main() and run_one() agree.
+
+    The NOISY/GRAPH-WRONG distractor condition is orthogonal to the prompt arm,
+    so it is encoded as a suffix (e.g. ``adopt-sem-noisy``). CLEAN runs carry no
+    suffix and stay byte-identical to the plain arm prompt_mode.
+    """
+    if adopt_arm is not None:
+        base = f"adopt-{adopt_arm}"
+    else:
+        base = "nudged" if nudge else "neutral"
+    if inject_label:
+        return f"{base}-{inject_label}"
+    return base
+
+
+def _inject_env(
+    inst: swe_bench.SweBenchInstance,
+    *,
+    inject_manifest: Path | None,
+    inject_k: int | None,
+) -> dict[str, str] | None:
+    """Build the env that gates server-side NOISY distractor injection.
+
+    The keyed-by-task manifest is read inside the MCP server; here we just point
+    it at the manifest path and pin BENCH_NOISY_TASK to this instance so only
+    this task's distractors are injected. Returns None when injection is off.
+    """
+    if inject_manifest is None:
+        return None
+    env = {
+        "BENCH_NOISY_MANIFEST": str(inject_manifest),
+        "BENCH_NOISY_TASK": inst.instance_id,
+    }
+    if inject_k is not None:
+        env["BENCH_NOISY_K"] = str(inject_k)
+    return env
+
+
 def run_one(
     inst: swe_bench.SweBenchInstance,
     *,
@@ -1318,6 +1368,9 @@ def run_one(
     nudge: bool = False,
     mode: str = FIX,
     adopt_arm: str | None = None,
+    inject_manifest: Path | None = None,
+    inject_label: str | None = None,
+    inject_k: int | None = None,
 ) -> dict[str, Any]:
     if adopt_arm is not None and (track != CODE_GRAPH or mode != LOCALIZE):
         raise ValueError(
@@ -1326,10 +1379,17 @@ def run_one(
         )
     if adopt_arm is not None and adopt_arm not in ADOPT_ARMS:
         raise ValueError(f"unknown adopt_arm={adopt_arm!r}; expected one of {ADOPT_ARMS}")
-    if adopt_arm is not None:
-        prompt_mode = f"adopt-{adopt_arm}"
-    else:
-        prompt_mode = "nudged" if nudge else "neutral"
+    if inject_manifest is not None:
+        if track != CODE_GRAPH or mode != LOCALIZE:
+            raise ValueError(
+                f"inject_manifest requires track={CODE_GRAPH} and mode={LOCALIZE}; "
+                f"got track={track!r} mode={mode!r}"
+            )
+        if not inject_label:
+            raise ValueError("inject_manifest requires a non-empty inject_label")
+    prompt_mode = _compute_prompt_mode(
+        adopt_arm=adopt_arm, nudge=nudge, inject_label=inject_label
+    )
     work_root = cache_dir / "worktrees" / track
     work_root.mkdir(parents=True, exist_ok=True)
     run_dir = _resolve_run_dir(
@@ -1363,7 +1423,7 @@ def run_one(
         return _run_localize(
             inst, track=track, model=model, run_dir=run_dir, work_root=work_root,
             wall_time=wall_time, server_root=server_root, nudge=nudge, base_row=base_row,
-            adopt_arm=adopt_arm,
+            adopt_arm=adopt_arm, inject_manifest=inject_manifest, inject_k=inject_k,
         )
 
     repo_path = swe_bench.prepare_worktree(
@@ -1466,6 +1526,8 @@ def _run_localize(
     nudge: bool,
     base_row: dict[str, Any],
     adopt_arm: str | None = None,
+    inject_manifest: Path | None = None,
+    inject_k: int | None = None,
 ) -> dict[str, Any]:
     """Localization driver: no edits, no Docker; score predicted files vs gold."""
     gold = swe_bench.gold_changed_files(inst.patch, source_only=True)
@@ -1490,7 +1552,8 @@ def _run_localize(
         index_sec = ensure_indexed(repo_path, fresh=True)
         host, port = _falkor_settings()
         wrapper = _write_mcp_wrapper(run_dir, server_root)
-        mcp_config = _write_mcp_config(run_dir, wrapper, host, port)
+        extra_env = _inject_env(inst, inject_manifest=inject_manifest, inject_k=inject_k)
+        mcp_config = _write_mcp_config(run_dir, wrapper, host, port, extra_env=extra_env)
     elif track == LSP:
         wrapper = _write_lsp_wrapper(run_dir, repo_path)
         mcp_config = _write_lsp_mcp_config(run_dir, wrapper)
@@ -1672,6 +1735,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Lane 1 adoption-calibration arm (code_graph + localize only): "
              "ctrl (=nudge base), sem (edge-semantics clause), rat (keep/drop step)",
     )
+    p.add_argument(
+        "--inject-manifest", default=None,
+        help="path to a NOISY/GRAPH-WRONG distractor manifest (code_graph + localize only); "
+             "enables server-side injection of verified non-gold candidates",
+    )
+    p.add_argument(
+        "--inject-label", default=None,
+        help="condition label suffixed onto prompt_mode when injecting (e.g. 'noisy', 'gwrong')",
+    )
+    p.add_argument(
+        "--inject-k", type=int, default=None,
+        help="override number of distractors to inject (default: manifest k)",
+    )
     p.add_argument("--cache-dir", default=str(DEFAULT_CACHE))
     p.add_argument("--results", default=None, help="results jsonl (default: <cache>/<model>/results.jsonl)")
     p.add_argument("--wall-time", type=float, default=1200.0, help="per-run wall-clock seconds")
@@ -1698,16 +1774,28 @@ def main(argv: list[str] | None = None) -> int:
         if tracks != [CODE_GRAPH]:
             raise SystemExit(f"--adopt-arm requires --track {CODE_GRAPH} (only)")
     cache_dir = Path(args.cache_dir).resolve()
+    inject_manifest: Path | None = None
+    if args.inject_manifest is not None:
+        if args.mode != LOCALIZE:
+            raise SystemExit(f"--inject-manifest requires --mode {LOCALIZE}")
+        if tracks != [CODE_GRAPH]:
+            raise SystemExit(f"--inject-manifest requires --track {CODE_GRAPH} (only)")
+        if not args.inject_label:
+            raise SystemExit("--inject-manifest requires --inject-label")
+        inject_manifest = Path(args.inject_manifest).resolve()
+        if not inject_manifest.is_file():
+            raise SystemExit(f"--inject-manifest not found: {inject_manifest}")
     results_path = (
         Path(args.results)
         if args.results
         else cache_dir / args.model / "results.jsonl"
     )
     server_root = Path(args.server_root)
-    if args.adopt_arm is not None:
-        prompt_mode = f"adopt-{args.adopt_arm}"
-    else:
-        prompt_mode = "nudged" if args.nudge else "neutral"
+    # Only suffix prompt_mode when injection is actually active.
+    effective_inject_label = args.inject_label if inject_manifest is not None else None
+    prompt_mode = _compute_prompt_mode(
+        adopt_arm=args.adopt_arm, nudge=args.nudge, inject_label=effective_inject_label,
+    )
 
     ids = _load_instance_ids(args)
     dataset_name = args.dataset
@@ -1749,6 +1837,9 @@ def main(argv: list[str] | None = None) -> int:
                     nudge=args.nudge,
                     mode=args.mode,
                     adopt_arm=args.adopt_arm,
+                    inject_manifest=inject_manifest,
+                    inject_label=effective_inject_label,
+                    inject_k=args.inject_k,
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"[error] {inst.instance_id} [{track}]: {exc!r}", file=sys.stderr)
