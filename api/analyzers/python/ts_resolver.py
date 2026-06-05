@@ -168,6 +168,21 @@ def _captures(query, root: Node) -> dict[str, list[Node]]:
     return cursor.captures(root)
 
 
+def _matches(query, root: Node) -> list[tuple[int, dict[str, list[Node]]]]:
+    """Return per-match capture groups.
+
+    Unlike :func:`_captures` (which groups *all* nodes by capture name into
+    parallel lists that are **not** guaranteed to be index-aligned across
+    different capture names), this yields one dict per match so that, e.g.,
+    a ``@name`` capture is always paired with the ``@def`` capture from the
+    *same* match. Zipping the two independent lists from ``captures()`` mis-
+    aligns names and definitions whenever the per-capture node orderings
+    diverge, scrambling the module symbol table.
+    """
+    cursor = QueryCursor(query)
+    return cursor.matches(root)
+
+
 # ---------------------------------------------------------------------------
 # Public resolver
 # ---------------------------------------------------------------------------
@@ -242,46 +257,50 @@ class TreeSitterPythonResolver:
         by_name: dict[str, list[_Definition]],
     ) -> None:
         # Top-level functions
-        caps = _captures(self._queries.top_level_func, root)
-        names = caps.get("name", [])
-        defs = caps.get("def", [])
-        for name_node, def_node in zip(names, defs):
-            name = name_node.text.decode("utf-8")
-            d = _Definition(mi.file_path, _strip_decorator(def_node), "func")
+        for _, caps in _matches(self._queries.top_level_func, root):
+            name_nodes = caps.get("name", [])
+            def_nodes = caps.get("def", [])
+            if not name_nodes or not def_nodes:
+                continue
+            name = name_nodes[0].text.decode("utf-8")
+            d = _Definition(mi.file_path, _strip_decorator(def_nodes[0]), "func")
             mi.top_level[name] = d
             by_name[name].append(d)
 
         # Top-level classes
-        caps = _captures(self._queries.top_level_class, root)
-        names = caps.get("name", [])
-        defs = caps.get("def", [])
-        for name_node, def_node in zip(names, defs):
-            name = name_node.text.decode("utf-8")
-            d = _Definition(mi.file_path, _strip_decorator(def_node), "class")
+        for _, caps in _matches(self._queries.top_level_class, root):
+            name_nodes = caps.get("name", [])
+            def_nodes = caps.get("def", [])
+            if not name_nodes or not def_nodes:
+                continue
+            name = name_nodes[0].text.decode("utf-8")
+            d = _Definition(mi.file_path, _strip_decorator(def_nodes[0]), "class")
             mi.top_level[name] = d
             by_name[name].append(d)
 
         # Top-level assignments (for class aliases like ``Foo = OtherFoo``)
-        caps = _captures(self._queries.top_level_assign, root)
-        names = caps.get("name", [])
-        defs = caps.get("def", [])
-        for name_node, def_node in zip(names, defs):
-            name = name_node.text.decode("utf-8")
+        for _, caps in _matches(self._queries.top_level_assign, root):
+            name_nodes = caps.get("name", [])
+            def_nodes = caps.get("def", [])
+            if not name_nodes or not def_nodes:
+                continue
+            name = name_nodes[0].text.decode("utf-8")
             if name in mi.top_level:
                 continue
-            d = _Definition(mi.file_path, def_node, "var")
+            d = _Definition(mi.file_path, def_nodes[0], "var")
             mi.top_level[name] = d
             by_name[name].append(d)
 
         # Class methods
-        caps = _captures(self._queries.class_methods, root)
-        class_names = caps.get("class_name", [])
-        method_names = caps.get("method_name", [])
-        method_defs = caps.get("method_def", [])
-        for cls_node, mname_node, mdef_node in zip(class_names, method_names, method_defs):
-            class_name = cls_node.text.decode("utf-8")
-            method_name = mname_node.text.decode("utf-8")
-            d = _Definition(mi.file_path, _strip_decorator(mdef_node), "method")
+        for _, caps in _matches(self._queries.class_methods, root):
+            class_nodes = caps.get("class_name", [])
+            mname_nodes = caps.get("method_name", [])
+            mdef_nodes = caps.get("method_def", [])
+            if not class_nodes or not mname_nodes or not mdef_nodes:
+                continue
+            class_name = class_nodes[0].text.decode("utf-8")
+            method_name = mname_nodes[0].text.decode("utf-8")
+            d = _Definition(mi.file_path, _strip_decorator(mdef_nodes[0]), "method")
             mi.class_methods.setdefault(class_name, {})[method_name] = d
             by_name[method_name].append(d)
 

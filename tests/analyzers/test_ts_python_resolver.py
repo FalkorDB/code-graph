@@ -227,6 +227,58 @@ def test_resolver_unknown_name_returns_empty(tmp_path: Path):
     assert r.resolve(files, mod, tmp_path.resolve(), name) == []
 
 
+def test_resolver_many_defs_name_def_alignment(tmp_path: Path):
+    """Regression for the scrambled module symbol table.
+
+    With several top-level definitions in one module, pairing the ``@name``
+    and ``@def`` captures by zipping two independently-grouped lists mis-
+    aligned names with definitions (e.g. an imported ``arange`` call resolved
+    to the ``array`` def node). Each imported call must resolve to the def
+    whose name actually matches the call name.
+    """
+    lib_src = "".join(f"def fn_{i}():\n    return {i}\n\n" for i in range(10))
+    import_line = "from lib import " + ", ".join(f"fn_{i}" for i in range(10))
+    call_lines = "\n".join(f"    fn_{i}()" for i in range(10))
+    app_src = f"{import_line}\n\ndef use():\n{call_lines}\n"
+    files = _make_project(tmp_path, {"lib.py": lib_src, "app.py": app_src})
+    r = TreeSitterPythonResolver(_PY)
+    app_path = (tmp_path / "app.py").resolve()
+    lib_path = (tmp_path / "lib.py").resolve()
+    root = files[app_path].tree.root_node
+    for i in range(10):
+        call = _find_call_node(root, f"fn_{i}(")
+        out = r.resolve(
+            files, app_path, tmp_path.resolve(), call.child_by_field_name("function")
+        )
+        assert len(out) == 1, f"fn_{i} did not resolve uniquely"
+        file, def_node = out[0]
+        assert file.path == lib_path
+        resolved_name = def_node.child_by_field_name("name").text.decode("utf-8")
+        assert resolved_name == f"fn_{i}", (
+            f"call fn_{i} resolved to wrong def {resolved_name}"
+        )
+
+
+def test_resolver_many_classes_name_def_alignment(tmp_path: Path):
+    """Same alignment regression for top-level classes."""
+    lib_src = "".join(f"class Cls{i}:\n    pass\n\n" for i in range(8))
+    import_line = "from lib import " + ", ".join(f"Cls{i}" for i in range(8))
+    body = "\n".join(f"    Cls{i}()" for i in range(8))
+    app_src = f"{import_line}\n\ndef use():\n{body}\n"
+    files = _make_project(tmp_path, {"lib.py": lib_src, "app.py": app_src})
+    r = TreeSitterPythonResolver(_PY)
+    app_path = (tmp_path / "app.py").resolve()
+    root = files[app_path].tree.root_node
+    for i in range(8):
+        call = _find_call_node(root, f"Cls{i}(")
+        out = r.resolve(
+            files, app_path, tmp_path.resolve(), call.child_by_field_name("function")
+        )
+        assert len(out) == 1
+        resolved_name = out[0][1].child_by_field_name("name").text.decode("utf-8")
+        assert resolved_name == f"Cls{i}"
+
+
 # ---------------------------------------------------------------------------
 # Cross-project bare-name fallback — precision (blocker #1 + Copilot #4)
 # ---------------------------------------------------------------------------
