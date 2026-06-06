@@ -72,6 +72,62 @@ async def test_search_code_result_serialisable(indexed_fixture):
     json.dumps(results)  # must not raise
 
 
+def test_relativize_strips_worktree_prefix():
+    from api.mcp.tools.structural import _relativize
+
+    proj = "django__django-18854__loc"
+    abs_path = f"/Users/x/.worktrees/bench/worktrees/code_graph/{proj}/django/db/models/fields/__init__.py"
+    assert _relativize(abs_path, proj) == "django/db/models/fields/__init__.py"
+
+
+def test_relativize_keeps_nested_repeat_of_project_name():
+    """A nested dir repeating the project name must survive (first-match strip)."""
+    from api.mcp.tools.structural import _relativize
+
+    proj = "myproj"
+    abs_path = f"/root/{proj}/src/vendor/{proj}/file.py"
+    assert _relativize(abs_path, proj) == f"src/vendor/{proj}/file.py"
+
+
+def test_relativize_noops_without_marker_or_rel_to():
+    from api.mcp.tools.structural import _relativize
+
+    assert _relativize("/abs/path/no/marker.py", "absent") == "/abs/path/no/marker.py"
+    assert _relativize("/abs/path.py", None) == "/abs/path.py"
+    assert _relativize(None, "proj") is None
+
+
+async def test_search_code_returns_relative_paths(indexed_fixture):
+    from api.mcp.tools.structural import search_code
+
+    results = await search_code(
+        prefix="ent",
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+    )
+    for r in results:
+        if r.get("file"):
+            assert not r["file"].startswith("/"), f"path not relativized: {r['file']}"
+            assert f"/{indexed_fixture.project}/" not in r["file"]
+
+
+async def test_search_code_ranks_exact_match_within_limit(indexed_fixture, expected_contract):
+    """An exact name==prefix match must survive the ``[:limit]`` cut and rank
+    ahead of the looser prefix matches."""
+    from api.mcp.tools.structural import search_code
+
+    # pick a known symbol from the contract and query its exact name
+    exact = next(iter(expected_contract["search_prefixes"]["ent"]["must_include"]))
+    results = await search_code(
+        prefix=exact,
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+        limit=1,
+    )
+    assert results, f"no results for exact prefix {exact!r}"
+    assert results[0]["name"] == exact
+
+
 # ---------------------------------------------------------------------------
 # get_callers / get_callees / get_dependencies (T5)
 # ---------------------------------------------------------------------------
@@ -266,8 +322,138 @@ async def test_all_query_tools_registered():
     tools = {t.name for t in await app.list_tools()}
     assert {
         "search_code",
-        "get_callers",
-        "get_callees",
-        "get_dependencies",
+        "get_neighbors",
         "find_path",
     }.issubset(tools)
+    # The per-edge tools were consolidated into get_neighbors and must no
+    # longer be advertised on the MCP surface.
+    assert tools.isdisjoint(
+        {"get_callers", "get_callees", "get_dependencies", "get_importers", "get_overrides"}
+    )
+
+
+async def test_get_neighbors_matches_legacy_callers_callees(indexed_fixture):
+    from api.mcp.tools.structural import get_callees, get_callers, get_neighbors
+
+    project = indexed_fixture.project
+    branch = indexed_fixture.branch
+    entry_id = await _find_id(indexed_fixture, "entrypoint")
+
+    legacy_callees = await get_callees(symbol_id=entry_id, project=project, branch=branch)
+    unified_callees = await get_neighbors(
+        symbol_id=entry_id, project=project, branch=branch, relation="CALLS", direction="OUT"
+    )
+    assert {n["id"] for n in unified_callees} == {n["id"] for n in legacy_callees}
+
+    service_id = await _find_id(indexed_fixture, "service")
+    legacy_callers = await get_callers(symbol_id=service_id, project=project, branch=branch)
+    unified_callers = await get_neighbors(
+        symbol_id=service_id, project=project, branch=branch, relation="CALLS", direction="IN"
+    )
+    assert {n["id"] for n in unified_callers} == {n["id"] for n in legacy_callers}
+
+
+async def test_get_neighbors_matches_legacy_dependencies(indexed_fixture):
+    from api.mcp.tools.structural import get_dependencies, get_neighbors
+
+    project = indexed_fixture.project
+    branch = indexed_fixture.branch
+    entry_id = await _find_id(indexed_fixture, "entrypoint")
+
+    legacy = await get_dependencies(symbol_id=entry_id, project=project, branch=branch)
+    unified = await get_neighbors(
+        symbol_id=entry_id,
+        project=project,
+        branch=branch,
+        relation=["IMPORTS", "CALLS", "DEFINES"],
+        direction="OUT",
+    )
+    assert {n["id"] for n in unified} == {n["id"] for n in legacy}
+
+
+# ---------------------------------------------------------------------------
+# get_file_neighbors (T8b) — file-level structural coupling
+# ---------------------------------------------------------------------------
+
+
+async def test_get_file_neighbors_reaches_cross_file_dependency(indexed_fixture):
+    """File-level expansion must reach a cross-file dependency.
+
+    ``entrypoint()`` calls ``service()`` in another file, so ``service.py``
+    must surface as a neighbor — and crucially via expanding ALL symbols in
+    the file, not only the lowest-``src_start`` representative one.
+    """
+    from api.mcp.tools.structural import get_file_neighbors
+
+    res = await get_file_neighbors(
+        "python/entrypoint.py",
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+    )
+    assert isinstance(res, dict)
+    assert res["file"] == "python/entrypoint.py"
+    assert res["truncated"] is False
+    assert res["total_neighbors"] == len(res["neighbors"])
+
+    names = [n["file"] for n in res["neighbors"]]
+    assert any(n.endswith("service.py") for n in names), names
+    assert "python/entrypoint.py" not in names  # self excluded
+
+    for n in res["neighbors"]:
+        assert isinstance(n["file_id"], int)  # recursable handle
+        assert n["edge_count"] >= 1
+        assert n["relations"]  # relation:direction breakdown present
+
+
+async def test_get_file_neighbors_id_and_path_agree(indexed_fixture):
+    """Resolving by File-node id and by repo-relative path yields the same set."""
+    from api.mcp.tools.structural import get_file_neighbors
+
+    by_path = await get_file_neighbors(
+        "python/service.py",
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+    )
+    assert by_path["file_id"] is not None
+    by_id = await get_file_neighbors(
+        by_path["file_id"],
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+    )
+    assert [n["file"] for n in by_id["neighbors"]] == [
+        n["file"] for n in by_path["neighbors"]
+    ]
+
+
+async def test_get_file_neighbors_unknown_file_is_empty(indexed_fixture):
+    from api.mcp.tools.structural import get_file_neighbors
+
+    res = await get_file_neighbors(
+        "python/does_not_exist.py",
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+    )
+    assert res["total_neighbors"] == 0
+    assert res["neighbors"] == []
+    assert res["truncated"] is False
+
+
+async def test_search_code_returns_file_id(indexed_fixture):
+    """Every search_code hit must carry a File-node ``file_id`` to hop from."""
+    from api.mcp.tools.structural import search_code
+
+    rows = await search_code(
+        query="service repo db",
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+    )
+    assert rows, "expected at least one hit"
+    for r in rows:
+        assert isinstance(r["file_id"], int)
+
+
+async def test_get_file_neighbors_registered():
+    from api.mcp.server import app
+
+    tools = await app.list_tools()
+    assert "get_file_neighbors" in {t.name for t in tools}

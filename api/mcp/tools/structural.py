@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import re
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Optional
 
@@ -28,6 +30,250 @@ from ..server import app
 
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Hybrid ranking (search_code Step 3) — tunable weights
+# ---------------------------------------------------------------------------
+# Repo-wide file relevance = weighted sum of normalized component scores minus
+# a path penalty. Each component is min-max normalized across files so the
+# weights are directly comparable. Tune these after the smoke test.
+_HYBRID_W_NAME = 2.0   # symbol name == a query identifier (exact)
+_HYBRID_W_PATH = 1.5   # query tokens present in the file's path
+_HYBRID_W_BM25 = 1.5   # BM25 over file body (symbol names + docstrings + path)
+_HYBRID_W_CENT = 0.5   # log(1 + cross-file in-degree): structural centrality
+_HYBRID_W_PEN = 1.0    # penalty for test/legacy/vendored/etc. paths
+_HYBRID_BODY_TOKEN_CAP = 4000
+_HYBRID_MIN_IDENT_LEN = 4
+_HYBRID_BM25_K1 = 1.5
+_HYBRID_BM25_B = 0.75
+
+_WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z0-9]+|[A-Z]+")
+_PENALTY_RE = re.compile(
+    r"(^|/)(tests?|testing|conftest|migrations?|legacy|vendor|vendored|"
+    r"third_party|__pycache__|examples?|docs?|benchmarks?)(/|$)|_test\.py$|(^|/)test_",
+    re.IGNORECASE,
+)
+
+
+def _subtokens(ident: str) -> list[str]:
+    """Split an identifier into snake/camel sub-tokens (lowercased) plus itself."""
+    out: list[str] = []
+    for part in ident.split("_"):
+        if not part:
+            continue
+        out.extend(m.group(0).lower() for m in _CAMEL_RE.finditer(part))
+    out.append(ident.lower())
+    return [t for t in out if t]
+
+
+def _tokenize(text: str) -> list[str]:
+    toks: list[str] = []
+    for m in _WORD_RE.finditer(text or ""):
+        toks.extend(_subtokens(m.group(0)))
+    return toks
+
+
+def _issue_identifiers(text: str) -> set[str]:
+    """Candidate symbol names mentioned in the query (backticked or code-shaped)."""
+    cands: set[str] = set()
+    for m in re.finditer(r"`([^`]+)`", text or ""):
+        for ident in _WORD_RE.findall(m.group(1)):
+            if len(ident) >= _HYBRID_MIN_IDENT_LEN:
+                cands.add(ident.lower())
+    for ident in _WORD_RE.findall(text or ""):
+        if len(ident) >= _HYBRID_MIN_IDENT_LEN and (
+            "_" in ident or re.search(r"[a-z][A-Z]", ident) or ident[0].isupper()
+        ):
+            cands.add(ident.lower())
+    return cands
+
+
+def _minmax(d: dict[str, float]) -> dict[str, float]:
+    if not d:
+        return {}
+    vals = list(d.values())
+    lo, hi = min(vals), max(vals)
+    if hi - lo < 1e-12:
+        return {k: 0.0 for k in d}
+    return {k: (v - lo) / (hi - lo) for k, v in d.items()}
+
+
+def _bm25(query_tokens: set[str], files: list[str],
+          tokmap: dict[str, list[str]]) -> dict[str, float]:
+    docs = [tokmap.get(f, []) for f in files]
+    n = len(docs)
+    if n == 0:
+        return {}
+    df: Counter = Counter()
+    for d in docs:
+        for t in set(d):
+            df[t] += 1
+    avgdl = (sum(len(d) for d in docs) / n) or 1.0
+    idf = {t: math.log(1 + (n - k + 0.5) / (k + 0.5)) for t, k in df.items()}
+    k1, b = _HYBRID_BM25_K1, _HYBRID_BM25_B
+    out: dict[str, float] = {}
+    for f, d in zip(files, docs):
+        if not d:
+            out[f] = 0.0
+            continue
+        tf = Counter(d)
+        dl = len(d)
+        s = 0.0
+        for t in query_tokens:
+            freq = tf.get(t)
+            if not freq:
+                continue
+            s += idf.get(t, 0.0) * (freq * (k1 + 1)) / (
+                freq + k1 * (1 - b + b * dl / avgdl)
+            )
+        out[f] = s
+    return out
+
+
+async def _hybrid_rank(g, query: str, project: Optional[str]) -> list[dict[str, Any]]:
+    """Rank every indexed file by relevance to a free-text ``query``.
+
+    Runs three aggregate Cypher reads (files, symbols, cross-file edge degree),
+    scores files with the weighted hybrid above, and returns an ordered list of
+    ``{abs_path, file, score, name, src_start, src_end}`` (best representative
+    symbol per file, used for the snippet). Pure read; no graph mutation.
+    """
+    files, comps, rep, abs_of, file_id_of = await _hybrid_components(g, query, project)
+    return _hybrid_score(files, comps, rep, abs_of, file_id_of)
+
+
+async def _hybrid_components(g, query: str, project: Optional[str]):
+    """Fetch graph data and build per-file, weight-independent components.
+
+    Returns ``(files, comps, rep, abs_of, file_id_of)`` where ``comps[f]`` holds
+    the min-max-normalized ``name``/``path``/``bm25``/``cent`` scores plus the
+    ``pen`` penalty, and ``file_id_of[f]`` is the File node id (handle the agent
+    feeds to ``get_file_neighbors``). Separated from weighting so weight sweeps
+    reuse the exact same normalized inputs as the live ranker.
+    """
+    def rel(p: Optional[str]) -> str:
+        return _relativize(p, project) if p else ""
+
+    qtok = set(_tokenize(query))
+    qids = _issue_identifiers(query)
+
+    pathtok: dict[str, list[str]] = {}
+    bodytok: dict[str, list[str]] = defaultdict(list)
+    abs_of: dict[str, str] = {}
+    file_id_of: dict[str, Any] = {}
+    name_exact: dict[str, float] = defaultdict(float)
+    rep: dict[str, dict[str, Any]] = {}
+
+    files_res = await g._query("MATCH (f:File) RETURN f.path, ID(f)")
+    for row in files_res.result_set:
+        ap = row[0]
+        if not ap:
+            continue
+        rp = rel(ap)
+        abs_of[rp] = ap
+        file_id_of[rp] = row[1]
+        pt = _tokenize(rp.replace("/", " "))
+        pathtok[rp] = pt
+        bodytok[rp].extend(pt)
+
+    sym_res = await g._query(
+        "MATCH (n) WHERE n:Function OR n:Class "
+        "RETURN n.name, n.path, n.doc, n.src_start, n.src_end"
+    )
+    body_used: Counter = Counter()
+    for name, path, doc, start, end in sym_res.result_set:
+        if not path:
+            continue
+        rp = rel(path)
+        # Rank only over real ``File`` nodes; symbols whose containing file was
+        # not emitted as a File node would otherwise inflate the BM25 corpus and
+        # skew min-max normalization.
+        if rp not in abs_of:
+            continue
+        if name:
+            bodytok[rp].extend(_subtokens(name))
+            if name.lower() in qids:
+                name_exact[rp] += 1.0
+                rep.setdefault(rp, {"name": name, "src_start": start, "src_end": end})
+        if rp not in rep and name:
+            cur = rep.get(rp)
+            if cur is None or (start is not None and (
+                cur.get("src_start") is None or start < cur["src_start"])):
+                rep[rp] = {"name": name, "src_start": start, "src_end": end}
+        if doc and body_used[rp] < _HYBRID_BODY_TOKEN_CAP:
+            toks = _tokenize(doc)[: _HYBRID_BODY_TOKEN_CAP - body_used[rp]]
+            bodytok[rp].extend(toks)
+            body_used[rp] += len(toks)
+
+    deg_res = await g._query(
+        "MATCH (a)-[:CALLS|IMPORTS|EXTENDS|OVERRIDES]->(b) "
+        "WHERE a.path IS NOT NULL AND b.path IS NOT NULL AND a.path <> b.path "
+        "RETURN b.path AS p, count(*) AS deg"
+    )
+    centrality: dict[str, float] = defaultdict(float)
+    for bpath, deg in deg_res.result_set:
+        centrality[rel(bpath)] += math.log1p(int(deg or 0))
+
+    files = sorted(abs_of)
+    if not files:
+        return [], {}, {}, {}, {}
+
+    path_overlap = {f: float(len(qtok & set(pathtok.get(f, [])))) for f in files}
+    n_name = _minmax(name_exact if name_exact else {f: 0.0 for f in files})
+    n_path = _minmax(path_overlap)
+    n_bm25 = _minmax(_bm25(qtok, files, bodytok))
+    n_cent = _minmax({f: centrality.get(f, 0.0) for f in files})
+
+    comps: dict[str, dict[str, float]] = {}
+    for f in files:
+        comps[f] = {
+            "name": n_name.get(f, 0.0),
+            "path": n_path.get(f, 0.0),
+            "bm25": n_bm25.get(f, 0.0),
+            "cent": n_cent.get(f, 0.0),
+            "pen": _HYBRID_W_PEN if _PENALTY_RE.search(f) else 0.0,
+        }
+
+    return files, comps, rep, abs_of, file_id_of
+
+
+def _hybrid_score(
+    files: list[str],
+    comps: dict[str, dict[str, float]],
+    rep: dict[str, dict[str, Any]],
+    abs_of: dict[str, str],
+    file_id_of: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
+    """Apply the hybrid weights to pre-normalized per-file components.
+
+    Split out from ``_hybrid_rank`` so the weighting can be exercised
+    independently of the (expensive) graph reads and normalization.
+    """
+    file_id_of = file_id_of or {}
+    scored: list[dict[str, Any]] = []
+    for f in files:
+        c = comps[f]
+        score = (
+            _HYBRID_W_NAME * c["name"]
+            + _HYBRID_W_PATH * c["path"]
+            + _HYBRID_W_BM25 * c["bm25"]
+            + _HYBRID_W_CENT * c["cent"]
+            - c["pen"]
+        )
+        r = rep.get(f, {})
+        scored.append({
+            "abs_path": abs_of[f],
+            "file": f,
+            "file_id": file_id_of.get(f),
+            "score": round(score, 4),
+            "name": r.get("name"),
+            "src_start": r.get("src_start"),
+            "src_end": r.get("src_end"),
+        })
+    scored.sort(key=lambda d: -d["score"])
+    return scored
 
 
 # ---------------------------------------------------------------------------
@@ -223,13 +469,118 @@ def _project_arg(project: str, branch: Optional[str]):
     return AsyncGraphQuery(project, branch=branch)
 
 
-def _node_summary(n: Any) -> dict[str, Any]:
+def _relativize(path: Optional[str], rel_to: Optional[str]) -> Optional[str]:
+    """Strip the indexing-root prefix so file paths are repo-relative.
+
+    Stored paths are absolute and include the worktree root whose final
+    segment equals the ``project`` identifier
+    (e.g. ``/<root>/<project>/pkg/mod.py``). We strip up to and including the
+    FIRST ``/<project>/`` occurrence so the result is the repo-relative path.
+    ``find`` (first match) is deliberate: a nested directory may legitimately
+    repeat the project name and must be preserved in the relative path.
+
+    Absolute worktree prefixes are ~150 chars/row of pure noise that the agent
+    re-reads on every cached turn; relativizing is the cheapest token win.
+    """
+    if not path or not rel_to:
+        return path
+    marker = f"/{rel_to}/"
+    idx = path.find(marker)
+    if idx == -1:
+        return path
+    return path[idx + len(marker):]
+
+
+def _raw_name(n: Any) -> Optional[str]:
+    """Extract the ``name`` property from a Node or already-encoded dict."""
+    if hasattr(n, "properties"):
+        return (n.properties or {}).get("name")
+    return (dict(n).get("properties") or {}).get("name")
+
+
+# Snippet windows (lines) attached to results so the agent can judge relevance
+# without a follow-up full-file ``view`` — the dominant token cost. Neighbor
+# tools return small, high-relevance result sets, so they carry a real window;
+# search_code can return many name matches, so it carries only a signature.
+NEIGHBOR_SNIPPET_LINES = 12
+SEARCH_SNIPPET_LINES = 2
+_SNIPPET_LINE_CHARS = 200
+"""Per-line char cap so a single minified line cannot blow up the payload."""
+
+
+def _read_snippet(
+    abs_path: Optional[str],
+    src_start: Any,
+    src_end: Any,
+    max_lines: int,
+) -> Optional[str]:
+    """Read up to ``max_lines`` leading source lines for an entity from disk.
+
+    Paths and line numbers are stored on nodes but the source text is not, so
+    we read the file lazily. Returns the entity's leading lines (signature plus
+    the start of the body) joined by newlines, or ``None`` when the file/line
+    info is missing or unreadable. Each line is capped at
+    ``_SNIPPET_LINE_CHARS``. Carrying a snippet in the result lets a single
+    tool call replace a follow-up ``view`` of a large file.
+    """
+    if not abs_path or max_lines <= 0:
+        return None
+    try:
+        start = int(src_start)
+    except (TypeError, ValueError):
+        return None
+    if start < 1:
+        return None
+    try:
+        end = int(src_end)
+    except (TypeError, ValueError):
+        end = start
+    # Read a slightly larger window than ``max_lines`` (bounded by the entity's
+    # own extent) so leading blank / decorator-only lines can be skipped without
+    # starving the substantive output.
+    hard_end = end if end >= start else start
+    read_until = min(hard_end, start + max_lines + 5)
+    raw_lines: list[str] = []
+    try:
+        with open(abs_path, "r", encoding="utf-8", errors="replace") as fh:
+            for i, raw in enumerate(fh, start=1):
+                if i < start:
+                    continue
+                if i > read_until:
+                    break
+                raw_lines.append(raw.rstrip("\n"))
+    except OSError:
+        return None
+    # Skip leading blank / decorator-only lines so the limited window lands on
+    # the substantive signature + body rather than being wasted on a blank line
+    # or a bare ``@decorator``.
+    while raw_lines and (
+        not raw_lines[0].strip() or raw_lines[0].lstrip().startswith("@")
+    ):
+        raw_lines.pop(0)
+    lines = [ln[:_SNIPPET_LINE_CHARS] for ln in raw_lines[:max_lines]]
+    if not lines:
+        return None
+    return "\n".join(lines)
+
+
+def _node_summary(
+    n: Any,
+    rel_to: Optional[str] = None,
+    snippet_lines: int = 0,
+    with_label: bool = True,
+) -> dict[str, Any]:
     """Normalize a FalkorDB Node (or already-encoded dict) to a flat payload.
 
     ``encode_node`` returns ``{id, labels, properties: {...}}`` because Node
-    properties live on a nested attribute. Agents want a flat record, and
-    they also want a single ``label`` (the meaningful one — File, Class,
-    Function — not the fulltext-index marker ``Searchable``).
+    properties live on a nested attribute. Agents want a flat record. We keep
+    the single meaningful ``label`` (File, Class, Function — not the fulltext
+    marker ``Searchable``) only for ``search_code``, where File-vs-Function
+    disambiguation matters; neighbor/path results omit it via ``with_label``
+    since the relation already implies the type.
+
+    When ``rel_to`` is given (the project/worktree identifier), ``file`` is
+    relativized to drop the absolute worktree prefix.
     """
     if hasattr(n, "properties"):
         props = dict(n.properties or {})
@@ -242,13 +593,24 @@ def _node_summary(n: Any) -> dict[str, Any]:
         node_id = d.get("id")
 
     label = next((lbl for lbl in labels if lbl != "Searchable"), None)
-    return {
+    summary: dict[str, Any] = {
         "id": node_id,
         "name": props.get("name"),
-        "label": label,
-        "file": props.get("path"),
-        "line": props.get("src_start"),
     }
+    if with_label:
+        summary["label"] = label
+    summary["file"] = _relativize(props.get("path"), rel_to)
+    summary["line"] = props.get("src_start")
+    if snippet_lines > 0:
+        snip = _read_snippet(
+            props.get("path"),
+            props.get("src_start"),
+            props.get("src_end"),
+            snippet_lines,
+        )
+        if snip:
+            summary["snippet"] = snip
+    return summary
 
 
 # Relationship-type names are graph labels (SCREAMING_SNAKE_CASE, e.g. CALLS,
@@ -324,7 +686,12 @@ async def _neighbors_payload(
         res = await g._query(q, {"sid": node_id, "limit": int(limit)})
         out: list[dict[str, Any]] = []
         for row in res.result_set:
-            entry = _node_summary(row[0])
+            entry = _node_summary(
+                row[0],
+                rel_to=project,
+                snippet_lines=NEIGHBOR_SNIPPET_LINES,
+                with_label=False,
+            )
             entry["relation"] = row[1]
             entry["direction"] = direction
             out.append(entry)
@@ -334,13 +701,61 @@ async def _neighbors_payload(
 
 
 @app.tool(
-    name="get_callers",
+    name="get_neighbors",
     description=(
-        "Return functions that call the given symbol (incoming CALLS edges). "
-        "`symbol_id` is the integer node id returned by `search_code` or "
-        "other tools."
+        "Adjacent symbols of a SYMBOL node (Function/Class) via graph edges, by "
+        "its integer node id. Pick relation+direction: "
+        "`CALLS`+`IN`=callers (upstream co-change sites); `CALLS`+`OUT`=callees; "
+        "`IMPORTS`+`IN`=importers of a File; `OVERRIDES`+`BOTH`=polymorphic "
+        "dispatch that plain CALLS miss; `[IMPORTS,CALLS,DEFINES]`+`OUT`="
+        "dependencies. `relation` is one name or a list; `direction` is IN, OUT, "
+        "or BOTH. Each result carries a code `snippet`, so you rarely need to "
+        "`view` the file. To navigate from a `search_code` hit (a FILE), use "
+        "`get_file_neighbors` with its `file_id` instead — this tool expects a "
+        "symbol id."
     ),
 )
+async def get_neighbors(
+    symbol_id: Any,
+    project: str,
+    relation: Any = "CALLS",
+    direction: str = "OUT",
+    branch: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Unified single-hop neighbor traversal (replaces the per-edge tools).
+
+    ``relation`` accepts a single edge type or a list of them; results are
+    aggregated across relations and deduped. ``direction`` is ``IN``
+    (incoming edges), ``OUT`` (outgoing), or ``BOTH`` (union of IN+OUT).
+    """
+    rels = [relation] if isinstance(relation, str) else list(relation)
+    direction = (direction or "OUT").upper()
+    if direction == "BOTH":
+        dirs = ["OUT", "IN"]
+    elif direction in ("IN", "OUT"):
+        dirs = [direction]
+    else:
+        raise ValueError(
+            f"direction must be 'IN', 'OUT', or 'BOTH', got: {direction!r}"
+        )
+
+    seen: set[Any] = set()
+    out: list[dict[str, Any]] = []
+    for d in dirs:
+        for rel in rels:
+            rows = await _neighbors_payload(project, branch, symbol_id, rel, d, limit)
+            for row in rows:
+                key = (row.get("id"), row.get("relation"), row.get("direction"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(row)
+                if len(out) >= limit:
+                    return out
+    return out
+
+
 async def get_callers(
     symbol_id: int | str,
     project: str,
@@ -350,12 +765,6 @@ async def get_callers(
     return await _neighbors_payload(project, branch, symbol_id, "CALLS", "IN", limit)
 
 
-@app.tool(
-    name="get_callees",
-    description=(
-        "Return functions that the given symbol calls (outgoing CALLS edges)."
-    ),
-)
 async def get_callees(
     symbol_id: int | str,
     project: str,
@@ -365,14 +774,6 @@ async def get_callees(
     return await _neighbors_payload(project, branch, symbol_id, "CALLS", "OUT", limit)
 
 
-@app.tool(
-    name="get_dependencies",
-    description=(
-        "Return outgoing neighbors of the given symbol across any of the "
-        "specified relation types (default: IMPORTS, CALLS, DEFINES). "
-        "Useful for 'what does this depend on' queries."
-    ),
-)
 async def get_dependencies(
     symbol_id: int | str,
     project: str,
@@ -406,6 +807,55 @@ async def get_dependencies(
 
 
 # ---------------------------------------------------------------------------
+# Spike 1a — get_importers (incoming IMPORTS) / get_overrides (OVERRIDES)
+# ---------------------------------------------------------------------------
+
+
+async def get_importers(
+    symbol_id: Any,
+    project: str,
+    branch: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    return await _neighbors_payload(
+        project, branch, symbol_id, "IMPORTS", "IN", limit
+    )
+
+
+async def get_overrides(
+    symbol_id: Any,
+    project: str,
+    branch: Optional[str] = None,
+    direction: str = "BOTH",
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    direction = (direction or "BOTH").upper()
+    if direction in ("IN", "OUT"):
+        return await _neighbors_payload(
+            project, branch, symbol_id, "OVERRIDES", direction, limit
+        )
+    if direction != "BOTH":
+        raise ValueError(
+            f"direction must be 'IN', 'OUT', or 'BOTH', got: {direction!r}"
+        )
+    seen: set[Any] = set()
+    out: list[dict[str, Any]] = []
+    for d in ("OUT", "IN"):
+        rows = await _neighbors_payload(
+            project, branch, symbol_id, "OVERRIDES", d, limit
+        )
+        for row in rows:
+            key = (row.get("id"), row.get("direction"))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+# ---------------------------------------------------------------------------
 # T7 — find_path
 # ---------------------------------------------------------------------------
 
@@ -414,8 +864,10 @@ async def get_dependencies(
     name="find_path",
     description=(
         "Return up to `max_paths` CALLS-path sequences from `source_id` to "
-        "`dest_id`. Useful for 'how does A reach B' questions. Returns an "
-        "empty list when no path exists."
+        "`dest_id` ('how does A reach B'). Use to confirm whether a suspected "
+        "entry point actually reaches a suspected buggy function, and through "
+        "which intermediaries. Returns an empty list when no STATIC path exists "
+        "(dynamic dispatch is not captured)."
     ),
 )
 async def find_path(
@@ -441,7 +893,7 @@ async def find_path(
     paths: list[dict[str, Any]] = []
     for entry in raw:
         node_seq = [
-            _node_summary(x)
+            _node_summary(x, rel_to=project, with_label=False)
             for x in entry
             # Discriminate on ``labels``: ``encode_node`` emits a top-level
             # ``labels`` key, while ``encode_edge`` does not (edges carry
@@ -463,31 +915,224 @@ async def find_path(
 @app.tool(
     name="search_code",
     description=(
-        "Prefix-search for symbols (functions, classes, files) whose name "
-        "starts with `prefix`. Backed by FalkorDB's full-text index. The "
-        "agent typically calls this first to discover symbol ids for the "
-        "navigation tools (`get_callers`, `find_path`, ...)."
+        "Localize a bug/feature to its files from a CONCEPTUAL free-text query. "
+        "Phrase it as a natural-language description of the behavior and area "
+        "involved (e.g. 'face centroid computation uses node connectivity' or "
+        "'tagging a library entry duplicates tags') — the issue title plus a "
+        "phrase about what the code DOES. Backticked symbol/error names are fine "
+        "as seasoning, but DO NOT pass a bare list of identifiers: a pile of exact "
+        "symbol names collapses the ranking onto their single definition file and "
+        "hides the related files you didn't know to name (use grep if you already "
+        "know the exact symbol). "
+        "Ranks every indexed file by a hybrid of (exact symbol-name match, "
+        "path-token overlap, BM25 over symbol names + docstrings, and call-graph "
+        "centrality), de-prioritizing test/vendored paths. Returns the top files "
+        "as {file, file_id, score, name, line, snippet} — best candidates first, "
+        "so the usual top 3-5 are where to start. Unlike a name lookup, it "
+        "surfaces the right file even when you don't know the exact symbol. Feed a "
+        "result's `file_id` to `get_file_neighbors` to reveal the files "
+        "structurally coupled to it (imports/calls) — co-change candidates a "
+        "textual search misses."
     ),
 )
 async def search_code(
-    prefix: str,
+    query: str,
     project: str,
     branch: Optional[str] = None,
-    limit: int = 20,
+    limit: int = 10,
 ) -> list[dict[str, Any]]:
     g = _project_arg(project, branch)
     try:
-        # Push the caller's ``limit`` down to the DB so it is actually honored
-        # (the underlying full-text query is otherwise capped at its default).
-        raw = await g.prefix_search(prefix, limit=limit)
+        ranked = await _hybrid_rank(g, query, project)
     finally:
         await g.close()
-    return [_node_summary(node) for node in raw]
+    out: list[dict[str, Any]] = []
+    for r in ranked[:limit]:
+        rec: dict[str, Any] = {
+            "file": r["file"],
+            "file_id": r["file_id"],
+            "score": r["score"],
+            "name": r["name"],
+            "line": r["src_start"],
+            "label": "File",
+        }
+        snip = _read_snippet(
+            r["abs_path"],
+            r["src_start"] if r["src_start"] is not None else 1,
+            r["src_end"] if r["src_end"] is not None else r["src_start"],
+            SEARCH_SNIPPET_LINES,
+        )
+        if snip:
+            rec["snippet"] = snip
+        out.append(rec)
+    return out
 
 
 # ---------------------------------------------------------------------------
-# T6 — impact_analysis (variable-depth Cypher with DISTINCT for cycle safety)
+# T8b — get_file_neighbors (file-level structural coupling)
 # ---------------------------------------------------------------------------
+
+FILE_NEIGHBOR_RELS = ("IMPORTS", "CALLS", "EXTENDS", "OVERRIDES")
+FILE_NEIGHBOR_MAX = 100
+"""Hard cap on returned neighbor files. The default is intentionally high:
+the value of this tool is a candidate set GUARANTEED to contain the coupled
+file, so truncating it (and possibly dropping that file) defeats the purpose.
+``truncated`` is surfaced so the agent knows when the cap bit."""
+
+
+async def _resolve_file(
+    g, file: Any, project: Optional[str]
+) -> tuple[Optional[int], Optional[str]]:
+    """Resolve a File handle to ``(file_node_id, abs_path)``.
+
+    ``file`` is either the integer File-node id that ``search_code`` returns,
+    or a repo-relative path. Path resolution compares ``_relativize`` of each
+    stored ``File.path`` rather than reconstructing an absolute path (worktree
+    roots vary), so a relative path matches regardless of the indexing root.
+    """
+    try:
+        fid = _coerce_node_id(file)
+    except ValueError:
+        fid = None
+    if fid is not None:
+        res = await g._query(
+            "MATCH (f:File) WHERE ID(f) = $id RETURN f.path", {"id": fid}
+        )
+        if res.result_set and res.result_set[0][0]:
+            return fid, res.result_set[0][0]
+        return None, None
+    target = str(file).strip().lstrip("/")
+    res = await g._query("MATCH (f:File) RETURN ID(f), f.path")
+    for nid, ap in res.result_set:
+        if ap and (_relativize(ap, project) == target or ap == file):
+            return nid, ap
+    return None, None
+
+
+@app.tool(
+    name="get_file_neighbors",
+    description=(
+        "Files structurally coupled to a FILE — the import/call/inheritance "
+        "dependencies that a textual search misses and that must often change "
+        "together. Run after `search_code`, passing a hit's `file_id` (or a "
+        "repo-relative path). Expands EVERY symbol in the file (not just the "
+        "representative one) and unions 1-hop IMPORTS/CALLS/EXTENDS/OVERRIDES "
+        "edges in both directions, deduped to files and ordered by coupling "
+        "strength (edge count). Returns {file, total_neighbors, truncated, "
+        "neighbors:[{file, file_id, edge_count, relations, snippet}]}. Each "
+        "neighbor carries a `file_id` you can recurse on and a code `snippet`. "
+        "Use this to reach co-change files after localizing the primary hit."
+    ),
+)
+async def get_file_neighbors(
+    file: Any,
+    project: str,
+    branch: Optional[str] = None,
+    limit: int = FILE_NEIGHBOR_MAX,
+) -> dict[str, Any]:
+    g = _project_arg(project, branch)
+    try:
+        fid, abs_path = await _resolve_file(g, file, project)
+        if abs_path is None:
+            return {
+                "file": _relativize(str(file), project),
+                "total_neighbors": 0,
+                "truncated": False,
+                "neighbors": [],
+            }
+
+        sres = await g._query(
+            "MATCH (n) WHERE (n:Function OR n:Class) AND n.path = $p RETURN ID(n)",
+            {"p": abs_path},
+        )
+        ids = [row[0] for row in sres.result_set]
+        if fid is not None:
+            ids.append(fid)
+        if not ids:
+            return {
+                "file": _relativize(abs_path, project),
+                "total_neighbors": 0,
+                "truncated": False,
+                "neighbors": [],
+            }
+
+        relq = "|".join(FILE_NEIGHBOR_RELS)
+        # Aggregate first (group by neighbor file), sort second, limit last — so
+        # high-degree symbols can't crowd the coupled file out before ranking.
+        agg: dict[str, dict[str, Any]] = {}
+        for direction in ("OUT", "IN"):
+            if direction == "OUT":
+                q = (
+                    f"MATCH (n)-[e:{relq}]->(d) WHERE ID(n) IN $ids "
+                    "AND d.path IS NOT NULL AND d.path <> $self "
+                    "RETURN d.path AS p, type(e) AS rel"
+                )
+            else:
+                q = (
+                    f"MATCH (s)-[e:{relq}]->(n) WHERE ID(n) IN $ids "
+                    "AND s.path IS NOT NULL AND s.path <> $self "
+                    "RETURN s.path AS p, type(e) AS rel"
+                )
+            res = await g._query(q, {"ids": ids, "self": abs_path})
+            for ap, rel in res.result_set:
+                rp = _relativize(ap, project)
+                slot = agg.get(rp)
+                if slot is None:
+                    slot = {"abs": ap, "count": 0, "rels": Counter()}
+                    agg[rp] = slot
+                slot["count"] += 1
+                slot["rels"][f"{rel}:{direction}"] += 1
+
+        total = len(agg)
+        eff_limit = min(int(limit or FILE_NEIGHBOR_MAX), FILE_NEIGHBOR_MAX)
+        ordered = sorted(agg.items(), key=lambda kv: (-kv[1]["count"], kv[0]))
+        kept = ordered[:eff_limit]
+        kept_abs = [slot["abs"] for _, slot in kept]
+
+        # Batch the File-id and representative-symbol (lowest src_start) lookups
+        # for only the kept neighbors.
+        fid_of: dict[str, int] = {}
+        if kept_abs:
+            fres = await g._query(
+                "MATCH (f:File) WHERE f.path IN $paths RETURN f.path, ID(f)",
+                {"paths": kept_abs},
+            )
+            fid_of = {row[0]: row[1] for row in fres.result_set}
+        rep_of: dict[str, tuple] = {}
+        if kept_abs:
+            rres = await g._query(
+                "MATCH (n) WHERE (n:Function OR n:Class) AND n.path IN $paths "
+                "RETURN n.path, n.src_start, n.src_end ORDER BY n.src_start",
+                {"paths": kept_abs},
+            )
+            for ap, s0, s1 in rres.result_set:
+                rep_of.setdefault(ap, (s0, s1))
+
+        neighbors: list[dict[str, Any]] = []
+        for rp, slot in kept:
+            ap = slot["abs"]
+            entry: dict[str, Any] = {
+                "file": rp,
+                "file_id": fid_of.get(ap),
+                "edge_count": slot["count"],
+                "relations": dict(slot["rels"]),
+            }
+            rep = rep_of.get(ap)
+            if rep:
+                snip = _read_snippet(ap, rep[0], rep[1], NEIGHBOR_SNIPPET_LINES)
+                if snip:
+                    entry["snippet"] = snip
+            neighbors.append(entry)
+
+        return {
+            "file": _relativize(abs_path, project),
+            "file_id": fid,
+            "total_neighbors": total,
+            "truncated": total > eff_limit,
+            "neighbors": neighbors,
+        }
+    finally:
+        await g.close()
 
 
 # Hard cap on traversal depth — passed values above this are silently
@@ -515,13 +1160,15 @@ def _clamp_depth(depth: Any) -> int:
 @app.tool(
     name="impact_analysis",
     description=(
-        "Transitive call-graph impact for refactoring: "
-        "`direction='IN'` returns all upstream callers (what breaks if you "
-        "change this symbol); `direction='OUT'` returns all downstream "
-        "callees (what this symbol indirectly depends on). Traverses only "
-        f"CALLS edges. Depth is clamped to {IMPACT_MAX_DEPTH}; cycles are "
-        "deduplicated via Cypher DISTINCT (each node appears at most once). "
-        "`limit` bounds the number of impacted symbols returned."
+        "Find the files/functions connected to a symbol through the call graph "
+        "— the files that must change TOGETHER when fixing or modifying it. "
+        "`direction='IN'` = upstream callers (who depends on this); "
+        "`direction='OUT'` = downstream callees (what this relies on). "
+        f"Traverses only CALLS edges (static; dynamic dispatch not captured); "
+        f"depth clamped to {IMPACT_MAX_DEPTH}; cycles deduplicated via Cypher "
+        "DISTINCT. `limit` bounds the number of impacted symbols returned. "
+        "For localization, run IN on a confirmed-buggy symbol to "
+        "surface co-change files."
     ),
 )
 async def impact_analysis(
@@ -565,7 +1212,7 @@ async def impact_analysis(
 
     out: list[dict[str, Any]] = []
     for row in res.result_set:
-        entry = _node_summary(row[0])
+        entry = _node_summary(row[0], rel_to=project, with_label=False)
         entry["direction"] = direction
         out.append(entry)
     return out
