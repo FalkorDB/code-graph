@@ -131,6 +131,7 @@ class LSPClient:
         self.shim = shim
         self._env_path = environment_path
         self._server: Any | None = None  # SyncLanguageServer
+        self._cm: Any | None = None  # live start_server() context (persistent mode)
 
     # ----- lifecycle ------------------------------------------------------
 
@@ -165,6 +166,34 @@ class LSPClient:
                 yield self
             finally:
                 self._server = None
+
+    # ----- persistent lifecycle (for a long-lived MCP server) -------------
+
+    def start(self) -> "LSPClient":
+        """Start a persistent language-server subprocess.
+
+        Unlike ``server_running`` (a per-call context manager used by the
+        bash CLI), this keeps one jedi process alive so an MCP server can
+        serve many tool calls without paying the ~1-3s startup each time.
+        The caller is responsible for calling ``stop()`` at shutdown.
+        """
+        if self._server is not None:
+            return self
+        server = self._build_server()
+        cm = server.start_server()
+        cm.__enter__()
+        self._server = server
+        self._cm = cm
+        return self
+
+    def stop(self) -> None:
+        cm = getattr(self, "_cm", None)
+        if cm is not None:
+            try:
+                cm.__exit__(None, None, None)
+            finally:
+                self._cm = None
+        self._server = None
 
     # ----- relative path normalization -----------------------------------
 

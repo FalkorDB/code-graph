@@ -58,3 +58,4 @@ htmlcov/
 pytest_cache/
 *.log
 repositories/
+logs/

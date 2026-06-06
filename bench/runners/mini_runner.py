@@ -49,7 +49,7 @@ TOOLS_DIR = BENCH_DIR / "tools"
 DEFAULT_CACHE_DIR = BENCH_DIR / "cache"
 DEFAULT_RESULTS = DEFAULT_CACHE_DIR / "results.jsonl"
 
-VALID_CONFIGS = ("baseline", "lsp", "code_graph")
+VALID_CONFIGS = ("baseline", "lsp", "code_graph", "code_graph_mcp")
 
 
 # ---------------------------------------------------------------------------
@@ -155,11 +155,40 @@ message that contains a unified diff of your changes inside a fenced
 """
 
 
+INSTANCE_TEMPLATE_CODE_GRAPH_MCP = """\
+You are working in the repository at {{cwd}}.
+The code-graph MCP server has already indexed this repository under the
+project name `$PROJECT_NAME` on branch `$BRANCH` (use the env vars
+literally).
+
+The task to solve:
+
+{{task}}
+
+**Required workflow.** Before reading or editing any file, your first
+bash command MUST be:
+
+  `cg-mcp search_code --project "$PROJECT_NAME" --branch "$BRANCH" --prefix <a symbol named in the task description>`
+
+Then use `cg-mcp get_callers --project "$PROJECT_NAME" --branch "$BRANCH" --symbol-id <id>`
+to expand relationships before doing any textual search. Use
+`cg-mcp impact_analysis ... --symbol-id <id> --depth 3` before
+non-trivial edits.
+
+When you believe the task is complete, finish your turn with a final
+message that contains a unified diff of your changes inside a fenced
+``` block, then exit. Do not commit; the harness reads the diff via
+`git diff`.
+"""
+
+
 def load_instance_template(config: str) -> str:
     if config == "lsp":
         return INSTANCE_TEMPLATE_LSP
     if config == "code_graph":
         return INSTANCE_TEMPLATE_CODE_GRAPH
+    if config == "code_graph_mcp":
+        return INSTANCE_TEMPLATE_CODE_GRAPH_MCP
     return INSTANCE_TEMPLATE
 
 
@@ -210,6 +239,23 @@ def config_env(config: str, repo_path: Path) -> dict[str, str]:
         # The agent's preamble references $REPO_NAME — set it to the
         # worktree dirname, which is what analyze_folder used as the id.
         env["REPO_NAME"] = repo_path.name
+    elif config == "code_graph_mcp":
+        # MCP transport: agent calls `cg-mcp …` which spawns the
+        # `cgraph-mcp` stdio server per call. FalkorDB coordinates
+        # are passed through verbatim.
+        env.setdefault("FALKORDB_HOST", os.environ.get("FALKORDB_HOST", "127.0.0.1"))
+        env.setdefault("FALKORDB_PORT", os.environ.get("FALKORDB_PORT", "6379"))
+        # `cgraph-mcp` must be on PATH; the runner installs the
+        # falkordb-code-graph package into the same interpreter, so
+        # prepending the venv bin gives us the entry point.
+        venv_bin = str(Path(sys.executable).parent)
+        env["PATH"] = f"{venv_bin}:{env['PATH']}"
+        # The preamble references $PROJECT_NAME and $BRANCH; project
+        # name matches what `index_repo` derives from the folder
+        # (= worktree dirname), and branch is the per-instance tag we
+        # used when indexing.
+        env["PROJECT_NAME"] = repo_path.name
+        env["BRANCH"] = os.environ.get("CGRAPH_MCP_BRANCH", "_default")
     return env
 
 
@@ -235,17 +281,63 @@ def _ensure_indexed(repo_path: Path) -> None:
                 print(f"[index] {repo_name} already indexed; skip")
                 return
         print(f"[index] analyzing {repo_path} ...")
-        with httpx.Client(timeout=600.0, headers=headers) as c:
+        # Default ignore set: auto-generated / vendored / pathological dirs
+        # that either contain no useful symbols or send jedi into a
+        # multi-hour resolve loop (e.g. sympy/integrals/rubi/rules has
+        # 3000-line files with hundreds of unresolvable symbols per line).
+        default_ignore = [
+            ".git", "venv", ".venv", "node_modules", "__pycache__",
+            "rubi/rules",  # sympy: blocks indexing for ~hours otherwise
+            "build", "dist", ".tox", ".eggs",
+        ]
+        with httpx.Client(timeout=7200.0, headers=headers) as c:
             r = c.post(
                 f"{base}/api/analyze_folder",
-                json={"path": str(repo_path), "ignore": []},
+                json={"path": str(repo_path), "ignore": default_ignore},
             )
             if r.status_code != 200:
-                print(f"[index] WARN analyze_folder returned {r.status_code}: {r.text[:200]}")
-            else:
-                print(f"[index] indexed {repo_name}")
+                raise RuntimeError(
+                    f"analyze_folder returned {r.status_code}: {r.text[:300]}. "
+                    f"Check ALLOWED_ANALYSIS_DIR on the API server covers {repo_path}."
+                )
+            print(f"[index] indexed {repo_name}")
+    except Exception as exc:
+        raise RuntimeError(f"failed to index {repo_name} at {repo_path}: {exc}") from exc
+
+
+def _ensure_indexed_mcp(repo_path: Path) -> None:
+    """MCP-track equivalent of _ensure_indexed.
+
+    Drives the `index_repo` MCP tool in-process via the bench adapter
+    (avoids spawning a second cgraph-mcp just to bootstrap; the agent
+    will spawn its own per call). Same skip-if-present optimization
+    as the HTTP path: cheap GRAPH.LIST scan against FalkorDB.
+    """
+    from bench.agents import code_graph_mcp_adapter as cgm
+    import redis
+
+    repo_name = repo_path.name
+    branch = os.environ.get("CGRAPH_MCP_BRANCH", "_default")
+    host = os.environ.get("FALKORDB_HOST", "127.0.0.1")
+    port = int(os.environ.get("FALKORDB_PORT", "6379"))
+    expected_graph = f"code:{repo_name}:{branch}"
+    try:
+        r = redis.Redis(host=host, port=port, decode_responses=True, socket_timeout=2)
+        if expected_graph in (r.execute_command("GRAPH.LIST") or []):
+            print(f"[index-mcp] {expected_graph} already indexed; skip")
+            return
     except Exception as exc:  # noqa: BLE001
-        print(f"[index] WARN failed to index {repo_name}: {exc!r}")
+        print(f"[index-mcp] WARN list_graphs failed ({exc!r}); will attempt index anyway")
+
+    print(f"[index-mcp] indexing {repo_path} as {expected_graph} ...")
+    try:
+        payload = cgm.index_repo(str(repo_path), branch=branch)
+        if isinstance(payload, dict) and payload.get("error"):
+            print(f"[index-mcp] WARN index_repo error: {payload['error']!r}")
+        else:
+            print(f"[index-mcp] indexed: {payload}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[index-mcp] WARN failed to index {repo_name}: {exc!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -569,7 +661,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = argparse.ArgumentParser(description="code-graph benchmark runner")
     p.add_argument("--config", choices=VALID_CONFIGS, action="append",
-                   help="one of baseline / lsp / code_graph; repeatable. "
+                   help="one of baseline / lsp / code_graph / code_graph_mcp; repeatable. "
                         "Default: all three.")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true",
@@ -600,6 +692,11 @@ def main(argv: list[str] | None = None) -> int:
                         "needs GITHUB_TOKEN with models:read scope); "
                         "'github_copilot/gpt-4o' (uses your Copilot session, "
                         "device-code OAuth on first call).")
+    p.add_argument("--instances-file", type=Path, default=None,
+                   help="Path to a file listing instance_ids to run EXACTLY "
+                        "(one per line, or a results .jsonl with a task_id "
+                        "field). Overrides --stage/--limit sampling so a run "
+                        "can be reproduced against a prior model's exact set.")
     p.add_argument("--step-limit", type=int, default=50)
     p.add_argument("--cost-limit", type=float, default=3.0)
     p.add_argument("--wall-time", type=int, default=1200)
@@ -619,12 +716,40 @@ def main(argv: list[str] | None = None) -> int:
         from bench.metrics import append_jsonl
 
         insts = sample_instances(load_instances(), stage=args.stage)
-        if args.limit is not None:
+        if args.instances_file is not None:
+            wanted: list[str] = []
+            seen: set[str] = set()
+            for line in args.instances_file.read_text().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("{"):
+                    import json as _json
+                    tid = _json.loads(line).get("task_id")
+                else:
+                    tid = line
+                if tid and tid not in seen:
+                    seen.add(tid)
+                    wanted.append(tid)
+            pool = {i.instance_id: i for i in load_instances()}
+            missing = [t for t in wanted if t not in pool]
+            if missing:
+                raise SystemExit(f"instances-file ids not in dataset: {missing[:5]}")
+            insts = [pool[t] for t in wanted]
+            print(f"[swe-bench] instances-file override: {len(insts)} instances")
+        elif args.limit is not None:
             insts = insts[: args.limit]
         print(f"[swe-bench] stage={args.stage} running {len(insts)} instances "
               f"x {len(configs)} configs = {len(insts) * len(configs)} trajectories")
         for inst in insts:
             for cfg in configs:
+                # Resume support: if a trajectory file for this (instance, cfg)
+                # already exists, skip the run entirely. Lets us recover from
+                # crashes / kills without re-spending tokens on completed work.
+                existing_traj = args.trajectories / f"{inst.instance_id}__{cfg}.json"
+                if existing_traj.exists():
+                    print(f"[resume] {inst.instance_id}/{cfg}: trajectory exists, skip")
+                    continue
                 # Fresh worktree per (instance, config) to avoid cross-talk.
                 wt = prepare_worktree(inst)
                 # Rename so each cfg gets a distinct path.
@@ -640,6 +765,8 @@ def main(argv: list[str] | None = None) -> int:
                 # call returns nothing and the agent abandons the tool.
                 if cfg == "code_graph":
                     _ensure_indexed(cfg_wt)
+                elif cfg == "code_graph_mcp":
+                    _ensure_indexed_mcp(cfg_wt)
                 cfg_rows = run_batch(
                     [task],
                     [cfg],
@@ -655,7 +782,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 rows.extend(cfg_rows)
                 ok, summary = verify_instance(inst, cfg_wt)
-                cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
+                # Inline verify is a best-effort signal only; the authoritative
+                # grade comes from the SWE-bench Docker harness (run separately
+                # via bench.runners.swebench_verify against the stored patch).
+                # If pytest couldn't even run here (e.g. missing in the launch
+                # env), record `ungraded` rather than a misleading `failed`.
+                if summary.startswith("UNGRADED:"):
+                    cfg_rows[-1]["metrics"].outcome = "ungraded"
+                else:
+                    cfg_rows[-1]["metrics"].outcome = "resolved" if ok else "failed"
                 if not ok:
                     cfg_rows[-1]["verify_summary"] = summary[-200:]
                 append_jsonl(args.results, cfg_rows[-1]["metrics"])
