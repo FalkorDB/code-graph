@@ -735,6 +735,82 @@ async def _neighbors_payload(
         await g.close()
 
 
+FIND_SYMBOL_SNIPPET_LINES = 4
+FIND_SYMBOL_DB_LIMIT = 200
+
+
+@app.tool(
+    name="find_symbol",
+    description=(
+        "Resolve a Function/Class NAME to its integer symbol node id — the "
+        "bridge from a human-readable name to the `symbol_id` that "
+        "`get_neighbors`, `impact_analysis` and `find_path` require (those tools "
+        "take an id, NOT a name; `search_code` returns FILES, not symbol ids, so "
+        "start here for relationship questions). Pass the simple name "
+        "(e.g. `normalize_cartesian_coordinates`); a dotted qualname "
+        "(`Grid.normalize_cartesian_coordinates`) is accepted and its last "
+        "segment is used. Optionally pass `file` (repo-relative path or a "
+        "substring of it) to disambiguate same-named symbols — matches in that "
+        "file are flagged `file_match: true` and listed first. Returns "
+        "[{symbol_id, name, label, file, line, file_match, snippet}] ordered "
+        "best-scoped first; when more than one remains, disambiguate by `file` "
+        "and `snippet`. Feed the chosen `symbol_id` to the relationship tools."
+    ),
+)
+async def find_symbol(
+    name: str,
+    project: str,
+    file: Optional[str] = None,
+    branch: Optional[str] = None,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Look up Function/Class nodes by their simple name.
+
+    Symbol nodes store only the SIMPLE name (``foo``), never the qualname
+    (``Bar.foo``), so a dotted input is reduced to its last segment. When
+    ``file`` is given we do not silently widen the search: every candidate is
+    tagged ``file_match`` and the in-file ones sort first, so a wrong/empty
+    file filter degrades visibly (the agent still sees the global matches but
+    knows none were in the requested file) rather than routing a relationship
+    query to an arbitrary same-named symbol.
+    """
+    simple = str(name).strip().split(".")[-1]
+    g = _project_arg(project, branch)
+    try:
+        res = await g._query(
+            "MATCH (n) WHERE (n:Function OR n:Class) AND n.name = $name "
+            "RETURN n LIMIT $limit",
+            {"name": simple, "limit": FIND_SYMBOL_DB_LIMIT},
+        )
+        rows = [
+            _node_summary(
+                r[0],
+                rel_to=project,
+                snippet_lines=FIND_SYMBOL_SNIPPET_LINES,
+            )
+            for r in res.result_set
+        ]
+    finally:
+        await g.close()
+
+    for r in rows:
+        r["symbol_id"] = r.pop("id")
+
+    if file is not None:
+        needle = str(file).strip().lstrip("/")
+
+        def _matches(r: dict[str, Any]) -> bool:
+            fp = r.get("file") or ""
+            return bool(needle) and (fp == needle or fp.endswith(needle) or needle in fp)
+
+        for r in rows:
+            r["file_match"] = _matches(r)
+        # In-file matches first; preserve relative order within each group.
+        rows.sort(key=lambda r: not r["file_match"])
+
+    return rows[:limit]
+
+
 @app.tool(
     name="get_neighbors",
     description=(
