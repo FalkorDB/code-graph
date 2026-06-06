@@ -30,10 +30,13 @@ verification as "skipped" until that path is wired up.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import random
 import re
+import secrets
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -43,12 +46,71 @@ from typing import Any, Iterable
 from bench.runners.mini_runner import Task
 
 DATASET_NAME = "princeton-nlp/SWE-bench_Verified"
+# Loc-Bench (LocAgent, ACL 2025): curated multi-hop code-localization benchmark.
+# Schema-compatible subset; localization-only (no FAIL_TO_PASS / PASS_TO_PASS).
+LOC_BENCH_DATASET = "czlll/Loc-Bench_V1"
 DEFAULT_CACHE_ROOT = Path(__file__).resolve().parents[1] / "cache"
 REPOS_DIR = DEFAULT_CACHE_ROOT / "repos"
 WORKTREES_DIR = DEFAULT_CACHE_ROOT / "worktrees"
 
 # Locked-in seed from plan / configs/default.yaml.
 DEFAULT_SEED = 20260526
+
+# ---------------------------------------------------------------------------
+# Answer-leakage hardening (default ON; opt out with BENCH_BLOCK_NETWORK=0)
+# ---------------------------------------------------------------------------
+# The localize worktree was historically named ``{instance_id}__loc``. The
+# instance_id embeds the upstream GitHub PR/issue number, so that name leaked
+# into the prompt cwd, ``--add-dir`` and the code-graph ``project=`` key — the
+# agent could read the PR number off the path and fetch the merged PR's file
+# list (the gold answer), or read the cloned ``.git`` (origin + post-fix
+# default-branch ref) fully offline. When hardening is enabled we (a) name the
+# worktree with an opaque salted HMAC of the instance_id and (b) strip ``.git``.
+#
+# The salt defaults to a per-process random value; pin BENCH_LEAK_SALT only if
+# a stable mapping across processes is needed (it is NOT required for resume,
+# since localize worktrees are rmtree'd per run). The salt must never reach the
+# agent process env (the runner scrubs it from the Copilot child environment).
+_RUN_SALT = os.environ.get("BENCH_LEAK_SALT") or secrets.token_hex(16)
+
+# Env vars scrubbed from the agent's process environment under hardening, so the
+# agent cannot recover the opaque-name salt or use ambient GitHub credentials.
+LEAK_SCRUB_ENV_VARS = (
+    "BENCH_LEAK_SALT",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "GITHUB_PAT",
+    "GH_PAT",
+)
+
+
+def network_block_enabled() -> bool:
+    """Whether answer-leakage hardening is active for this run.
+
+    Default ON. Tracing repeatedly caught the agent fetching the gold file list
+    from GitHub (``gh pr view``, ``web_fetch`` of the issue/PR) and reading the
+    cloned ``.git`` post-fix ref, which silently turned localization misses into
+    fake recall=1.0 wins. Hardening is therefore enabled unless explicitly
+    disabled with ``BENCH_BLOCK_NETWORK`` set to a falsy value
+    (``0``/``false``/``no``/``off``).
+    """
+    val = os.environ.get("BENCH_BLOCK_NETWORK")
+    if val is None:
+        return True
+    return val.strip().lower() not in ("0", "false", "no", "off", "")
+
+
+def opaque_worktree_name(instance_id: str) -> str:
+    """Opaque, salted worktree dir name that does not embed the PR/issue number.
+
+    HMAC-SHA256(salt, instance_id) truncated to 16 hex chars, ``loc-`` prefixed.
+    Deterministic within a process (stable salt) so a single run's index/prompt/
+    query all agree, but reveals nothing about the upstream instance.
+    """
+    digest = hmac.new(
+        _RUN_SALT.encode(), instance_id.encode(), hashlib.sha256
+    ).hexdigest()[:16]
+    return f"loc-{digest}"
 
 # Per-stage sample sizes (locked-in from plan).
 STAGE_SIZES = {"smoke": 3, "calibration": 10, "headline": 37}
@@ -68,6 +130,7 @@ class SweBenchInstance:
     environment_setup_commit: str
     version: str
     patch: str = ""  # gold source patch (localization ground truth)
+    category: str = ""  # Loc-Bench issue category (Bug, Feature, Performance, ...)
 
 
 def _git(args: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
@@ -81,11 +144,20 @@ def _git(args: list[str], cwd: Path | None = None, check: bool = True) -> subpro
 
 
 def _parse_list_field(value: Any) -> list[str]:
-    """SWE-bench stores FAIL_TO_PASS / PASS_TO_PASS as JSON strings."""
+    """SWE-bench stores FAIL_TO_PASS / PASS_TO_PASS as JSON strings.
+
+    Localization-only datasets (e.g. Loc-Bench) omit these; treat missing /
+    empty values as an empty list rather than raising.
+    """
+    if value is None:
+        return []
     if isinstance(value, list):
         return list(value)
     if isinstance(value, str):
-        return list(json.loads(value))
+        s = value.strip()
+        if not s:
+            return []
+        return list(json.loads(s))
     raise TypeError(f"unsupported list field: {type(value)!r}")
 
 
@@ -117,12 +189,13 @@ def load_instances(
                 repo=row["repo"],
                 base_commit=row["base_commit"],
                 problem_statement=row["problem_statement"],
-                test_patch=row["test_patch"],
-                fail_to_pass=_parse_list_field(row["FAIL_TO_PASS"]),
-                pass_to_pass=_parse_list_field(row["PASS_TO_PASS"]),
+                test_patch=row.get("test_patch") or "",
+                fail_to_pass=_parse_list_field(row.get("FAIL_TO_PASS")),
+                pass_to_pass=_parse_list_field(row.get("PASS_TO_PASS")),
                 environment_setup_commit=row.get("environment_setup_commit") or "",
                 version=row.get("version") or "",
                 patch=row.get("patch") or "",
+                category=row.get("category") or "",
             )
         )
     return out
@@ -421,15 +494,24 @@ def prepare_localize_worktree(
     repos_dir: Path = REPOS_DIR,
     worktrees_dir: Path | None = None,
 ) -> Path:
-    """Materialize a TEST-FREE worktree under a distinct name (`{id}__loc`).
+    """Materialize a TEST-FREE worktree under a distinct name.
 
     The distinct dirname matters: the code-graph backend keys its index on
     the worktree dirname, so a fresh name forces a clean re-index that does
     NOT contain the test_patch files (which would leak the bug location).
+
+    Naming:
+      * unhardened (``BENCH_BLOCK_NETWORK=0``): ``{instance_id}__loc``
+        (preserves prior-run provenance).
+      * hardened (default): ``loc-<salted HMAC>`` so the
+        dirname does NOT embed the upstream PR/issue number, and the cloned
+        ``.git`` is stripped so the post-fix oracle is unreachable offline.
     """
+    hardened = network_block_enabled()
     wt_dir = worktrees_dir or (DEFAULT_CACHE_ROOT / "worktrees-localize")
     src = _ensure_repo_clone(inst.repo, repos_dir)
-    dest = wt_dir / f"{inst.instance_id}__loc"
+    name = opaque_worktree_name(inst.instance_id) if hardened else f"{inst.instance_id}__loc"
+    dest = wt_dir / name
     if dest.exists():
         shutil.rmtree(dest, ignore_errors=True)
     if dest.exists():
@@ -458,8 +540,42 @@ def prepare_localize_worktree(
     else:
         raise RuntimeError(f"git clone failed for {dest}: {last_err}")
     _git(["fetch", "origin", inst.base_commit], cwd=dest, check=False)
+    # The cached clone (origin) only has commits reachable from the default
+    # branch. Loc-Bench base_commits are sometimes unreachable from it (PR
+    # bases, rewritten history). GitHub serves any reachable SHA directly, so
+    # fall back to fetching the commit straight from the upstream URL.
+    if _git(["cat-file", "-e", inst.base_commit], cwd=dest, check=False).returncode != 0:
+        url = f"https://github.com/{inst.repo}.git"
+        _git(["fetch", "--depth", "1", url, inst.base_commit], cwd=dest, check=False)
     _git(["checkout", "--detach", inst.base_commit], cwd=dest)
+    if hardened:
+        # Strip the offline oracle: the cloned ``.git`` retains ``origin`` plus a
+        # local default-branch ref at the post-fix tip, so ``git log/diff
+        # origin/<branch>`` would reveal the gold change with no network. The
+        # localize path needs no git history (gold comes from the dataset patch;
+        # analyze_folder ignores ``.git``), so removing it is safe.
+        strip_git_oracle(dest)
     return dest
+
+
+def strip_git_oracle(root: Path) -> None:
+    """Remove every ``.git`` (directory OR gitdir-pointer file) under ``root``.
+
+    A bare ``rmtree(root/'.git')`` only handles the top-level repo dir. It misses
+    (a) submodule checkouts, whose ``.git`` is a *file* containing a
+    ``gitdir: ...`` pointer back into the superproject, and (b) any nested git
+    checkout. Any surviving ``.git`` lets ``git`` rediscover history from inside
+    the worktree, re-exposing the post-fix oracle. Remove them all so the
+    worktree is genuinely history-free.
+    """
+    for git_path in sorted(root.rglob(".git"), key=lambda p: len(p.parts), reverse=True):
+        if git_path.is_dir() and not git_path.is_symlink():
+            shutil.rmtree(git_path, ignore_errors=True)
+        else:
+            try:
+                git_path.unlink()
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------
