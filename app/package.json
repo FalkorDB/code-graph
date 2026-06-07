@@ -42,7 +42,8 @@
     "vaul": "^1.1.2"
   },
   "overrides": {
-    "prismjs": "^1.30.0"
+    "prismjs": "^1.30.0",
+    "lodash-es": "^4.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.4",
