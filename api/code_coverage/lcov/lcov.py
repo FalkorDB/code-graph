@@ -1,5 +1,7 @@
 import os
 import sys
+from typing import Optional
+
 from ...graph import Graph
 
 def lcovparse(content):
@@ -124,7 +126,7 @@ def _line(l, report):
     else:
         sys.stdout.write("Unknown method name %s" % method)
 
-def process_lcov(repo: str, lcov_file: str) -> None:
+def process_lcov(repo: str, lcov_file: str, branch: Optional[str] = None) -> None:
     # create report from coverage lcov file
     with open(lcov_file, "r") as file:
         content = file.read()  # Reads the entire file as a single string
@@ -134,7 +136,7 @@ def process_lcov(repo: str, lcov_file: str) -> None:
     # SF:/__w/FalkorDB/FalkorDB/src/algorithms/detect_cycle.c
     prefix = "/__w/FalkorDB/FalkorDB/" # prefix to remove
 
-    g = Graph(repo)
+    g = Graph(repo, branch=branch)
 
     #---------------------------------------------------------------------------
     # Process report
