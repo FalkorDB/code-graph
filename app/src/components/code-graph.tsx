@@ -347,7 +347,7 @@ export function CodeGraph({
     }
 
     return (
-        <div className="grow md:h-full w-full flex flex-col gap-4 p-4 pt-0 md:p-8 md:bg-muted">
+        <div className="grow md:h-full w-full min-h-0 flex flex-col gap-4 p-4 pt-0 md:p-8 md:bg-muted">
             <header className="flex flex-col gap-4 relative">
                 <div className="absolute md:hidden inset-x-0 top-8 h-[50%] bg-muted -mx-8 -mt-8 px-8 border-b border-border" />
                 <Combobox
@@ -357,8 +357,8 @@ export function CodeGraph({
                     onSelectedValue={handleSelectedValue}
                 />
             </header>
-            <div className='h-1 grow flex flex-col'>
-                <main ref={containerRef} className="bg-background h-1 grow">
+            <div className='h-1 grow min-h-0 flex flex-col'>
+                <main ref={containerRef} className="bg-background h-1 grow min-h-0">
                     {
                         graph.Id ?
                             <div className="h-full relative border flex flex-col md:block">

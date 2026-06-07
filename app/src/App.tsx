@@ -380,8 +380,8 @@ export default function App() {
   return (
     <div className="relative font-sans">
       <GTM />
-      <main className="h-[100dvh]">
-        <div className='md:flex md:flex-col hidden h-screen' id='desktop'>
+      <main className="h-[100dvh] min-h-[100svh]">
+        <div className='hidden h-full min-h-0 md:flex md:flex-col' id='desktop'>
           <header className="flex flex-col text-xl">
             <div className="flex items-center justify-between py-2 px-4 border-b border-border">
               <div className="flex gap-4 items-center">
@@ -517,7 +517,7 @@ export default function App() {
           </header>
           <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
             <PanelGroup direction="horizontal" className="w-full h-full">
-              <Panel defaultSize={graph.Id ? 70 : 100} className="flex flex-col" minSize={50}>
+              <Panel defaultSize={graph.Id ? 70 : 100} className="flex min-w-0 flex-col" minSize={50}>
                 <CodeGraph
                   id="desktop"
                   graph={graph}
@@ -551,7 +551,7 @@ export default function App() {
               <PanelResizeHandle className={cn(!graph.Id && 'hidden', 'w-1 bg-border hover:bg-primary/50 transition-colors')} />
               <Panel
                 ref={chatPanel}
-                className="border-l"
+                className="min-w-0 border-l"
                 defaultSize={graph.Id ? 30 : 0}
                 minSize={30}
                 maxSize={50}
@@ -580,7 +580,7 @@ export default function App() {
             </PanelGroup>
           </Suspense>
         </div>
-        <div className='flex flex-col md:hidden h-full overflow-hidden' id='mobile'>
+        <div className='flex h-full min-h-0 flex-col overflow-hidden md:hidden' id='mobile'>
           <header className='flex justify-between items-center bg-muted py-2 px-4'>
             <a href="https://www.falkordb.com" target='_blank' rel="noopener noreferrer" aria-label="FalkorDB" className="flex gap-2 items-center">
               <Logo width={40} height={34} />
@@ -644,7 +644,7 @@ export default function App() {
             </div>
           )}
           <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
-            <div className='flex flex-col grow'>
+            <div className='flex min-h-0 grow flex-col'>
               <CodeGraph
                 id="mobile"
                 graph={graph}
@@ -682,7 +682,7 @@ export default function App() {
                         Chat
                       </Button>
                     </DrawerTrigger>
-                    <DrawerContent handleClassName='bg-muted-foreground h-1' className='md:hidden flex flex-col h-[90dvh]'>
+                    <DrawerContent handleClassName='bg-muted-foreground h-1' className='md:hidden flex min-h-0 flex-col h-[90svh] max-h-[90svh]'>
                       <VisuallyHidden>
                         <DrawerTitle />
                         <DrawerDescription />
