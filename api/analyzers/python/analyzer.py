@@ -5,14 +5,23 @@ from pathlib import Path
 import tomllib
 from typing import Optional
 
+from multilspy import SyncLanguageServer
+
 from ...entities.entity import Entity
+from ...entities.file import File
 from ..tree_sitter_base import TreeSitterAnalyzer
+from .ts_resolver import TreeSitterPythonResolver
 
 import tree_sitter_python as tspython
 from tree_sitter import Language, Node
 
 import logging
 logger = logging.getLogger('code_graph')
+
+
+_RESOLVER_ENV = "CODE_GRAPH_PY_RESOLVER"
+_RESOLVER_TREE_SITTER = "tree_sitter"
+
 
 class PythonAnalyzer(TreeSitterAnalyzer):
     entity_node_types = {
@@ -26,8 +35,48 @@ class PythonAnalyzer(TreeSitterAnalyzer):
 
     def __init__(self) -> None:
         super().__init__(Language(tspython.language()))
+        # Resolver selection: 'tree_sitter' opts into the static project-wide
+        # resolver (issue #689). Default is the historical jedi/LSP path so
+        # behaviour is unchanged until explicitly enabled.
+        resolver_choice = os.environ.get(_RESOLVER_ENV, "").strip().lower()
+        if resolver_choice == _RESOLVER_TREE_SITTER:
+            self._ts_resolver: Optional[TreeSitterPythonResolver] = (
+                TreeSitterPythonResolver(self.language)
+            )
+            logger.info("PythonAnalyzer: tree-sitter static resolver enabled")
+        else:
+            self._ts_resolver = None
+
+    def resolve(
+        self,
+        files: dict[Path, File],
+        lsp: SyncLanguageServer,
+        file_path: Path,
+        path: Path,
+        node: Node,
+    ) -> list[tuple[File, Node]]:
+        """Resolve a name node to ``(File, def_node)`` pairs.
+
+        When ``CODE_GRAPH_PY_RESOLVER=tree_sitter`` is set, bypass the LSP
+        and use the project-wide static resolver. Otherwise fall through to
+        the default jedi-backed implementation in ``AbstractAnalyzer``.
+        """
+        if self._ts_resolver is not None:
+            return self._ts_resolver.resolve(files, file_path, path, node)
+        return super().resolve(files, lsp, file_path, path, node)
+
+    def needs_lsp(self) -> bool:
+        # When the tree-sitter resolver is active we don't touch the LSP, so
+        # the orchestrator can skip starting one.
+        return self._ts_resolver is None
 
     def add_dependencies(self, path: Path, files: list[Path]):
+        # When the tree-sitter resolver is active, we resolve statically
+        # against the in-project files only — installing the project's
+        # transitive Python deps just to feed jedi adds 10s–10min of
+        # zero-value pip work. Short-circuit it.
+        if self._ts_resolver is not None:
+            return
         if Path(f"{path}/venv").is_dir():
             return
         subprocess.run(["python3", "-m", "venv", "venv"], cwd=str(path))

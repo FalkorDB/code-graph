@@ -173,7 +173,7 @@ class SourceAnalyzer():
             lsps[".java"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".java"] = NullLanguageServer()
-        if any(path.rglob('*.py')):
+        if any(path.rglob('*.py')) and analyzers[".py"].needs_lsp():
             py_venv = path / "venv"
             py_dotvenv = path / ".venv"
             if py_venv.is_dir() and (py_venv / "bin" / "python").exists():
@@ -237,7 +237,12 @@ class SourceAnalyzer():
                         file_path,
                     )
                     continue
-                if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
+                analyzer = analyzers.get(file_path.suffix)
+                # Skip symbol resolution when no real LSP is available *and* the
+                # analyzer can't resolve statically (e.g. tree-sitter resolver).
+                if isinstance(lsps.get(file_path.suffix), NullLanguageServer) and (
+                    analyzer is None or analyzer.needs_lsp()
+                ):
                     continue
                 resolvable.append(file_path)
 
