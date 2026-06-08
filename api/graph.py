@@ -93,15 +93,21 @@ def get_repos() -> list[dict]:
 
     repos = []
     for g in db.list_graphs():
-        if _is_internal_suffix(g):
-            continue
         parsed = parse_graph_name(g)
         if parsed is None:
-            # Legacy graph (pre-T17): synthesize a virtual entry so it stays
-            # discoverable until the migration helper promotes it.
+            # Legacy graph (pre-T17) or internal helper graph: skip when
+            # the bare name carries an internal suffix; otherwise synthesize
+            # a virtual entry so it stays discoverable.
+            if _is_internal_suffix(g):
+                continue
             repos.append({"project": g, "branch": DEFAULT_BRANCH, "graph": g})
         else:
             project, branch = parsed
+            # Hide per-branch internal companion graphs (e.g. ``branch_git``,
+            # ``branch_schema``, ``branch_tmp``); their suffix lives on the
+            # branch component, so check that explicitly.
+            if _is_internal_suffix(branch):
+                continue
             repos.append({"project": project, "branch": branch, "graph": g})
     return repos
 
@@ -129,7 +135,9 @@ class Graph():
             self.name = name
         else:
             self.project = name
-            self.branch = branch if branch is not None else DEFAULT_BRANCH
+            # Normalize empty / None to DEFAULT_BRANCH so the stored
+            # branch matches the key actually used by compose_graph_name.
+            self.branch = branch or DEFAULT_BRANCH
             self.name = compose_graph_name(self.project, self.branch)
 
         self.db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
@@ -440,14 +448,15 @@ class Graph():
 
         return res[0][0]
 
-    def prefix_search(self, prefix: str) -> str:
+    def prefix_search(self, prefix: str, limit: int = 10) -> str:
         """
         Search for entities by prefix using a full-text search on the graph.
-        The search is limited to 10 nodes. Each node's name and labels are retrieved,
-        and the results are sorted based on their labels.
+        The number of results is bounded by ``limit`` (default 10). Each node's
+        name and labels are retrieved, and the results are sorted based on their labels.
 
         Args:
             prefix (str): The prefix string to search for in the graph database.
+            limit (int): Maximum number of nodes to return (default 10).
 
         Returns:
             str: A list of entity names and corresponding labels, sorted by label.
@@ -457,7 +466,7 @@ class Graph():
         # Append a wildcard '*' to the prefix for full-text search.
         search_prefix = f"{prefix}*"
 
-        # Cypher query to perform full-text search and limit the result to 10 nodes.
+        # Cypher query to perform full-text search, bounding the result at $limit.
         # The 'CALL db.idx.fulltext.queryNodes' method searches for nodes labeled 'Searchable'
         # that match the given prefix, collects the nodes, and returns the result.
         query = """
@@ -465,11 +474,11 @@ class Graph():
             YIELD node
             WITH node
             RETURN node
-            LIMIT 10
+            LIMIT $limit
         """
 
         # Execute the query using the provided graph database connection.
-        result_set = self._query(query, {'prefix': search_prefix}).result_set
+        result_set = self._query(query, {'prefix': search_prefix, 'limit': int(limit)}).result_set
 
         completions = [encode_node(row[0]) for row in result_set]
 
@@ -603,6 +612,40 @@ class Graph():
         params = {'src_id': src_id, 'dest_id': dest_id, "properties": properties}
         self._query(q, params)
 
+    def derive_overrides(self, max_depth: int = 3) -> int:
+        """
+        Derive ``OVERRIDES`` edges from the existing class hierarchy.
+
+        A method ``m`` on a subclass overrides method ``m2`` on an ancestor
+        class when they share a name. Pure graph derivation over existing
+        ``EXTENDS`` + ``DEFINES`` edges, so it is language-agnostic. The edge
+        carries ``depth`` (inheritance distance) for downstream filtering.
+
+        Args:
+            max_depth (int): Maximum inheritance distance to bridge.
+
+        Returns:
+            int: Number of OVERRIDES edges after derivation.
+        """
+
+        q = f"""MATCH (sub:Class)-[x:EXTENDS*1..{int(max_depth)}]->(sup:Class)
+                WHERE ID(sub) <> ID(sup)
+                WITH DISTINCT sub, sup, length(x) AS depth
+                MATCH (sub)-[:DEFINES]->(m:Function)
+                MATCH (sup)-[:DEFINES]->(m2:Function)
+                WHERE m.name = m2.name AND ID(m) <> ID(m2)
+                MERGE (m)-[e:OVERRIDES]->(m2)
+                ON CREATE SET e.depth = depth"""
+
+        try:
+            self._query(q)
+        except Exception as exc:  # noqa: BLE001 — derivation is best-effort
+            logging.warning("derive_overrides failed: %s", exc)
+            return 0
+
+        res = self._query("MATCH ()-[e:OVERRIDES]->() RETURN count(e)").result_set
+        return int(res[0][0]) if res else 0
+
     def function_calls_function(self, caller_id: int, callee_id: int, pos: int) -> None:
         """
         Establish a 'CALLS' relationship between two function nodes.
@@ -650,13 +693,16 @@ class Graph():
 
         return self._query(q, params)
 
-    def find_paths(self, src: int, dest: int) -> list[Path]:
+    def find_paths(self, src: int, dest: int, limit: Optional[int] = None) -> list[Path]:
         """
         Find all paths between the source (src) and destination (dest) nodes.
 
         Args:
             src (int): The ID of the source node.
             dest (int): The ID of the destination node.
+            limit (Optional[int]): When provided, bound the number of paths
+                enumerated by the database with a Cypher ``LIMIT``. When ``None``
+                (default) all paths are returned (legacy behavior).
 
         Returns:
             List[Optional[Path]]: A list of paths found between the src and dest nodes.
@@ -674,8 +720,13 @@ class Graph():
                RETURN p
            """
 
+        params = {'src_id': src, 'dest_id': dest}
+        if limit is not None:
+            q += "        LIMIT $limit\n"
+            params['limit'] = int(limit)
+
         # Perform the query with the source and destination node IDs.
-        result_set = self._query(q, {'src_id': src, 'dest_id': dest}).result_set
+        result_set = self._query(q, params).result_set
 
         paths = []
 
@@ -766,13 +817,15 @@ async def async_get_repos() -> list[dict]:
     try:
         repos = []
         for g in await db.list_graphs():
-            if _is_internal_suffix(g):
-                continue
             parsed = parse_graph_name(g)
             if parsed is None:
+                if _is_internal_suffix(g):
+                    continue
                 repos.append({"project": g, "branch": DEFAULT_BRANCH, "graph": g})
             else:
                 project, branch = parsed
+                if _is_internal_suffix(branch):
+                    continue
                 repos.append({"project": project, "branch": branch, "graph": g})
         return repos
     finally:
@@ -796,7 +849,7 @@ class AsyncGraphQuery:
             self.name = name
         else:
             self.project = name
-            self.branch = branch if branch is not None else DEFAULT_BRANCH
+            self.branch = branch or DEFAULT_BRANCH
             self.name = compose_graph_name(self.project, self.branch)
         self.db = _async_db()
         self.g = self.db.select_graph(self.name)
@@ -851,26 +904,30 @@ class AsyncGraphQuery:
             logging.error(f"Error fetching neighbors for node {node_ids}: {e}")
             return {'nodes': [], 'edges': []}
 
-    async def prefix_search(self, prefix: str) -> list:
+    async def prefix_search(self, prefix: str, limit: int = 10) -> list:
         search_prefix = f"{prefix}*"
         query = """
             CALL db.idx.fulltext.queryNodes('Searchable', $prefix)
             YIELD node
             WITH node
             RETURN node
-            LIMIT 10
+            LIMIT $limit
         """
-        result_set = (await self._query(query, {'prefix': search_prefix})).result_set
+        result_set = (await self._query(query, {'prefix': search_prefix, 'limit': int(limit)})).result_set
         return [encode_node(row[0]) for row in result_set]
 
-    async def find_paths(self, src: int, dest: int) -> list:
+    async def find_paths(self, src: int, dest: int, limit: Optional[int] = None) -> list:
         q = """MATCH (src), (dest)
                WHERE ID(src) = $src_id AND ID(dest) = $dest_id
                WITH src, dest
                MATCH p = (src)-[:CALLS*]->(dest)
                RETURN p
            """
-        result_set = (await self._query(q, {'src_id': src, 'dest_id': dest})).result_set
+        params = {'src_id': src, 'dest_id': dest}
+        if limit is not None:
+            q += "        LIMIT $limit\n"
+            params['limit'] = int(limit)
+        result_set = (await self._query(q, params)).result_set
         paths = []
         for row in result_set:
             path  = []

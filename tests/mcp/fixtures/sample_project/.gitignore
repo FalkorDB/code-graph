@@ -1,0 +1,6 @@
+# Keep the fixture deterministic: jedi/multilspy historically auto-created
+# a venv/ here during indexing, which polluted the tree with hundreds of
+# stdlib + site-packages files and broke the exact-count contract.
+venv/
+__pycache__/
+*.pyc

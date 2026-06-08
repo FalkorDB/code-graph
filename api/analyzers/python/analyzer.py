@@ -136,6 +136,116 @@ class PythonAnalyzer(TreeSitterAnalyzer):
     def is_dependency(self, file_path: str) -> bool:
         return "venv" in file_path
 
+    def _module_parts(self, file_path: Path, root: Path) -> Optional[list[str]]:
+        """Dotted module path components for ``file_path`` relative to ``root``."""
+        try:
+            rel = file_path.relative_to(root)
+        except ValueError:
+            return None
+        parts = list(rel.with_suffix('').parts)
+        if parts and parts[-1] == '__init__':
+            parts = parts[:-1]
+        return parts
+
+    def build_import_index(self, files: dict[Path, File], root: Path) -> object:
+        """Index in-repo files by dotted module name.
+
+        Two maps: ``exact`` keyed by the full dotted path from ``root`` and
+        ``suffix`` keyed by every trailing sub-path (first file wins). The
+        suffix map tolerates ``src/``/``lib/`` layouts where the import name
+        (``matplotlib.axes``) differs from the path-from-root
+        (``lib.matplotlib.axes``).
+
+        Only Python files are indexed; ``files`` carries every analyzed
+        source file, and a Python ``import pkg.mod`` must not resolve to a
+        same-named non-Python file such as ``pkg/mod.java``.
+        """
+        exact: dict[str, File] = {}
+        suffix: dict[str, File] = {}
+        for fpath, file in files.items():
+            if fpath.suffix != '.py':
+                continue
+            if self.is_dependency(str(fpath)):
+                continue
+            parts = self._module_parts(fpath, root)
+            if not parts:
+                continue
+            exact.setdefault('.'.join(parts), file)
+            for i in range(len(parts)):
+                suffix.setdefault('.'.join(parts[i:]), file)
+        return {'exact': exact, 'suffix': suffix}
+
+    def _resolve_dotted(self, dotted: str, index: dict) -> Optional[File]:
+        if not dotted:
+            return None
+        f = index['exact'].get(dotted) or index['suffix'].get(dotted)
+        if f is None and '.' in dotted:
+            # imported name may be a symbol inside a module; drop the last part.
+            parent = dotted.rsplit('.', 1)[0]
+            f = index['exact'].get(parent) or index['suffix'].get(parent)
+        return f
+
+    def _import_requests(self, file: File) -> list[tuple[str, int]]:
+        """Extract (dotted, level) resolution requests from import statements."""
+        requests: list[tuple[str, int]] = []
+        captures = self._captures(
+            "(import_statement) @i (import_from_statement) @f",
+            file.tree.root_node,
+        )
+        for node in captures.get('i', []):
+            for child in node.named_children:
+                target = child
+                if child.type == 'aliased_import':
+                    target = child.child_by_field_name('name')
+                if target is not None and target.type == 'dotted_name':
+                    requests.append((target.text.decode('utf-8'), 0))
+        for node in captures.get('f', []):
+            module = node.child_by_field_name('module_name')
+            level = 0
+            base = ''
+            if module is not None:
+                if module.type == 'relative_import':
+                    prefix = next((c for c in module.children if c.type == 'import_prefix'), None)
+                    level = len(prefix.text.decode('utf-8')) if prefix is not None else 1
+                    dotted_part = next((c for c in module.named_children if c.type == 'dotted_name'), None)
+                    base = dotted_part.text.decode('utf-8') if dotted_part is not None else ''
+                else:
+                    base = module.text.decode('utf-8')
+            requests.append((base, level))
+            for name_node in node.children_by_field_name('name'):
+                leaf = name_node
+                if name_node.type == 'aliased_import':
+                    leaf = name_node.child_by_field_name('name')
+                if leaf is not None:
+                    name_txt = leaf.text.decode('utf-8')
+                    requests.append((f"{base}.{name_txt}" if base else name_txt, level))
+        return requests
+
+    def resolve_imports(self, file: File, root: Path, index: object) -> list[File]:
+        if not index:
+            return []
+        package_parts = self._module_parts(file.path, root)
+        if package_parts is None:
+            return []
+        # Package of the importing file = its parent dotted path.
+        package_parts = package_parts[:-1] if package_parts else []
+        seen: set[Path] = set()
+        targets: list[File] = []
+        for dotted, level in self._import_requests(file):
+            if level:
+                base = package_parts[: len(package_parts) - (level - 1)] if level > 1 else list(package_parts)
+                full = '.'.join([*base, dotted]) if dotted else '.'.join(base)
+            else:
+                full = dotted
+            resolved = self._resolve_dotted(full, index)
+            if resolved is None or resolved.path == file.path or resolved.path in seen:
+                continue
+            if self.is_dependency(str(resolved.path)):
+                continue
+            seen.add(resolved.path)
+            targets.append(resolved)
+        return targets
+
     def _extract_type_target(self, node: Node) -> Optional[Node]:
         if node.type == 'attribute':
             return node.child_by_field_name('attribute')

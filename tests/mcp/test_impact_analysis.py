@@ -130,7 +130,7 @@ async def test_impact_downstream_of_entrypoint(indexed_fixture, expected_contrac
 
 
 async def test_impact_depth_one_only_immediate_callers(indexed_fixture):
-    """depth=1 returns only direct callers — service for db's caller chain,
+    """depth=1 returns only direct callers — sufficient for db's caller chain,
     not transitive ancestors like entrypoint."""
     from api.mcp.tools.structural import impact_analysis
 
@@ -159,6 +159,32 @@ async def test_impact_response_serialisable(indexed_fixture):
         depth=3,
     )
     json.dumps(rows)
+
+
+async def test_impact_respects_limit(indexed_fixture):
+    """``limit`` bounds the number of impacted symbols returned."""
+    from api.mcp.tools.structural import impact_analysis
+
+    entry_id = await _find_id(indexed_fixture, "entrypoint")
+    full = await impact_analysis(
+        symbol_id=entry_id,
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+        direction="OUT",
+        depth=5,
+    )
+    # entrypoint reaches several downstream symbols; cap to 1 and confirm
+    # the result is bounded by the limit.
+    assert len(full) > 1, "fixture should expose >1 downstream symbol"
+    capped = await impact_analysis(
+        symbol_id=entry_id,
+        project=indexed_fixture.project,
+        branch=indexed_fixture.branch,
+        direction="OUT",
+        depth=5,
+        limit=1,
+    )
+    assert len(capped) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +223,9 @@ async def cycle_graph():
 
 async def test_impact_handles_cycles(cycle_graph):
     """Variable-depth Cypher with DISTINCT must return each node once
-    even when the graph has a cycle (A↔B). Without DISTINCT a *...*
-    traversal would loop infinitely or emit duplicates."""
+    even when the graph has a cycle (A↔B). The traversal is depth-bounded
+    (``*1..depth``) so it always terminates; without DISTINCT, though, a
+    node reachable via multiple paths would be emitted as duplicate rows."""
     from api.graph import AsyncGraphQuery
     from api.mcp.tools.structural import impact_analysis
 

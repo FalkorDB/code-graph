@@ -67,8 +67,12 @@ def set_repo_commit(repo_name: str, commit_hash: str, branch: Optional[str] = No
         raise
 
 
-def get_repo_commit(repo_name: str, branch: Optional[str] = None) -> str:
-    """Get the current commit the repo is at for ``(repo_name, branch)``."""
+def get_repo_commit(repo_name: str, branch: Optional[str] = None) -> Optional[str]:
+    """Get the current commit the repo is at for ``(repo_name, branch)``.
+
+    Returns ``None`` when no commit has been recorded yet (e.g. the
+    repository has not been analyzed under the given branch).
+    """
 
     try:
         r = get_redis_connection()

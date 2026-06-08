@@ -256,7 +256,6 @@ from api.mcp.tools.structural import (  # noqa: E402
     impact_analysis as _mcp_impact_analysis,
     find_path as _mcp_find_path,
 )
-from api.mcp.tools.ask import ask as _mcp_ask  # noqa: E402
 
 
 class _SearchCodeRequest(BaseModel):
@@ -287,12 +286,6 @@ class _FindPathRequest(BaseModel):
     dest_id: int
     branch: Optional[str] = None
     max_paths: int = 10
-
-
-class _AskRequest(BaseModel):
-    project: str
-    question: str
-    branch: Optional[str] = None
 
 
 @app.post('/api/v2/search_code')
@@ -345,17 +338,12 @@ async def v2_find_path(data: _FindPathRequest, _=Depends(public_or_auth)):
     )
 
 
-@app.post('/api/v2/ask')
-async def v2_ask(data: _AskRequest, _=Depends(public_or_auth)):
-    return await _mcp_ask(data.question, data.project, branch=data.branch)
-
-
 @app.post('/api/chat')
 async def chat(data: ChatRequest, _=Depends(public_or_auth)):
     """Chat with the CodeGraph language model."""
 
     try:
-        answer = await ask(data.repo, data.msg)
+        answer = await ask(data.repo, data.msg, branch=data.branch)
     except Exception as e:
         logging.exception("Chat error for repo '%s': %s", data.repo, e)
         return JSONResponse({"status": "error", "response": "Internal server error"},
