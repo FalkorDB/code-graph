@@ -226,9 +226,9 @@ Then ask Claude things like *"what functions call analyze_sources?"* or *"find t
 
 For agents that speak the [Model Context Protocol](https://modelcontextprotocol.io)
 (Claude Code, Cursor, Cline, …), code-graph ships a stdio MCP server
-that exposes the knowledge graph as 8 first-class tools: `index_repo`,
-`search_code`, `get_callers`, `get_callees`, `get_dependencies`,
-`impact_analysis`, `find_path`, and `ask` (NL→Cypher via GraphRAG).
+that exposes the knowledge graph as 7 first-class tools: `index_repo`,
+`search_code`, `find_symbol`, `get_neighbors`, `get_file_neighbors`,
+`impact_analysis`, and `find_path`.
 
 Quickstart — Claude Code:
 

@@ -2,7 +2,7 @@
 
 Spawns `cgraph-mcp` over stdio, lists tools, indexes the
 code-graph repo itself, and exercises `search_code`,
-`get_callers`, and `impact_analysis`. Prints a compact pass/fail line per
+`get_neighbors`, and `impact_analysis`. Prints a compact pass/fail line per
 tool.
 """
 
@@ -61,12 +61,11 @@ async def main() -> int:
             expected = {
                 "index_repo",
                 "search_code",
-                "get_callers",
-                "get_callees",
-                "get_dependencies",
+                "get_neighbors",
+                "get_file_neighbors",
+                "find_symbol",
                 "impact_analysis",
                 "find_path",
-                "ask",
             }
             missing = expected - set(tool_names)
             if missing:
@@ -92,10 +91,10 @@ async def main() -> int:
             branch_name = idx_payload["branch"]
             print(f"[index_repo] graph={idx_payload['graph_name']} project={project_name}")
 
-            print("[search_code] prefix='index_repo'")
+            print("[search_code] query='index_repo'")
             sr = await session.call_tool(
                 "search_code",
-                {"prefix": "index_repo", "project": project_name, "branch": branch_name},
+                {"query": "index_repo", "project": project_name, "branch": branch_name},
             )
             sr_payload = _pretty(sr)
             print(f"[search_code] -> {json.dumps(sr_payload)[:300]}")
@@ -116,20 +115,22 @@ async def main() -> int:
                 print(f"[search_code] picked id={first_id} name={hits[0].get('name')}")
 
             if first_id is not None:
-                print(f"[get_callers] id={first_id}")
+                print(f"[get_neighbors] id={first_id} direction=IN (callers)")
                 gc = await session.call_tool(
-                    "get_callers",
+                    "get_neighbors",
                     {
                         "symbol_id": first_id,
                         "project": project_name,
+                        "relation": "CALLS",
+                        "direction": "IN",
                         "branch": branch_name,
                     },
                 )
                 gc_payload = _pretty(gc)
                 # Some MCP servers return list payloads in structuredContent only.
                 gc_struct = getattr(gc, "structuredContent", None)
-                print(f"[get_callers] -> {json.dumps(gc_payload)[:300]} struct={json.dumps(gc_struct)[:200]}")
-                # Acceptable shapes: list of caller dicts, or {"callers": [...]}.
+                print(f"[get_neighbors] -> {json.dumps(gc_payload)[:300]} struct={json.dumps(gc_struct)[:200]}")
+                # Acceptable shapes: list of neighbor dicts, or {"result": [...]}.
                 callers = None
                 if isinstance(gc_payload, list):
                     callers = gc_payload
@@ -138,10 +139,10 @@ async def main() -> int:
                 elif isinstance(gc_struct, dict) and "result" in gc_struct:
                     callers = gc_struct["result"]
                 if callers is None:
-                    print("[FAIL] get_callers returned no recognizable payload")
+                    print("[FAIL] get_neighbors returned no recognizable payload")
                     fails += 1
                 else:
-                    print(f"[get_callers] {len(callers)} callers")
+                    print(f"[get_neighbors] {len(callers)} callers")
 
                 print("[impact_analysis] depth=2")
                 ia = await session.call_tool(

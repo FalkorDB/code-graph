@@ -6,22 +6,22 @@ understand how symbols connect.
 
 ## Tool selection
 
-- Symbol lookup by name: use `code-graph.search_code` (gives you the
-  numeric id every other tool needs).
-- "Who calls X?": `code-graph.get_callers`.
-- "What does X call?": `code-graph.get_callees`.
-- All outgoing edges (CALLS + IMPORTS + DEFINES): `code-graph.get_dependencies`.
+- Symbol lookup by name: use `code-graph.search_code` (hybrid prefix +
+  ranked match) or `code-graph.find_symbol` for an exact name — both give
+  you the numeric id every other tool needs.
+- "Who calls X?": `code-graph.get_neighbors` with `direction="IN"`.
+- "What does X call?": `code-graph.get_neighbors` with `direction="OUT"`.
+- Other edges (IMPORTS / DEFINES): `code-graph.get_neighbors` with the
+  matching `relation`.
+- What a file defines/touches: `code-graph.get_file_neighbors`.
 - Refactoring impact ("what breaks if I change X"):
   `code-graph.impact_analysis` with `direction="IN"`.
 - Call chain between two specific symbols: `code-graph.find_path`.
-- Natural-language question over the graph (expensive — last resort):
-  `code-graph.ask`.
 
 ## Rules
 
-- Always `search_code` first to resolve names to ids.
-- Prefer structural tools (`get_callers`, `find_path`, `impact_analysis`)
-  over `ask` for "who/what/where" questions.
+- Always `search_code`/`find_symbol` first to resolve names to ids.
+- Use `get_neighbors(direction=...)` for "who/what calls" questions.
 - Run `impact_analysis(direction="IN", depth=3)` before any non-trivial
   refactor.
 - Pass `branch` when on a feature branch.

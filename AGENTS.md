@@ -157,9 +157,9 @@ cgraph info [--repo <name>]              # Repo stats + metadata
 
 ## MCP server (for agents)
 
-`cgraph-mcp` exposes the code graph over MCP stdio. Eight tools:
-`index_repo`, `search_code`, `get_callers`, `get_callees`,
-`get_dependencies`, `impact_analysis`, `find_path`, `ask`.
+`cgraph-mcp` exposes the code graph over MCP stdio. Seven tools:
+`index_repo`, `search_code`, `find_symbol`, `get_neighbors`,
+`get_file_neighbors`, `impact_analysis`, `find_path`.
 
 Drop the canonical agent guidance into any repo:
 
@@ -169,8 +169,9 @@ cgraph init-agent --force     # overwrite existing files
 ```
 
 See `api/mcp/templates/claude_mcp_section.md` for the full tool table
-and rules of thumb (start with `search_code`; prefer structural tools
-over `ask`; run `impact_analysis` before refactoring).
+and rules of thumb (start with `search_code`/`find_symbol`; use
+`get_neighbors` for who/what-calls; run `impact_analysis` before
+refactoring).
 
 Environment:
 
