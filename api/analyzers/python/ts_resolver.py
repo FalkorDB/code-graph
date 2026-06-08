@@ -35,6 +35,7 @@ What we don't resolve (matches jedi's miss behavior):
 from __future__ import annotations
 
 import logging
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -193,29 +194,53 @@ class TreeSitterPythonResolver:
         self._path_to_module: dict[Path, str] = {}
         # name -> [_Definition, ...] (cross-project fallback)
         self._by_name: dict[str, list[_Definition]] = defaultdict(list)
+        # Serializes rebuilds so concurrent index workers (CODE_GRAPH_INDEX_WORKERS>1)
+        # can't clear/repopulate the shared tables out from under each other.
+        self._build_lock = threading.Lock()
 
     # -- build ---------------------------------------------------------------
 
     def _ensure_built(self, files: dict[Path, File], project_root: Path) -> None:
         if self._files_id == id(files) and self._project_root == project_root:
             return
-        self._files_id = id(files)
-        self._files = files
-        self._project_root = project_root
-        self._modules.clear()
-        self._path_to_module.clear()
-        self._by_name.clear()
+        with self._build_lock:
+            # Double-check inside the lock: another worker may have finished
+            # building while we waited.
+            if self._files_id == id(files) and self._project_root == project_root:
+                return
 
-        for file_path, file in files.items():
-            if file_path.suffix != ".py" or file.tree is None:
-                continue
-            module = _path_to_module(file_path, project_root)
-            mi = _ModuleIndex(module=module, file_path=file_path)
-            self._modules[module] = mi
-            self._path_to_module[file_path] = module
-            self._index_file(mi, file.tree.root_node)
+            # Build into fresh local tables and publish them atomically. This
+            # keeps a concurrent reader (lock-free fast path above) from ever
+            # observing a half-cleared / half-populated table under the #688
+            # thread pool.
+            modules: dict[str, _ModuleIndex] = {}
+            path_to_module: dict[Path, str] = {}
+            by_name: dict[str, list[_Definition]] = defaultdict(list)
 
-    def _index_file(self, mi: _ModuleIndex, root: Node) -> None:
+            for file_path, file in files.items():
+                if file_path.suffix != ".py" or file.tree is None:
+                    continue
+                module = _path_to_module(file_path, project_root)
+                mi = _ModuleIndex(module=module, file_path=file_path)
+                modules[module] = mi
+                path_to_module[file_path] = module
+                self._index_file(mi, file.tree.root_node, by_name)
+
+            self._files = files
+            self._modules = modules
+            self._path_to_module = path_to_module
+            self._by_name = by_name
+            self._project_root = project_root
+            # Publish the cache key LAST so the fast-path guard never matches a
+            # table that isn't fully built yet.
+            self._files_id = id(files)
+
+    def _index_file(
+        self,
+        mi: _ModuleIndex,
+        root: Node,
+        by_name: dict[str, list[_Definition]],
+    ) -> None:
         # Top-level functions
         caps = _captures(self._queries.top_level_func, root)
         names = caps.get("name", [])
@@ -224,7 +249,7 @@ class TreeSitterPythonResolver:
             name = name_node.text.decode("utf-8")
             d = _Definition(mi.file_path, _strip_decorator(def_node), "func")
             mi.top_level[name] = d
-            self._by_name[name].append(d)
+            by_name[name].append(d)
 
         # Top-level classes
         caps = _captures(self._queries.top_level_class, root)
@@ -234,7 +259,7 @@ class TreeSitterPythonResolver:
             name = name_node.text.decode("utf-8")
             d = _Definition(mi.file_path, _strip_decorator(def_node), "class")
             mi.top_level[name] = d
-            self._by_name[name].append(d)
+            by_name[name].append(d)
 
         # Top-level assignments (for class aliases like ``Foo = OtherFoo``)
         caps = _captures(self._queries.top_level_assign, root)
@@ -246,7 +271,7 @@ class TreeSitterPythonResolver:
                 continue
             d = _Definition(mi.file_path, def_node, "var")
             mi.top_level[name] = d
-            self._by_name[name].append(d)
+            by_name[name].append(d)
 
         # Class methods
         caps = _captures(self._queries.class_methods, root)
@@ -258,7 +283,7 @@ class TreeSitterPythonResolver:
             method_name = mname_node.text.decode("utf-8")
             d = _Definition(mi.file_path, _strip_decorator(mdef_node), "method")
             mi.class_methods.setdefault(class_name, {})[method_name] = d
-            self._by_name[method_name].append(d)
+            by_name[method_name].append(d)
 
         # Imports
         self._index_imports(mi, root)
@@ -285,7 +310,8 @@ class TreeSitterPythonResolver:
             module_node = stmt.child_by_field_name("module_name")
             if module_node is None:
                 continue
-            base_module = self._resolve_from_module(module_node, mi.module)
+            is_package = mi.file_path.name == "__init__.py"
+            base_module = self._resolve_from_module(module_node, mi.module, is_package)
             if base_module is None:
                 continue
             # Each import target is a sibling after module_name
@@ -305,7 +331,12 @@ class TreeSitterPythonResolver:
                         )
                 # Wildcard: ignored (matches jedi miss)
 
-    def _resolve_from_module(self, module_node: Node, current_module: str) -> Optional[str]:
+    def _resolve_from_module(
+        self,
+        module_node: Node,
+        current_module: str,
+        is_package: bool = False,
+    ) -> Optional[str]:
         """Handle relative imports (``from . import x``) by climbing the package."""
         if module_node.type == "dotted_name":
             return module_node.text.decode("utf-8")
@@ -319,11 +350,17 @@ class TreeSitterPythonResolver:
                 else:
                     break
             tail = text[dot_count:]
-            base_parts = current_module.split(".")
-            # `from . import x` from pkg.a -> base = pkg
-            # `from .. import x` from pkg.a -> base = ''
-            up = dot_count
-            base = base_parts[: max(0, len(base_parts) - up)]
+            base_parts = current_module.split(".") if current_module else []
+            # For a regular module ``pkg.sub.mod`` the leading dot refers to its
+            # containing package ``pkg.sub`` (drop the module's own name). For a
+            # package ``__init__.py`` the module name already *is* the package
+            # (``_path_to_module`` strips ``__init__``), so the first dot refers
+            # to the package itself — climb one level fewer.
+            up = dot_count - 1 if is_package else dot_count
+            if up > len(base_parts):
+                # Climbs above the project root — not resolvable here.
+                return None
+            base = base_parts[: len(base_parts) - up]
             if tail:
                 base.append(tail)
             return ".".join(p for p in base if p) or None
@@ -386,17 +423,20 @@ class TreeSitterPythonResolver:
                     if tail[0] in mi2.top_level:
                         return self._walk_tail(mi2.top_level[tail[0]], tail[1:])
 
-        # 3. Cross-project bare-name fallback
-        if head in self._by_name:
-            # If there's a tail, try walking each candidate; otherwise return all hits.
-            if not tail:
-                return list(self._by_name[head])
-            out = []
-            for d in self._by_name[head]:
-                out.extend(self._walk_tail(d, tail))
-            return out
-
-        return []
+        # 3. Cross-project bare-name fallback. This is a last resort: a bare
+        # identifier carries no receiver or import to disambiguate it.
+        #   * Methods (kind == 'method') are excluded — a receiver-less ``run()``
+        #     can't pick which class's ``run`` is meant, so linking it to every
+        #     ``Foo.run`` in the project is a false-CALLS factory.
+        #   * Among the remaining module-level defs we resolve only when exactly
+        #     one matches; multiple same-named defs are ambiguous and dropped
+        #     (jedi misses these too — precision over recall for edge building).
+        candidates = [
+            d for d in self._by_name.get(head, ()) if d.kind != "method"
+        ]
+        if len(candidates) != 1:
+            return []
+        return self._walk_tail(candidates[0], tail) if tail else list(candidates)
 
     def _lookup_dotted(self, dotted: str) -> Optional[_Definition]:
         """Resolve a fully-qualified ``pkg.mod.Name`` to its _Definition."""

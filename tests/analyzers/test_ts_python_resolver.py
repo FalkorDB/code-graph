@@ -228,6 +228,152 @@ def test_resolver_unknown_name_returns_empty(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
+# Cross-project bare-name fallback — precision (blocker #1 + Copilot #4)
+# ---------------------------------------------------------------------------
+
+
+def test_resolver_unique_cross_module_bare_name_resolves(tmp_path: Path):
+    """A bare call to a *uniquely*-named module-level function still resolves
+    across modules even without an explicit import."""
+    files = _make_project(
+        tmp_path,
+        {
+            "lib.py": "def helper():\n    return 1\n",
+            "caller.py": "def f():\n    helper()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    caller = (tmp_path / "caller.py").resolve()
+    call = _find_call_node(files[caller].tree.root_node, "helper(")
+    out = r.resolve(files, caller, tmp_path.resolve(), call.child_by_field_name("function"))
+    assert len(out) == 1
+    assert out[0][0].path == (tmp_path / "lib.py").resolve()
+
+
+def test_resolver_ambiguous_bare_name_returns_empty(tmp_path: Path):
+    """Two module-level functions share a name: a bare call is ambiguous and
+    must resolve to nothing rather than fanning out to both (false CALLS)."""
+    files = _make_project(
+        tmp_path,
+        {
+            "a.py": "def helper():\n    return 1\n",
+            "b.py": "def helper():\n    return 2\n",
+            "caller.py": "def f():\n    helper()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    caller = (tmp_path / "caller.py").resolve()
+    call = _find_call_node(files[caller].tree.root_node, "helper(")
+    out = r.resolve(files, caller, tmp_path.resolve(), call.child_by_field_name("function"))
+    assert out == []
+
+
+def test_resolver_func_and_class_same_name_ambiguous(tmp_path: Path):
+    """A func and a class sharing a name are also ambiguous under bare lookup."""
+    files = _make_project(
+        tmp_path,
+        {
+            "a.py": "def Widget():\n    return 1\n",
+            "b.py": "class Widget:\n    pass\n",
+            "caller.py": "def f():\n    Widget()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    caller = (tmp_path / "caller.py").resolve()
+    call = _find_call_node(files[caller].tree.root_node, "Widget(")
+    out = r.resolve(files, caller, tmp_path.resolve(), call.child_by_field_name("function"))
+    assert out == []
+
+
+def test_resolver_bare_name_excludes_methods(tmp_path: Path):
+    """A receiver-less ``run()`` must not bind to a class method ``A.run`` —
+    methods need a receiver, so the bare-name fallback excludes them."""
+    files = _make_project(
+        tmp_path,
+        {
+            "a.py": "class A:\n    def run(self):\n        return 1\n",
+            "caller.py": "def f():\n    run()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    caller = (tmp_path / "caller.py").resolve()
+    call = _find_call_node(files[caller].tree.root_node, "run(")
+    out = r.resolve(files, caller, tmp_path.resolve(), call.child_by_field_name("function"))
+    assert out == []
+
+
+# ---------------------------------------------------------------------------
+# Relative imports inside package __init__.py (Copilot #3)
+# ---------------------------------------------------------------------------
+
+
+def test_resolver_relative_import_in_package_init(tmp_path: Path):
+    """Inside ``pkg/sub/__init__.py`` the single dot refers to package
+    ``pkg.sub`` itself, so ``from . import mod`` binds ``pkg.sub.mod`` (not
+    ``pkg.mod``)."""
+    files = _make_project(
+        tmp_path,
+        {
+            "pkg/__init__.py": "",
+            "pkg/sub/__init__.py": "from . import mod\n\ndef use():\n    mod.thing()\n",
+            "pkg/sub/mod.py": "def thing():\n    return 1\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    init_path = (tmp_path / "pkg" / "sub" / "__init__.py").resolve()
+    call = _find_call_node(files[init_path].tree.root_node, "mod.thing(")
+    out = r.resolve(files, init_path, tmp_path.resolve(), call.child_by_field_name("function"))
+    assert len(out) == 1
+    assert out[0][0].path == (tmp_path / "pkg" / "sub" / "mod.py").resolve()
+
+
+# ---------------------------------------------------------------------------
+# Concurrency — _ensure_built must be race-free under the index thread pool
+# ---------------------------------------------------------------------------
+
+
+def test_resolver_concurrent_build_is_safe(tmp_path: Path):
+    """Many threads resolving against the same files dict must all observe a
+    fully-built table (no half-built reads from a concurrent rebuild)."""
+    import threading
+
+    files = _make_project(
+        tmp_path,
+        {
+            "lib.py": "def shared():\n    return 1\n",
+            "app.py": "from lib import shared\n\ndef use():\n    shared()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    app_path = (tmp_path / "app.py").resolve()
+    root = tmp_path.resolve()
+    call = _find_call_node(files[app_path].tree.root_node, "shared(")
+    func = call.child_by_field_name("function")
+
+    results: list[int] = []
+    errors: list[Exception] = []
+    barrier = threading.Barrier(8)
+
+    def worker() -> None:
+        try:
+            barrier.wait()
+            for _ in range(20):
+                out = r.resolve(files, app_path, root, func)
+                results.append(len(out))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, errors
+    assert results and all(n == 1 for n in results)
+
+
+# ---------------------------------------------------------------------------
 # PythonAnalyzer integration via env var
 # ---------------------------------------------------------------------------
 
