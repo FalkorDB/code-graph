@@ -151,7 +151,10 @@ class SourceAnalyzer():
                 # valid interpreter to introspect; otherwise every
                 # request_definition() raises InvalidPythonEnvironment and
                 # we'd silently produce a graph with zero CALLS edges.
-                env_path = str(Path(sys.executable).resolve().parent.parent)
+                # sys.prefix is the active environment root and is more
+                # reliable than deriving it from sys.executable (which breaks
+                # when the interpreter is a wrapper/shim).
+                env_path = sys.prefix
                 logging.info(
                     "No venv at %s; falling back to host env %s for jedi LSP",
                     path, env_path,
@@ -175,16 +178,15 @@ class SourceAnalyzer():
         with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server(), lsps[".kt"].start_server(), lsps[".kts"].start_server():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
-                if file_path not in self.files:
-                    continue
                 # Skip symbol resolution when no real LSP is available
                 if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
                     continue
                 file = self.files.get(file_path)
                 if file is None:
                     # first_pass skipped this file (e.g. parse error, empty,
-                    # or ignored after entering the candidate list). Skip
-                    # in second_pass too instead of crashing the whole index.
+                    # untracked, or ignored after entering the candidate list).
+                    # Skip in second_pass too instead of crashing the whole
+                    # index.
                     logging.warning(
                         "second_pass: %s not in files map (first_pass skipped it); skipping",
                         file_path,

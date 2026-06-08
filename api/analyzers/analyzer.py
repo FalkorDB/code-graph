@@ -56,11 +56,12 @@ class AbstractAnalyzer(ABC):
         try:
             locations = lsp.request_definition(str(file_path), node.start_point.row, node.start_point.column)
             return [(files[Path(self.resolve_path(location['absolutePath'], path))], files[Path(self.resolve_path(location['absolutePath'], path))].tree.root_node.descendant_for_point_range(Point(location['range']['start']['line'], location['range']['start']['character']), Point(location['range']['end']['line'], location['range']['end']['character']))) for location in locations if location and Path(self.resolve_path(location['absolutePath'], path)) in files]
-        except Exception as e:
+        except Exception:
             import logging
             logging.getLogger(__name__).warning(
-                "resolve() failed for %s @%d:%d: %s",
-                file_path, node.start_point.row, node.start_point.column, e,
+                "resolve() failed for %s @%d:%d",
+                file_path, node.start_point.row, node.start_point.column,
+                exc_info=True,
             )
             return []
         
