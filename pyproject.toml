@@ -48,6 +48,6 @@ where = ["."]
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
-    "pytest-anyio>=0.0.0",
+    "anyio>=4.0,<5.0",
     "pyyaml>=6.0.3",
 ]

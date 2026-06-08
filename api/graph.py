@@ -93,15 +93,21 @@ def get_repos() -> list[dict]:
 
     repos = []
     for g in db.list_graphs():
-        if _is_internal_suffix(g):
-            continue
         parsed = parse_graph_name(g)
         if parsed is None:
-            # Legacy graph (pre-T17): synthesize a virtual entry so it stays
-            # discoverable until the migration helper promotes it.
+            # Legacy graph (pre-T17) or internal helper graph: skip when
+            # the bare name carries an internal suffix; otherwise synthesize
+            # a virtual entry so it stays discoverable.
+            if _is_internal_suffix(g):
+                continue
             repos.append({"project": g, "branch": DEFAULT_BRANCH, "graph": g})
         else:
             project, branch = parsed
+            # Hide per-branch internal companion graphs (e.g. ``branch_git``,
+            # ``branch_schema``, ``branch_tmp``); their suffix lives on the
+            # branch component, so check that explicitly.
+            if _is_internal_suffix(branch):
+                continue
             repos.append({"project": project, "branch": branch, "graph": g})
     return repos
 
@@ -129,7 +135,9 @@ class Graph():
             self.name = name
         else:
             self.project = name
-            self.branch = branch if branch is not None else DEFAULT_BRANCH
+            # Normalize empty / None to DEFAULT_BRANCH so the stored
+            # branch matches the key actually used by compose_graph_name.
+            self.branch = branch or DEFAULT_BRANCH
             self.name = compose_graph_name(self.project, self.branch)
 
         self.db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
@@ -766,13 +774,15 @@ async def async_get_repos() -> list[dict]:
     try:
         repos = []
         for g in await db.list_graphs():
-            if _is_internal_suffix(g):
-                continue
             parsed = parse_graph_name(g)
             if parsed is None:
+                if _is_internal_suffix(g):
+                    continue
                 repos.append({"project": g, "branch": DEFAULT_BRANCH, "graph": g})
             else:
                 project, branch = parsed
+                if _is_internal_suffix(branch):
+                    continue
                 repos.append({"project": project, "branch": branch, "graph": g})
         return repos
     finally:
@@ -796,7 +806,7 @@ class AsyncGraphQuery:
             self.name = name
         else:
             self.project = name
-            self.branch = branch if branch is not None else DEFAULT_BRANCH
+            self.branch = branch or DEFAULT_BRANCH
             self.name = compose_graph_name(self.project, self.branch)
         self.db = _async_db()
         self.g = self.db.select_graph(self.name)

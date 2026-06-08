@@ -7,7 +7,7 @@ from .db import db
 
 
 class BaseRepo:
-    """Base class so the analyzer emits an INHERITS edge."""
+    """Base class so the analyzer emits an EXTENDS edge."""
 
     def repo(self) -> str:
         return db()
