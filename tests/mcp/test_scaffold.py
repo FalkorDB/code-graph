@@ -45,11 +45,12 @@ def test_main_entry_point_exists() -> None:
 
 
 @pytest.mark.anyio
-async def test_stdio_server_lists_zero_tools() -> None:
+async def test_stdio_server_lists_registered_tools() -> None:
     """Spawn ``cgraph-mcp`` over stdio and verify the protocol handshake.
 
-    The scaffold registers no tools, so ``list_tools`` must return an
-    empty list. Tool tickets (T4-T8, T11) extend this expectation.
+    Once tool tickets land (T4+), ``list_tools`` returns at least the
+    tools they register. This test only guards the *handshake* — per-tool
+    behavioural assertions live in the per-tool test modules.
     """
     cgraph_mcp = shutil.which("cgraph-mcp")
     assert cgraph_mcp is not None, (
@@ -62,4 +63,8 @@ async def test_stdio_server_lists_zero_tools() -> None:
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 result = await session.list_tools()
-                assert result.tools == []
+                # ``index_repo`` lands in T4; this assertion intentionally
+                # only checks for presence so it stays stable as more tools
+                # are registered in T5-T8 / T11.
+                names = {t.name for t in result.tools}
+                assert "index_repo" in names
