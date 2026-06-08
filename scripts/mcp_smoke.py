@@ -1,7 +1,7 @@
 """End-to-end MCP smoke test.
 
 Spawns `cgraph-mcp` over stdio, lists tools, indexes the
-code-graph repo itself, and exercises `search_code`,
+code-graph repo itself, and exercises `search_code`, `find_symbol`,
 `get_neighbors`, and `impact_analysis`. Prints a compact pass/fail line per
 tool.
 """
@@ -102,17 +102,40 @@ async def main() -> int:
                 hits = sr_payload
             elif isinstance(sr_payload, dict) and "results" in sr_payload:
                 hits = sr_payload["results"]
-            elif isinstance(sr_payload, dict) and "id" in sr_payload:
+            elif isinstance(sr_payload, dict) and "file_id" in sr_payload:
                 hits = [sr_payload]
             else:
                 hits = []
             if not hits:
                 print("[FAIL] search_code returned no hits for index_repo")
                 fails += 1
+            else:
+                # search_code returns FILE hits ({file, file_id, ...}) — they
+                # carry no symbol id. Resolve a real Function/Class symbol_id via
+                # find_symbol before exercising the symbol-level tools below.
+                print(f"[search_code] {len(hits)} file hit(s), e.g. {hits[0].get('file')}")
+
+            print("[find_symbol] name='index_repo'")
+            fs = await session.call_tool(
+                "find_symbol",
+                {"name": "index_repo", "project": project_name, "branch": branch_name},
+            )
+            fs_payload = _pretty(fs)
+            fs_struct = getattr(fs, "structuredContent", None)
+            print(f"[find_symbol] -> {json.dumps(fs_payload)[:300]} struct={json.dumps(fs_struct)[:200]}")
+            if isinstance(fs_payload, list):
+                syms = fs_payload
+            elif isinstance(fs_struct, dict) and "result" in fs_struct:
+                syms = fs_struct["result"]
+            else:
+                syms = []
+            if not syms:
+                print("[FAIL] find_symbol returned no symbol for index_repo")
+                fails += 1
                 first_id = None
             else:
-                first_id = hits[0].get("id")
-                print(f"[search_code] picked id={first_id} name={hits[0].get('name')}")
+                first_id = syms[0].get("symbol_id")
+                print(f"[find_symbol] picked symbol_id={first_id} name={syms[0].get('name')}")
 
             if first_id is not None:
                 print(f"[get_neighbors] id={first_id} direction=IN (callers)")

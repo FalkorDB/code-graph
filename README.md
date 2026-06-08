@@ -234,7 +234,7 @@ Quickstart — Claude Code:
 
 ```bash
 # 1. Install (in any venv with the cgraph package on PATH)
-pip install code-graph         # or: uv pip install code-graph
+pip install falkordb-code-graph         # or: uv pip install falkordb-code-graph
 
 # 2. Register with Claude Code
 claude mcp add-json code-graph '{

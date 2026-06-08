@@ -4,8 +4,6 @@ Verifies the CLI drops the MCP guidance templates into CWD and
 respects `--force`.
 """
 
-import os
-
 import pytest
 from typer.testing import CliRunner
 
