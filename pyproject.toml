@@ -23,16 +23,19 @@ dependencies = [
     "javatools>=1.6.0,<2.0.0",
     "pygit2>=1.17.0,<2.0.0",
     "typer>=0.24.0,<1.0.0",
+    "mcp>=1.0.0,<2.0.0",
 ]
 
 [project.scripts]
 cgraph = "api.cli:app"
+cgraph-mcp = "api.mcp.server:main"
 
 [project.optional-dependencies]
 test = [
     "pytest>=9.0.2,<10.0.0",
     "ruff>=0.11.0,<1.0.0",
     "httpx>=0.28.0,<1.0.0",
+    "anyio>=4.0,<5.0",
 ]
 
 [build-system]
@@ -41,3 +44,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "anyio>=4.0,<5.0",
+    "pyyaml>=6.0.3",
+]

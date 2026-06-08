@@ -21,7 +21,9 @@ COPY --from=node-base /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-base /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # Install netcat for wait loop in start.sh and system build tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get install -y -f \
+    && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     git \
     build-essential \
