@@ -23,7 +23,13 @@ class JavaAnalyzer(AbstractAnalyzer):
         # if not Path("java-decompiler-engine-243.23654.153.jar").is_file():
         #     subprocess.run(["wget", "https://www.jetbrains.com/intellij-repository/releases/com/jetbrains/intellij/java/java-decompiler-engine/243.23654.153/java-decompiler-engine-243.23654.153.jar"])
         subprocess.run(["rm", "-rf", f"{path}/temp_deps"])
-        pom = ElementTree.parse(str(path) + '/pom.xml')
+        pom_path = Path(path) / 'pom.xml'
+        if not pom_path.is_file():
+            # Non-Maven Java sources (e.g. Gradle, or polyglot repos with stray
+            # .java files): no pom.xml means no Maven dependencies to resolve.
+            logger.info("no pom.xml at %s; skipping Maven dependency resolution", path)
+            return
+        pom = ElementTree.parse(str(pom_path))
         for dependency in pom.findall('.//{http://maven.apache.org/POM/4.0.0}dependency'):
             groupId = dependency.find('{http://maven.apache.org/POM/4.0.0}groupId').text.replace('.', '/')
             artifactId = dependency.find('{http://maven.apache.org/POM/4.0.0}artifactId').text
