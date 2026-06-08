@@ -612,6 +612,40 @@ class Graph():
         params = {'src_id': src_id, 'dest_id': dest_id, "properties": properties}
         self._query(q, params)
 
+    def derive_overrides(self, max_depth: int = 3) -> int:
+        """
+        Derive ``OVERRIDES`` edges from the existing class hierarchy.
+
+        A method ``m`` on a subclass overrides method ``m2`` on an ancestor
+        class when they share a name. Pure graph derivation over existing
+        ``EXTENDS`` + ``DEFINES`` edges, so it is language-agnostic. The edge
+        carries ``depth`` (inheritance distance) for downstream filtering.
+
+        Args:
+            max_depth (int): Maximum inheritance distance to bridge.
+
+        Returns:
+            int: Number of OVERRIDES edges after derivation.
+        """
+
+        q = f"""MATCH (sub:Class)-[x:EXTENDS*1..{int(max_depth)}]->(sup:Class)
+                WHERE ID(sub) <> ID(sup)
+                WITH DISTINCT sub, sup, length(x) AS depth
+                MATCH (sub)-[:DEFINES]->(m:Function)
+                MATCH (sup)-[:DEFINES]->(m2:Function)
+                WHERE m.name = m2.name AND ID(m) <> ID(m2)
+                MERGE (m)-[e:OVERRIDES]->(m2)
+                ON CREATE SET e.depth = depth"""
+
+        try:
+            self._query(q)
+        except Exception as exc:  # noqa: BLE001 — derivation is best-effort
+            logging.warning("derive_overrides failed: %s", exc)
+            return 0
+
+        res = self._query("MATCH ()-[e:OVERRIDES]->() RETURN count(e)").result_set
+        return int(res[0][0]) if res else 0
+
     def function_calls_function(self, caller_id: int, callee_id: int, pos: int) -> None:
         """
         Establish a 'CALLS' relationship between two function nodes.

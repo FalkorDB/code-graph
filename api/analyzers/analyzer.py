@@ -85,6 +85,39 @@ class AbstractAnalyzer(ABC):
         """
         return True
         
+    def build_import_index(self, files: dict[Path, File], root: Path) -> object:
+        """
+        Build a language-specific index used to resolve import statements to
+        in-repo files. Returns an opaque structure consumed by
+        ``resolve_imports``. Default: no import resolution for this language.
+
+        Args:
+            files (dict[Path, File]): All parsed files keyed by absolute path.
+            root (Path): The analyzed repository root.
+
+        Returns:
+            object: Opaque index, or ``None`` when unsupported.
+        """
+
+        return None
+
+    def resolve_imports(self, file: File, root: Path, index: object) -> list[File]:
+        """
+        Resolve the import statements of ``file`` to the in-repo files they
+        depend on. Purely syntactic by default (no LSP). Each returned File is
+        connected to ``file`` with an ``IMPORTS`` edge by the orchestrator.
+
+        Args:
+            file (File): The importing file (already parsed; ``file.tree`` set).
+            root (Path): The analyzed repository root.
+            index (object): The structure returned by ``build_import_index``.
+
+        Returns:
+            list[File]: In-repo files imported by ``file`` (deduped, self excluded).
+        """
+
+        return []
+
     @abstractmethod
     def add_dependencies(self, path: Path, files: list[Path]):
         """
