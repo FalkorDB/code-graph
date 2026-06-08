@@ -155,10 +155,16 @@ class PythonAnalyzer(TreeSitterAnalyzer):
         suffix map tolerates ``src/``/``lib/`` layouts where the import name
         (``matplotlib.axes``) differs from the path-from-root
         (``lib.matplotlib.axes``).
+
+        Only Python files are indexed; ``files`` carries every analyzed
+        source file, and a Python ``import pkg.mod`` must not resolve to a
+        same-named non-Python file such as ``pkg/mod.java``.
         """
         exact: dict[str, File] = {}
         suffix: dict[str, File] = {}
         for fpath, file in files.items():
+            if fpath.suffix != '.py':
+                continue
             if self.is_dependency(str(fpath)):
                 continue
             parts = self._module_parts(fpath, root)
