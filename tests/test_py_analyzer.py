@@ -1,8 +1,20 @@
 import os
 import unittest
+from collections import Counter
 from pathlib import Path
 
 from api import SourceAnalyzer, Graph
+
+
+def _edge_snapshot(g: Graph) -> Counter:
+    """Return a multiset of all relationships in the graph keyed by
+    (rel_type, src_path, src_name, dst_path, dst_name) so two indexing runs
+    can be compared independent of node ids or write order."""
+    rows = g._query(
+        "MATCH (a)-[r]->(b) "
+        "RETURN type(r), a.path, a.name, b.path, b.name"
+    ).result_set
+    return Counter(tuple(row) for row in rows)
 
 
 class Test_PY_Analyzer(unittest.TestCase):
@@ -72,4 +84,45 @@ class Test_PY_Analyzer(unittest.TestCase):
 
         self.assertIn('__init__', callers)
         self.assertIn('log', callers)
+
+    def test_index_workers_edges_are_deterministic(self):
+        """second_pass must produce identical edges regardless of
+        CODE_GRAPH_INDEX_WORKERS, since phase A only parallelises symbol
+        resolution while phase B writes edges in a fixed order.
+
+        Regression guard for the parallel-resolution path (#688): runs the
+        same fixture serially (workers=1) and in parallel (workers=4) and
+        asserts the full relationship multiset matches.
+        """
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'source_files', 'py')
+
+        prev = os.environ.get("CODE_GRAPH_INDEX_WORKERS")
+        g1 = Graph("py_workers1")
+        g4 = Graph("py_workers4")
+        try:
+            os.environ["CODE_GRAPH_INDEX_WORKERS"] = "1"
+            SourceAnalyzer().analyze_local_folder(path, g1)
+            serial = _edge_snapshot(g1)
+
+            os.environ["CODE_GRAPH_INDEX_WORKERS"] = "4"
+            SourceAnalyzer().analyze_local_folder(path, g4)
+            parallel = _edge_snapshot(g4)
+
+            self.assertEqual(
+                serial, parallel,
+                "edge multiset differs between workers=1 and workers=4",
+            )
+            # Sanity: the fixture has resolvable CALLS, so guard against a
+            # vacuous all-empty comparison when an LSP is available.
+            self.assertGreater(
+                sum(serial.values()), 0,
+                "expected at least one resolved edge in the fixture",
+            )
+        finally:
+            if prev is None:
+                os.environ.pop("CODE_GRAPH_INDEX_WORKERS", None)
+            else:
+                os.environ["CODE_GRAPH_INDEX_WORKERS"] = prev
+            g1.delete()
+            g4.delete()
 
