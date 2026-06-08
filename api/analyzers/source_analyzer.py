@@ -19,6 +19,7 @@ from multilspy.multilspy_config import MultilspyConfig
 from multilspy.multilspy_logger import MultilspyLogger
 
 import logging
+import sys
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
@@ -139,7 +140,6 @@ class SourceAnalyzer():
         else:
             lsps[".java"] = NullLanguageServer()
         if any(path.rglob('*.py')):
-            import sys
             py_venv = path / "venv"
             py_dotvenv = path / ".venv"
             if py_venv.is_dir() and (py_venv / "bin" / "python").exists():
@@ -178,11 +178,7 @@ class SourceAnalyzer():
         with lsps[".java"].start_server(), lsps[".py"].start_server(), lsps[".cs"].start_server(), lsps[".js"].start_server(), lsps[".kt"].start_server(), lsps[".kts"].start_server():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
-                # Skip symbol resolution when no real LSP is available
-                if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
-                    continue
-                file = self.files.get(file_path)
-                if file is None:
+                if file_path not in self.files:
                     # first_pass skipped this file (e.g. parse error, empty,
                     # untracked, or ignored after entering the candidate list).
                     # Skip in second_pass too instead of crashing the whole
@@ -192,6 +188,10 @@ class SourceAnalyzer():
                         file_path,
                     )
                     continue
+                # Skip symbol resolution when no real LSP is available
+                if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
+                    continue
+                file = self.files[file_path]
                 logging.info(f'Processing file ({i + 1}/{files_len}): {file_path}')
                 for _, entity in file.entities.items():
                     entity.resolved_symbol(lambda key, symbol, fp=file_path: analyzers[fp.suffix].resolve_symbol(self.files, lsps[fp.suffix], fp, path, key, symbol))
