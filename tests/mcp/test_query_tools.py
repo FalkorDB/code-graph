@@ -145,6 +145,21 @@ async def test_get_dependencies_aggregates_relations(indexed_fixture):
     assert "CALLS" in rels
 
 
+async def test_get_dependencies_rejects_injected_relation(indexed_fixture):
+    """Relation types are string-interpolated into Cypher, so agent-supplied
+    values must be validated to prevent Cypher injection."""
+    from api.mcp.tools.structural import get_dependencies
+
+    entry_id = await _find_id(indexed_fixture, "entrypoint")
+    with pytest.raises(ValueError, match="invalid relation type"):
+        await get_dependencies(
+            symbol_id=entry_id,
+            project=indexed_fixture.project,
+            branch=indexed_fixture.branch,
+            rels=["CALLS]->() DETACH DELETE n //"],
+        )
+
+
 async def test_neighbor_tools_accept_string_ids(indexed_fixture):
     """Agents sometimes hand back ids as strings — must work."""
     from api.mcp.tools.structural import get_callees

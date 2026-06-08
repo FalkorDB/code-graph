@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -250,6 +251,25 @@ def _node_summary(n: Any) -> dict[str, Any]:
     }
 
 
+# Relationship-type names are graph labels (SCREAMING_SNAKE_CASE, e.g. CALLS,
+# IMPORTS, DEFINES). FalkorDB cannot parameterize relationship types, so any
+# ``rel`` interpolated into Cypher must be validated against this pattern to
+# prevent Cypher injection via agent-controlled input.
+_REL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_relation(rel: str) -> str:
+    """Return ``rel`` if it is a safe relationship-type name, else raise.
+
+    Guards the relationship types that are string-interpolated into Cypher
+    (``-[e:{rel}]->``) — parameter binding is not available for relation
+    types in FalkorDB.
+    """
+    if not isinstance(rel, str) or not _REL_NAME_RE.match(rel):
+        raise ValueError(f"invalid relation type: {rel!r}")
+    return rel
+
+
 def _coerce_node_id(symbol_id: Any) -> int:
     """Accept int or stringified int; raise ValueError otherwise.
 
@@ -281,6 +301,7 @@ async def _neighbors_payload(
     walks outgoing edges, so we inline the Cypher here for symmetry.
     """
     node_id = _coerce_node_id(symbol_id)
+    rel = _validate_relation(rel)
     g = _project_arg(project, branch)
     try:
         if direction == "OUT":
@@ -321,7 +342,7 @@ async def _neighbors_payload(
     ),
 )
 async def get_callers(
-    symbol_id: Any,
+    symbol_id: int | str,
     project: str,
     branch: Optional[str] = None,
     limit: int = 50,
@@ -336,7 +357,7 @@ async def get_callers(
     ),
 )
 async def get_callees(
-    symbol_id: Any,
+    symbol_id: int | str,
     project: str,
     branch: Optional[str] = None,
     limit: int = 50,
@@ -353,7 +374,7 @@ async def get_callees(
     ),
 )
 async def get_dependencies(
-    symbol_id: Any,
+    symbol_id: int | str,
     project: str,
     branch: Optional[str] = None,
     rels: Optional[list[str]] = None,
@@ -365,7 +386,14 @@ async def get_dependencies(
     seen: set[Any] = set()
     out: list[dict[str, Any]] = []
     for rel in rels:
-        rows = await _neighbors_payload(project, branch, symbol_id, rel, "OUT", limit)
+        # Only fetch the rows we can still accept, so total DB work is
+        # bounded by ``limit`` rather than ``limit * len(rels)``.
+        remaining = limit - len(out)
+        if remaining <= 0:
+            break
+        rows = await _neighbors_payload(
+            project, branch, symbol_id, rel, "OUT", remaining
+        )
         for row in rows:
             key = (row.get("id"), row.get("relation"))
             if key in seen:
@@ -391,8 +419,8 @@ async def get_dependencies(
     ),
 )
 async def find_path(
-    source_id: Any,
-    dest_id: Any,
+    source_id: int | str,
+    dest_id: int | str,
     project: str,
     branch: Optional[str] = None,
     max_paths: int = 10,
@@ -401,7 +429,9 @@ async def find_path(
     dst = _coerce_node_id(dest_id)
     g = _project_arg(project, branch)
     try:
-        raw = await g.find_paths(src, dst)
+        # Bound DB work by ``max_paths`` so large graphs don't enumerate an
+        # unbounded number of paths before we slice in Python.
+        raw = await g.find_paths(src, dst, limit=max_paths)
     finally:
         await g.close()
 
@@ -409,7 +439,7 @@ async def find_path(
     # [node, edge, node, edge, ..., node] list; we strip edges and surface
     # only the node sequence — that's what agents typically want.
     paths: list[dict[str, Any]] = []
-    for entry in raw[:max_paths]:
+    for entry in raw:
         node_seq = [
             _node_summary(x)
             for x in entry
@@ -447,7 +477,9 @@ async def search_code(
 ) -> list[dict[str, Any]]:
     g = _project_arg(project, branch)
     try:
-        raw = await g.prefix_search(prefix)
+        # Push the caller's ``limit`` down to the DB so it is actually honored
+        # (the underlying full-text query is otherwise capped at its default).
+        raw = await g.prefix_search(prefix, limit=limit)
     finally:
         await g.close()
-    return [_node_summary(node) for node in raw[:limit]]
+    return [_node_summary(node) for node in raw]
