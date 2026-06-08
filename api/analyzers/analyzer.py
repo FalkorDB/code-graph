@@ -64,12 +64,13 @@ class AbstractAnalyzer(ABC):
     def resolve(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[tuple[File, Node]]:
         try:
             locations = lsp.request_definition(str(file_path), node.start_point.row, node.start_point.column)
-            return [(files[Path(self.resolve_path(location['absolutePath'], path))], files[Path(self.resolve_path(location['absolutePath'], path))].tree.root_node.descendant_for_point_range(Point(location['range']['start']['line'], location['range']['start']['character']), Point(location['range']['end']['line'], location['range']['end']['character'])) ) for location in locations if location and Path(self.resolve_path(location['absolutePath'], path)) in files]
-        except Exception as e:
+            return [(files[Path(self.resolve_path(location['absolutePath'], path))], files[Path(self.resolve_path(location['absolutePath'], path))].tree.root_node.descendant_for_point_range(Point(location['range']['start']['line'], location['range']['start']['character']), Point(location['range']['end']['line'], location['range']['end']['character']))) for location in locations if location and Path(self.resolve_path(location['absolutePath'], path)) in files]
+        except Exception:
             import logging
             logging.getLogger(__name__).warning(
-                "resolve() failed for %s @%d:%d: %s",
-                file_path, node.start_point.row, node.start_point.column, e,
+                "resolve() failed for %s @%d:%d",
+                file_path, node.start_point.row, node.start_point.column,
+                exc_info=True,
             )
             return []
 
@@ -84,6 +85,39 @@ class AbstractAnalyzer(ABC):
         """
         return True
         
+    def build_import_index(self, files: dict[Path, File], root: Path) -> object:
+        """
+        Build a language-specific index used to resolve import statements to
+        in-repo files. Returns an opaque structure consumed by
+        ``resolve_imports``. Default: no import resolution for this language.
+
+        Args:
+            files (dict[Path, File]): All parsed files keyed by absolute path.
+            root (Path): The analyzed repository root.
+
+        Returns:
+            object: Opaque index, or ``None`` when unsupported.
+        """
+
+        return None
+
+    def resolve_imports(self, file: File, root: Path, index: object) -> list[File]:
+        """
+        Resolve the import statements of ``file`` to the in-repo files they
+        depend on. Purely syntactic by default (no LSP). Each returned File is
+        connected to ``file`` with an ``IMPORTS`` edge by the orchestrator.
+
+        Args:
+            file (File): The importing file (already parsed; ``file.tree`` set).
+            root (Path): The analyzed repository root.
+            index (object): The structure returned by ``build_import_index``.
+
+        Returns:
+            list[File]: In-repo files imported by ``file`` (deduped, self excluded).
+        """
+
+        return []
+
     @abstractmethod
     def add_dependencies(self, path: Path, files: list[Path]):
         """

@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -37,6 +38,21 @@ logger = logging.getLogger(__name__)
 def _looks_like_url(spec: str) -> bool:
     """Return True for HTTP(S) / git URLs, False for local paths."""
     return spec.startswith(("http://", "https://", "git@", "ssh://", "git://"))
+
+
+def _count_nodes(graph) -> int:
+    """Total node count for the graph.
+
+    Counts every node generically (``MATCH (n)``) rather than summing a
+    fixed label list, so non-Python repos -- whose analyzers emit Method,
+    Interface, Enum, Constructor, ... nodes -- aren't under-reported. This
+    mirrors :func:`_count_edges`, which already counts edges generically.
+    """
+    try:
+        rows = graph.g.query("MATCH (n) RETURN count(n) AS c").result_set
+        return int(rows[0][0]) if rows else 0
+    except Exception:
+        return 0
 
 
 def _languages_detected(graph) -> list[str]:
@@ -60,16 +76,6 @@ def _languages_detected(graph) -> list[str]:
     return sorted(seen)
 
 
-def _count(graph, label: str) -> int:
-    try:
-        rows = graph.g.query(
-            f"MATCH (n:{label}) RETURN count(n) AS c"
-        ).result_set
-        return int(rows[0][0]) if rows else 0
-    except Exception:
-        return 0
-
-
 def _count_edges(graph) -> int:
     try:
         rows = graph.g.query("MATCH ()-[r]->() RETURN count(r) AS c").result_set
@@ -87,11 +93,11 @@ def _count_edges(graph) -> int:
     name="index_repo",
     description=(
         "Index a code repository into code-graph for subsequent navigation. "
-        "Accepts a local path or a git URL. When `branch` is omitted, "
-        "auto-detects the current branch from the local checkout (defaults "
-        "to '_default' for non-git folders). Returns the indexed graph's "
-        "node/edge counts, detected languages, and the (project, branch) "
-        "identity callers should pass to other code-graph tools."
+        "Accepts a local path or an http(s) git URL. When `branch` is "
+        "omitted, auto-detects the current branch from the local checkout "
+        "(defaults to '_default' for non-git folders). Returns the indexed "
+        "graph's node/edge counts, detected languages, and the (project, "
+        "branch) identity callers should pass to other code-graph tools."
     ),
 )
 async def index_repo(
@@ -104,12 +110,16 @@ async def index_repo(
 
     Args:
         path_or_url: Filesystem path to a local repository **or** a clonable
-            git URL (``https://...``, ``git@host:...``, ``ssh://...``).
+            http(s) git URL (``https://host/org/repo.git``). SSH/scp specs
+            (``git@host:org/repo.git``, ``ssh://...``) are not supported by
+            the cloner -- clone such repos locally and pass the checkout path
+            instead.
         branch: Branch identity for the indexed graph. When ``None``:
             auto-detect from the checkout via ``git rev-parse --abbrev-ref
             HEAD``; falls back to ``_default`` if not a git checkout.
         incremental: Accepted for forward-compatibility with T18; the
-            current full-reindex path ignores it.
+            current path always performs a full reindex and ignores this
+            flag (the response ``mode`` is always ``"full"``).
         ignore: List of relative paths to skip during analysis.
     """
 
@@ -122,6 +132,17 @@ async def index_repo(
 
     def _do_index() -> dict[str, Any]:
         if _looks_like_url(path_or_url):
+            # Project.from_git_repository validates with validators.url(),
+            # which only accepts http(s) URLs -- scp-style (git@host:...) and
+            # ssh:// specs would raise a confusing "invalid url". Reject them
+            # up front with an actionable message instead. (Silently rewriting
+            # them to https would change auth semantics for private repos.)
+            if not path_or_url.startswith(("http://", "https://")):
+                raise ValueError(
+                    "index_repo only supports http(s) git URLs, got "
+                    f"{path_or_url!r}. For SSH/scp specs, clone the repository "
+                    "locally and pass the checkout path instead."
+                )
             project = Project.from_git_repository(path_or_url, branch=branch)
         else:
             local_path = Path(path_or_url).expanduser().resolve()
@@ -142,7 +163,15 @@ async def index_repo(
             # Use Project for git-repo paths so commit metadata is saved,
             # otherwise drive SourceAnalyzer directly so non-git folders work.
             if (local_path / ".git").is_dir():
-                project = Project.from_local_repository(local_path, branch=branch)
+                try:
+                    project = Project.from_local_repository(local_path, branch=branch)
+                except IndexError:
+                    # from_local_repository reads remotes[0].url, which raises
+                    # IndexError for a git repo with no configured remote.
+                    # Index it anyway, just without url/repo-info metadata.
+                    project = Project(
+                        local_path.name, local_path, url=None, branch=branch
+                    )
             else:
                 # Synthesize a Project-like object so the return shape is uniform.
                 from api.analyzers.source_analyzer import SourceAnalyzer
@@ -171,9 +200,7 @@ async def index_repo(
             "project_name": project.name,
             "branch": getattr(project, "branch", None),
             "graph_name": g.name,
-            "num_nodes": (
-                _count(g, "File") + _count(g, "Class") + _count(g, "Function")
-            ),
+            "num_nodes": _count_nodes(g),
             "num_edges": _count_edges(g),
             "languages_detected": _languages_detected(g),
             # T18 will flip this to "incremental" when only changed files
@@ -224,6 +251,25 @@ def _node_summary(n: Any) -> dict[str, Any]:
     }
 
 
+# Relationship-type names are graph labels (SCREAMING_SNAKE_CASE, e.g. CALLS,
+# IMPORTS, DEFINES). FalkorDB cannot parameterize relationship types, so any
+# ``rel`` interpolated into Cypher must be validated against this pattern to
+# prevent Cypher injection via agent-controlled input.
+_REL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_relation(rel: str) -> str:
+    """Return ``rel`` if it is a safe relationship-type name, else raise.
+
+    Guards the relationship types that are string-interpolated into Cypher
+    (``-[e:{rel}]->``) — parameter binding is not available for relation
+    types in FalkorDB.
+    """
+    if not isinstance(rel, str) or not _REL_NAME_RE.match(rel):
+        raise ValueError(f"invalid relation type: {rel!r}")
+    return rel
+
+
 def _coerce_node_id(symbol_id: Any) -> int:
     """Accept int or stringified int; raise ValueError otherwise.
 
@@ -255,6 +301,7 @@ async def _neighbors_payload(
     walks outgoing edges, so we inline the Cypher here for symmetry.
     """
     node_id = _coerce_node_id(symbol_id)
+    rel = _validate_relation(rel)
     g = _project_arg(project, branch)
     try:
         if direction == "OUT":
@@ -295,7 +342,7 @@ async def _neighbors_payload(
     ),
 )
 async def get_callers(
-    symbol_id: Any,
+    symbol_id: int | str,
     project: str,
     branch: Optional[str] = None,
     limit: int = 50,
@@ -310,7 +357,7 @@ async def get_callers(
     ),
 )
 async def get_callees(
-    symbol_id: Any,
+    symbol_id: int | str,
     project: str,
     branch: Optional[str] = None,
     limit: int = 50,
@@ -327,7 +374,7 @@ async def get_callees(
     ),
 )
 async def get_dependencies(
-    symbol_id: Any,
+    symbol_id: int | str,
     project: str,
     branch: Optional[str] = None,
     rels: Optional[list[str]] = None,
@@ -339,7 +386,14 @@ async def get_dependencies(
     seen: set[Any] = set()
     out: list[dict[str, Any]] = []
     for rel in rels:
-        rows = await _neighbors_payload(project, branch, symbol_id, rel, "OUT", limit)
+        # Only fetch the rows we can still accept, so total DB work is
+        # bounded by ``limit`` rather than ``limit * len(rels)``.
+        remaining = limit - len(out)
+        if remaining <= 0:
+            break
+        rows = await _neighbors_payload(
+            project, branch, symbol_id, rel, "OUT", remaining
+        )
         for row in rows:
             key = (row.get("id"), row.get("relation"))
             if key in seen:
@@ -365,8 +419,8 @@ async def get_dependencies(
     ),
 )
 async def find_path(
-    source_id: Any,
-    dest_id: Any,
+    source_id: int | str,
+    dest_id: int | str,
     project: str,
     branch: Optional[str] = None,
     max_paths: int = 10,
@@ -375,7 +429,9 @@ async def find_path(
     dst = _coerce_node_id(dest_id)
     g = _project_arg(project, branch)
     try:
-        raw = await g.find_paths(src, dst)
+        # Bound DB work by ``max_paths`` so large graphs don't enumerate an
+        # unbounded number of paths before we slice in Python.
+        raw = await g.find_paths(src, dst, limit=max_paths)
     finally:
         await g.close()
 
@@ -383,13 +439,17 @@ async def find_path(
     # [node, edge, node, edge, ..., node] list; we strip edges and surface
     # only the node sequence — that's what agents typically want.
     paths: list[dict[str, Any]] = []
-    for entry in raw[:max_paths]:
+    for entry in raw:
         node_seq = [
             _node_summary(x)
             for x in entry
-            # Edges in the alternating list carry a top-level ``relation``
-            # key (from ``encode_edge``); nodes carry ``properties``.
-            if isinstance(x, dict) and "properties" in x
+            # Discriminate on ``labels``: ``encode_node`` emits a top-level
+            # ``labels`` key, while ``encode_edge`` does not (edges carry
+            # ``relation``/``src_node``/``dest_node`` instead). Filtering on
+            # ``properties`` would be wrong because FalkorDB's Edge also has a
+            # ``properties`` attribute, so edges would slip through as bogus
+            # all-null node entries.
+            if isinstance(x, dict) and "labels" in x
         ]
         paths.append({"path": node_seq})
     return paths
@@ -417,10 +477,12 @@ async def search_code(
 ) -> list[dict[str, Any]]:
     g = _project_arg(project, branch)
     try:
-        raw = await g.prefix_search(prefix)
+        # Push the caller's ``limit`` down to the DB so it is actually honored
+        # (the underlying full-text query is otherwise capped at its default).
+        raw = await g.prefix_search(prefix, limit=limit)
     finally:
         await g.close()
-    return [_node_summary(node) for node in raw[:limit]]
+    return [_node_summary(node) for node in raw]
 
 
 # ---------------------------------------------------------------------------
@@ -428,11 +490,11 @@ async def search_code(
 # ---------------------------------------------------------------------------
 
 
+# Hard cap on traversal depth — passed values above this are silently
+# clamped. Prevents pathological queries (e.g. depth=999) from hammering
+# FalkorDB while still letting agents request "deep" impact without
+# hitting an error.
 IMPACT_MAX_DEPTH = 10
-"""Hard cap on traversal depth — passed values above this are silently
-clamped. Prevents pathological queries (e.g. depth=999) from hammering
-FalkorDB while still letting agents request "deep" impact without
-hitting an error."""
 
 
 def _clamp_depth(depth: Any) -> int:
@@ -458,15 +520,17 @@ def _clamp_depth(depth: Any) -> int:
         "change this symbol); `direction='OUT'` returns all downstream "
         "callees (what this symbol indirectly depends on). Traverses only "
         f"CALLS edges. Depth is clamped to {IMPACT_MAX_DEPTH}; cycles are "
-        "deduplicated via Cypher DISTINCT (each node appears at most once)."
+        "deduplicated via Cypher DISTINCT (each node appears at most once). "
+        "`limit` bounds the number of impacted symbols returned."
     ),
 )
 async def impact_analysis(
-    symbol_id: Any,
+    symbol_id: int | str,
     project: str,
     branch: Optional[str] = None,
     direction: str = "IN",
     depth: int = 3,
+    limit: int = 50,
 ) -> list[dict[str, Any]]:
     node_id = _coerce_node_id(symbol_id)
     eff_depth = _clamp_depth(depth)
@@ -476,14 +540,16 @@ async def impact_analysis(
         q = (
             f"MATCH (n)<-[:CALLS*1..{eff_depth}]-(impacted) "
             f"WHERE ID(n) = $sid "
-            f"RETURN DISTINCT impacted"
+            f"RETURN DISTINCT impacted "
+            f"LIMIT $limit"
         )
     elif direction == "OUT":
         # Downstream callees: (n) -[:CALLS*]-> (impacted)
         q = (
             f"MATCH (n)-[:CALLS*1..{eff_depth}]->(impacted) "
             f"WHERE ID(n) = $sid "
-            f"RETURN DISTINCT impacted"
+            f"RETURN DISTINCT impacted "
+            f"LIMIT $limit"
         )
     else:
         raise ValueError(
@@ -493,7 +559,7 @@ async def impact_analysis(
 
     g = _project_arg(project, branch)
     try:
-        res = await g._query(q, {"sid": node_id})
+        res = await g._query(q, {"sid": node_id, "limit": int(limit)})
     finally:
         await g.close()
 

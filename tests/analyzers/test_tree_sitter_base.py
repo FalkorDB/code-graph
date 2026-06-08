@@ -75,3 +75,26 @@ def test_tree_sitter_multilanguage_fixture_graph_counts():
         {"Class": 3, "Function": 4, "Method": 2}
     )
     assert Counter(edge[0] for edge in graph.edges) == Counter({"DEFINES": 9})
+
+
+def test_build_import_index_skips_non_python_files():
+    """A Python ``import pkg.mod`` must not resolve to ``pkg/mod.java``.
+
+    ``build_import_index`` receives every analyzed file (all languages), so it
+    must only index ``.py`` files; otherwise a same-named non-Python file with
+    the same dotted path would create spurious ``IMPORTS`` edges.
+    """
+    analyzer = PythonAnalyzer()
+    root = Path("/repo")
+    py_file = File(root / "pkg" / "mod.py", None)
+    java_file = File(root / "pkg" / "mod.java", None)
+    files = {py_file.path: py_file, java_file.path: java_file}
+
+    index = analyzer.build_import_index(files, root)
+
+    assert index["exact"]["pkg.mod"] is py_file
+    assert index["suffix"]["pkg.mod"] is py_file
+    assert index["suffix"]["mod"] is py_file
+    # The .java file must not have been indexed under any dotted name.
+    assert java_file not in index["exact"].values()
+    assert java_file not in index["suffix"].values()

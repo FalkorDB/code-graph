@@ -64,28 +64,49 @@ def sample_project_path() -> Path:
 
 
 def _falkordb_reachable() -> bool:
-    """Cheap probe so the integration fixture can self-skip in dev."""
+    """Cheap probe so the integration fixture can self-skip in dev.
+
+    Uses the falkordb-py client (rather than a raw TCP socket) so the
+    check exercises the same connection settings the rest of the test
+    suite uses, and surfaces auth / protocol failures — not just
+    "something is listening on that port".
+    """
     try:
-        import socket
+        from falkordb import FalkorDB
 
         host = os.getenv("FALKORDB_HOST", "localhost")
         port = int(os.getenv("FALKORDB_PORT", 6379))
-        with socket.create_connection((host, port), timeout=1):
-            return True
-    except OSError:
+        db = FalkorDB(host=host, port=port, socket_timeout=1)
+        return bool(db.connection.ping())
+    except Exception:
         return False
 
 
+@pytest.fixture
+def require_falkordb() -> None:
+    """Skip the depending test when FalkorDB isn't reachable.
+
+    Tests that drive the real indexing path (creating a ``Graph`` and
+    writing nodes/edges) depend on this so the MCP suite stays runnable in
+    environments that only exercise the pure-Python unit tests.
+    """
+    if not _falkordb_reachable():
+        pytest.skip("FalkorDB not reachable on $FALKORDB_HOST:$FALKORDB_PORT")
+
+
 @pytest.fixture(scope="session")
-def indexed_fixture(sample_project_path: Path) -> IndexedFixture:
+def indexed_fixture(sample_project_path: Path):
     """Index the sample project into a unique per-session graph.
 
     Each test session creates a new graph named
     ``code:sample_project:test-<uuid>`` so parallel CI shards never
-    contend on the same graph. The graph is intentionally **not**
-    cleaned up — short-lived CI runners discard the FalkorDB volume,
-    and keeping it around helps post-mortem debugging on developer
-    machines.
+    contend on the same graph. The graph is deleted on teardown so
+    long-lived FalkorDB deployments (developer machines, shared CI)
+    don't accumulate orphan ``test-*`` graphs across runs.
+
+    Set ``MCP_KEEP_TEST_GRAPHS=1`` to skip teardown — useful for
+    post-mortem debugging when a test fails and you want to poke at
+    the graph by hand.
 
     Uses :class:`api.analyzers.SourceAnalyzer` directly (instead of
     ``Project.from_local_repository``) so the fixture doesn't need to
@@ -106,11 +127,31 @@ def indexed_fixture(sample_project_path: Path) -> IndexedFixture:
     graph = Graph(project_name, branch=branch)
 
     analyzer = SourceAnalyzer()
-    analyzer.analyze_local_folder(str(sample_project_path), graph)
+    # Belt-and-suspenders: jedi/multilspy used to create venv/ inside the
+    # fixture during resolution, which polluted the tree with hundreds of
+    # site-packages files. Tree-sitter doesn't do this, but we still pass
+    # an explicit ignore list so a stray venv on a contributor's machine
+    # can never break the exact-count contract.
+    analyzer.analyze_local_folder(
+        str(sample_project_path),
+        graph,
+        ignore=["venv", "__pycache__", ".venv"],
+    )
 
-    return IndexedFixture(
+    yield IndexedFixture(
         project=project_name,
         branch=branch,
         graph_name=graph.name,
         path=sample_project_path,
     )
+
+    # Teardown — drop the graph so we don't leak ``test-<uuid>`` graphs
+    # across runs. Opt out with MCP_KEEP_TEST_GRAPHS=1 when debugging.
+    if os.getenv("MCP_KEEP_TEST_GRAPHS") == "1":
+        return
+    try:
+        graph.delete()
+    except Exception:
+        # Best-effort cleanup: never fail a test session because
+        # teardown couldn't reach FalkorDB.
+        pass
