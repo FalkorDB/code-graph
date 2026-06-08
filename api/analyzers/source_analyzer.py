@@ -19,6 +19,7 @@ from multilspy.multilspy_config import MultilspyConfig
 from multilspy.multilspy_logger import MultilspyLogger
 
 import logging
+import sys
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
@@ -139,7 +140,29 @@ class SourceAnalyzer():
         else:
             lsps[".java"] = NullLanguageServer()
         if any(path.rglob('*.py')):
-            config = MultilspyConfig.from_dict({"code_language": "python", "environment_path": f"{path}/venv"})
+            py_venv = path / "venv"
+            py_dotvenv = path / ".venv"
+            if py_venv.is_dir() and (py_venv / "bin" / "python").exists():
+                env_path = str(py_venv)
+            elif py_dotvenv.is_dir() and (py_dotvenv / "bin" / "python").exists():
+                env_path = str(py_dotvenv)
+            else:
+                # Fall back to the host's Python environment so jedi has a
+                # valid interpreter to introspect; otherwise every
+                # request_definition() raises InvalidPythonEnvironment and
+                # we'd silently produce a graph with zero CALLS edges.
+                # sys.prefix is the active environment root and is more
+                # reliable than deriving it from sys.executable (which breaks
+                # when the interpreter is a wrapper/shim).
+                env_path = sys.prefix
+                logging.info(
+                    "No venv at %s; falling back to host env %s for jedi LSP",
+                    path, env_path,
+                )
+            config = MultilspyConfig.from_dict({
+                "code_language": "python",
+                "environment_path": env_path,
+            })
             lsps[".py"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".py"] = NullLanguageServer()
@@ -156,6 +179,14 @@ class SourceAnalyzer():
             files_len = len(self.files)
             for i, file_path in enumerate(files):
                 if file_path not in self.files:
+                    # first_pass skipped this file (e.g. parse error, empty,
+                    # untracked, or ignored after entering the candidate list).
+                    # Skip in second_pass too instead of crashing the whole
+                    # index.
+                    logging.warning(
+                        "second_pass: %s not in files map (first_pass skipped it); skipping",
+                        file_path,
+                    )
                     continue
                 # Skip symbol resolution when no real LSP is available
                 if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
