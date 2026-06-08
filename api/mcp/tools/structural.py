@@ -739,6 +739,27 @@ FIND_SYMBOL_SNIPPET_LINES = 4
 FIND_SYMBOL_DB_LIMIT = 200
 
 
+def _clamp_find_symbol_limit(limit: Any) -> int:
+    """Coerce ``limit`` to ``1..FIND_SYMBOL_DB_LIMIT``.
+
+    Agents may hand back a stringified or out-of-range ``limit``; a negative
+    value would otherwise flip ``rows[:limit]`` into a surprising tail slice and
+    a non-integer would fail deep in the slice with an opaque error. Strings of
+    digits are accepted; anything else is rejected up front.
+    """
+    if isinstance(limit, bool):
+        raise ValueError(f"limit must be an integer, got bool: {limit!r}")
+    if isinstance(limit, str) and limit.lstrip("-").isdigit():
+        limit = int(limit)
+    if not isinstance(limit, int):
+        raise ValueError(f"limit must be an integer, got: {limit!r}")
+    if limit < 1:
+        return 1
+    if limit > FIND_SYMBOL_DB_LIMIT:
+        return FIND_SYMBOL_DB_LIMIT
+    return limit
+
+
 @app.tool(
     name="find_symbol",
     description=(
@@ -767,14 +788,20 @@ async def find_symbol(
     """Look up Function/Class nodes by their simple name.
 
     Symbol nodes store only the SIMPLE name (``foo``), never the qualname
-    (``Bar.foo``), so a dotted input is reduced to its last segment. When
-    ``file`` is given we do not silently widen the search: every candidate is
-    tagged ``file_match`` and the in-file ones sort first, so a wrong/empty
-    file filter degrades visibly (the agent still sees the global matches but
-    knows none were in the requested file) rather than routing a relationship
-    query to an arbitrary same-named symbol.
+    (``Bar.foo``), so a dotted input is reduced to its last segment. Every
+    candidate carries a ``file_match`` flag (always ``False`` when no ``file``
+    filter is requested); when ``file`` is given we do not silently widen the
+    search — the in-file ones sort first, so a wrong/empty file filter degrades
+    visibly (the agent still sees the global matches but knows none were in the
+    requested file) rather than routing a relationship query to an arbitrary
+    same-named symbol.
     """
-    simple = str(name).strip().split(".")[-1]
+    simple = str(name).strip().split(".")[-1].strip()
+    if not simple:
+        raise ValueError(
+            f"name must be a non-empty symbol name, got: {name!r}"
+        )
+    eff_limit = _clamp_find_symbol_limit(limit)
     g = _project_arg(project, branch)
     try:
         res = await g._query(
@@ -796,19 +823,28 @@ async def find_symbol(
     for r in rows:
         r["symbol_id"] = r.pop("id")
 
-    if file is not None:
-        needle = str(file).strip().lstrip("/")
+    needle = str(file).strip().lstrip("/") if file is not None else ""
 
-        def _matches(r: dict[str, Any]) -> bool:
-            fp = r.get("file") or ""
-            return bool(needle) and (fp == needle or fp.endswith(needle) or needle in fp)
+    def _matches(r: dict[str, Any]) -> bool:
+        fp = r.get("file") or ""
+        return bool(needle) and (fp == needle or fp.endswith(needle) or needle in fp)
 
-        for r in rows:
-            r["file_match"] = _matches(r)
-        # In-file matches first; preserve relative order within each group.
-        rows.sort(key=lambda r: not r["file_match"])
+    # ``file_match`` is part of the documented response shape, so set it on
+    # every row (False when no ``file`` filter is requested) rather than only
+    # when ``file`` is given. Sort deterministically — in-file matches first,
+    # then by file/line/name/id — so ordering never depends on FalkorDB row
+    # order between runs.
+    for r in rows:
+        r["file_match"] = _matches(r)
+    rows.sort(key=lambda r: (
+        not r["file_match"],
+        r.get("file") or "",
+        r["line"] if r.get("line") is not None else math.inf,
+        r.get("name") or "",
+        r["symbol_id"],
+    ))
 
-    return rows[:limit]
+    return rows[:eff_limit]
 
 
 @app.tool(
