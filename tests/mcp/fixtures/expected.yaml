@@ -1,56 +1,64 @@
 # MCP fixture assertion contract.
 #
-# Anything declared here is treated as load-bearing by tests/mcp/*. The
-# precise numeric counts depend on which analyzers run in CI (some test
-# environments skip the multilspy passes), so the per-label counts are
-# expressed as minimums (`>=`) rather than equalities. Named-symbol
-# assertions are exact.
+# Anything declared here is treated as load-bearing by tests/mcp/*.
+# Counts are EXACT (not minimums): the fixture is pinned to a Python-only
+# tree the deterministic tree-sitter analyzer fully covers, so there is
+# no analyzer-availability skew to hedge against.
+# Named-symbol assertions are also exact.
 
 # The graph is named after the fixture directory (per Project.from_local_repository).
 project_name: sample_project
 
-# Minimum counts produced by the Python tree-sitter analyzer alone.
-# Java + C# add more when multilspy is available.
-counts_min:
-  File: 4        # 4 python files (java/csharp may bump this)
+# Exact counts produced by the Python tree-sitter analyzer over the
+# fixture as committed. If you add/remove a fixture source file, update
+# these numbers to match.
+counts:
+  File: 5        # entrypoint.py, service.py, repo.py, db.py, __init__.py
   Class: 3       # BaseRepo, UserRepo, OrderRepo
   Function: 6    # entrypoint, service, db, BaseRepo.repo, UserRepo.repo, OrderRepo.repo
 
 # Named callers / callees (used by T5 — get_callers / get_callees).
+# Verified against the live graph: assertions are exact, not "at least".
 calls:
   service:
     callers: ["entrypoint"]
     # service() instantiates UserRepo + OrderRepo and calls .repo() on each;
-    # the analyzer encodes that as CALLS edges on the method.
-    callees_any_of: ["repo", "UserRepo", "OrderRepo"]
+    # the analyzer emits CALLS edges to both the class constructors and
+    # the repo method (one per subclass, so `repo` appears twice).
+    callees: ["OrderRepo", "UserRepo", "repo", "repo"]
   entrypoint:
     callers: []
-    callees_any_of: ["service"]
+    callees: ["service"]
   db:
-    # db() is called by both subclasses via super().repo() -> BaseRepo.repo().
-    callers_any_of: ["repo"]
+    # db() is called from BaseRepo.repo (the subclasses delegate via super()).
+    callers: ["repo"]
     callees: []
 
-# Known path between two named symbols (used by T7 — find_path).
+# Known paths between two named symbols (used by T7 — find_path).
+# Exact path count per (source, dest) pair.
+#
+# entrypoint -> service -> { UserRepo.repo, OrderRepo.repo } -> db
+# yields two distinct paths through the class hierarchy.
 paths:
   - source: entrypoint
     dest: db
-    min_paths: 1
+    paths_count: 2
 
 # Prefix-search hits (used by T8 — search_code).
+# Verified against api.auto_complete.prefix_search.
 search_prefixes:
   ent:
     must_include: ["entrypoint"]
   serv:
     must_include: ["service"]
-  Repo:
-    # case-insensitive prefix match on Searchable label
-    must_include_any_of: ["BaseRepo", "UserRepo", "OrderRepo"]
+  Base:
+    # Case-insensitive prefix match against Searchable.name.
+    must_include: ["BaseRepo"]
 
 # Transitive impact (used by T6 — impact_analysis).
-# Names listed under ``upstream_includes`` MUST appear when running
-# impact_analysis(<symbol>, direction="IN", depth=>=3). Names under
-# ``downstream_includes`` MUST appear with direction="OUT".
+# Names listed under ``upstream_includes_any_of`` MUST appear when running
+# impact_analysis(<symbol>, direction="IN", depth >= 3). Names under
+# ``downstream_includes_any_of`` MUST appear with direction="OUT".
 impact:
   db:
     # Anything that transitively calls db(): repo() variants and service().

@@ -6,12 +6,12 @@
 # `cgraph-mcp` stdio server for each tool call — the exact transport
 # Claude Code / Cursor / Cline use in production.
 #
-# Tool names mirror the 8 MCP tools registered in api/mcp/tools/
+# Tool names mirror the 7 MCP tools registered in api/mcp/tools/
 # (search_code, get_callers, get_callees, get_dependencies,
-# impact_analysis, find_path, index_repo, ask). The bash agent calls
+# impact_analysis, find_path, index_repo). The bash agent calls
 # them through the `cg-mcp <tool> ...` shim (see bench/cli/cg-mcp).
 #
-# IMPORTANT: `ask` (GraphRAG) is intentionally NOT in the tool list.
+# NOTE: GraphRAG `ask` is intentionally NOT part of the surface.
 # Including it would double-count tokens (nested LLM agent). Same Q2
 # decision as the HTTP code_graph config — we benchmark the *graph*,
 # not GraphRAG.

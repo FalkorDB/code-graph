@@ -66,7 +66,6 @@ async def main() -> int:
                 "get_dependencies",
                 "impact_analysis",
                 "find_path",
-                "ask",
             }
             missing = expected - set(tool_names)
             if missing:

@@ -1,11 +1,10 @@
-"""`cg` — bash-callable CLI exposing code-graph's 8 agent primitives over HTTP.
+"""`cg` — bash-callable CLI exposing code-graph's 7 agent primitives over HTTP.
 
 This is the HTTP-transport sibling of `cg-mcp`. Both CLIs expose the **same
 verb surface** (search_code, get_callers, get_callees, get_dependencies,
-impact_analysis, find_path, ask, index_repo) over **the same underlying
-async tool functions** (api.mcp.tools.structural and api.mcp.tools.ask),
-so a benchmark comparison between them measures transport overhead, not
-API differences.
+impact_analysis, find_path, index_repo) over **the same underlying
+async tool functions** (api.mcp.tools.structural), so a benchmark comparison
+between them measures transport overhead, not API differences.
 
 The agent calls these via bash:
 
@@ -16,7 +15,6 @@ The agent calls these via bash:
   cg get_dependencies --project P --symbol-id ID [--branch B] [--limit N]
   cg impact_analysis  --project P --symbol-id ID [--direction IN|OUT] [--depth N] [--limit N]
   cg find_path        --project P --source-id ID --dest-id ID [--branch B]
-  cg ask              --project P --question "..." [--branch B]
 
 Legacy verbs (graph-entities, get-neighbors, find-paths, auto-complete,
 find-symbol, note-edit) remain for the React UI's backing tests but are
@@ -198,10 +196,6 @@ def main(argv: list[str] | None = None) -> int:
     fp2.add_argument("--source-id", type=int, required=True, dest="source_id")
     fp2.add_argument("--dest-id", type=int, required=True, dest="dest_id")
 
-    aq = sub.add_parser("ask")
-    _add_project(aq)
-    aq.add_argument("--question", required=True)
-
     # ---- legacy UI verbs (kept for existing tests) ----
     def add_repo(p: argparse.ArgumentParser) -> None:
         p.add_argument("--repo", required=True)
@@ -260,8 +254,6 @@ def main(argv: list[str] | None = None) -> int:
                 c.find_path_v2(args.project, args.source_id, args.dest_id, branch=args.branch),
                 proj,
             ))
-        elif args.cmd == "ask":
-            _print(c.ask_v2(args.project, args.question, branch=args.branch))
         # ---- legacy verbs ----
         elif args.cmd == "graph-entities":
             _print(c.graph_entities(args.repo))

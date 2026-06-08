@@ -157,9 +157,9 @@ cgraph info [--repo <name>]              # Repo stats + metadata
 
 ## MCP server (for agents)
 
-`cgraph-mcp` exposes the code graph over MCP stdio. Eight tools:
+`cgraph-mcp` exposes the code graph over MCP stdio. Seven tools:
 `index_repo`, `search_code`, `get_callers`, `get_callees`,
-`get_dependencies`, `impact_analysis`, `find_path`, `ask`.
+`get_dependencies`, `impact_analysis`, `find_path`.
 
 Drop the canonical agent guidance into any repo:
 

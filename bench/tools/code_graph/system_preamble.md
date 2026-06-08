@@ -9,7 +9,7 @@ A pre-indexed code-graph for this repo is available via the `cg` CLI
 **Use `cg` to locate symbols before reading files or grepping.**
 `$PROJECT_NAME` and `$BRANCH` are exported.
 
-This CLI exposes the **same 8 verbs** as the MCP-track `cg-mcp` CLI;
+This CLI exposes the **same 7 verbs** as the MCP-track `cg-mcp` CLI;
 they wrap the same underlying tool implementations. The only
 difference is transport (HTTP vs stdio MCP).
 

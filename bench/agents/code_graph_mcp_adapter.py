@@ -7,9 +7,9 @@ SDK and dispatches tool calls over JSON-RPC.
 
 This gives us a second, real-world benchmark track that exercises the
 exact same transport agents (Claude Code, Cursor, …) will use in
-production. Tool names match the 8-tool MCP surface
+production. Tool names match the 7-tool MCP surface
 (`index_repo`, `search_code`, `get_callers`, `get_callees`,
-`get_dependencies`, `impact_analysis`, `find_path`, `ask`).
+`get_dependencies`, `impact_analysis`, `find_path`).
 
 Each call spawns a fresh server, runs the call, and exits. That's
 ~0.5-1s overhead per call but keeps the model trivially safe to call
@@ -202,10 +202,3 @@ def find_path(source_id: int, dest_id: int, project: str, branch: str | None = N
     if branch is not None:
         args["branch"] = branch
     return call_tool("find_path", args)
-
-
-def ask(question: str, project: str, branch: str | None = None) -> Any:
-    args: dict[str, Any] = {"question": question, "project": project}
-    if branch is not None:
-        args["branch"] = branch
-    return call_tool("ask", args)

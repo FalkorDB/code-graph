@@ -211,14 +211,6 @@ class CodeGraphClient:
         r.raise_for_status()
         return r.json()
 
-    def ask_v2(self, project: str, question: str, branch: str | None = None) -> Any:
-        body: dict[str, Any] = {"project": project, "question": question}
-        if branch:
-            body["branch"] = branch
-        r = self._client.post("/api/v2/ask", json=body)
-        r.raise_for_status()
-        return r.json()
-
 
 # Convenience function aliases — the SWE-agent tool registry expects
 # top-level callables. Each spins up a short-lived client; for hot loops

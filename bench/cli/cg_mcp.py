@@ -1,4 +1,4 @@
-"""`cg-mcp` — bash-callable CLI exposing code-graph's 8 MCP tools.
+"""`cg-mcp` — bash-callable CLI exposing code-graph's 7 MCP tools.
 
 This is the MCP-transport sibling of `cg`. Where `cg` calls the host
 FastAPI service over HTTP, `cg-mcp` spawns the `cgraph-mcp` stdio
@@ -19,7 +19,6 @@ Subcommands mirror the MCP tool names:
   cg-mcp get_dependencies --project P --symbol-id ID [--branch B] [--limit N]
   cg-mcp impact_analysis  --project P --symbol-id ID [--direction IN|OUT] [--depth N]
   cg-mcp find_path        --project P --source-id ID --dest-id ID [--branch B]
-  cg-mcp ask              --project P --question "..." [--branch B]
 
 Output: one JSON document per call on stdout. Errors print to stderr
 and exit non-zero.
@@ -162,10 +161,6 @@ def main(argv: list[str] | None = None) -> int:
     fp.add_argument("--source-id", type=int, required=True, dest="source_id")
     fp.add_argument("--dest-id", type=int, required=True, dest="dest_id")
 
-    aq = sub.add_parser("ask")
-    _add_project(aq)
-    aq.add_argument("--question", required=True)
-
     args = parser.parse_args(argv)
     timeout = _timeout()
 
@@ -213,8 +208,6 @@ def main(argv: list[str] | None = None) -> int:
                 cgm.find_path(args.source_id, args.dest_id, args.project, branch=args.branch),
                 proj,
             ))
-        elif args.cmd == "ask":
-            _print(cgm.ask(args.question, args.project, branch=args.branch))
         else:  # pragma: no cover — argparse already enforces this
             parser.error(f"unknown subcommand: {args.cmd}")
     except Exception as e:  # noqa: BLE001 — surface everything to the agent
