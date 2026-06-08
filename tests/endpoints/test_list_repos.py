@@ -47,7 +47,9 @@ def test_list_repos(client):
 
     # Expecting an empty response
     assert status == "success"
-    assert repositories == ['git_repo']
+    assert repositories == [
+        {"project": "git_repo", "branch": "_default", "graph": "code:git_repo:_default"}
+    ]
 
 
 def test_list_repos_with_auth(monkeypatch):

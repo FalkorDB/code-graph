@@ -61,14 +61,17 @@ async def test_async_graph_exists_closes_on_error():
 async def test_async_get_repos_filters_suffixes():
     mock_db = MagicMock()
     mock_db.list_graphs = AsyncMock(
-        return_value=["repo1", "repo1_git", "repo1_schema", "repo2"]
+        return_value=["repo1", "code:repo2:main", "repo1_git", "repo1_schema", "code:repo2:main_git"]
     )
     mock_db.aclose = AsyncMock()
 
     with patch("api.graph._async_db", return_value=mock_db):
         repos = await async_get_repos()
 
-    assert repos == ["repo1", "repo2"]
+    assert repos == [
+        {"project": "repo1", "branch": "_default", "graph": "repo1"},
+        {"project": "repo2", "branch": "main", "graph": "code:repo2:main"},
+    ]
     mock_db.aclose.assert_awaited_once()
 
 
