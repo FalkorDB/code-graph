@@ -448,14 +448,15 @@ class Graph():
 
         return res[0][0]
 
-    def prefix_search(self, prefix: str) -> str:
+    def prefix_search(self, prefix: str, limit: int = 10) -> str:
         """
         Search for entities by prefix using a full-text search on the graph.
-        The search is limited to 10 nodes. Each node's name and labels are retrieved,
-        and the results are sorted based on their labels.
+        The number of results is bounded by ``limit`` (default 10). Each node's
+        name and labels are retrieved, and the results are sorted based on their labels.
 
         Args:
             prefix (str): The prefix string to search for in the graph database.
+            limit (int): Maximum number of nodes to return (default 10).
 
         Returns:
             str: A list of entity names and corresponding labels, sorted by label.
@@ -465,7 +466,7 @@ class Graph():
         # Append a wildcard '*' to the prefix for full-text search.
         search_prefix = f"{prefix}*"
 
-        # Cypher query to perform full-text search and limit the result to 10 nodes.
+        # Cypher query to perform full-text search, bounding the result at $limit.
         # The 'CALL db.idx.fulltext.queryNodes' method searches for nodes labeled 'Searchable'
         # that match the given prefix, collects the nodes, and returns the result.
         query = """
@@ -473,11 +474,11 @@ class Graph():
             YIELD node
             WITH node
             RETURN node
-            LIMIT 10
+            LIMIT $limit
         """
 
         # Execute the query using the provided graph database connection.
-        result_set = self._query(query, {'prefix': search_prefix}).result_set
+        result_set = self._query(query, {'prefix': search_prefix, 'limit': int(limit)}).result_set
 
         completions = [encode_node(row[0]) for row in result_set]
 
@@ -658,13 +659,16 @@ class Graph():
 
         return self._query(q, params)
 
-    def find_paths(self, src: int, dest: int) -> list[Path]:
+    def find_paths(self, src: int, dest: int, limit: Optional[int] = None) -> list[Path]:
         """
         Find all paths between the source (src) and destination (dest) nodes.
 
         Args:
             src (int): The ID of the source node.
             dest (int): The ID of the destination node.
+            limit (Optional[int]): When provided, bound the number of paths
+                enumerated by the database with a Cypher ``LIMIT``. When ``None``
+                (default) all paths are returned (legacy behavior).
 
         Returns:
             List[Optional[Path]]: A list of paths found between the src and dest nodes.
@@ -682,8 +686,13 @@ class Graph():
                RETURN p
            """
 
+        params = {'src_id': src, 'dest_id': dest}
+        if limit is not None:
+            q += "        LIMIT $limit\n"
+            params['limit'] = int(limit)
+
         # Perform the query with the source and destination node IDs.
-        result_set = self._query(q, {'src_id': src, 'dest_id': dest}).result_set
+        result_set = self._query(q, params).result_set
 
         paths = []
 
@@ -861,26 +870,30 @@ class AsyncGraphQuery:
             logging.error(f"Error fetching neighbors for node {node_ids}: {e}")
             return {'nodes': [], 'edges': []}
 
-    async def prefix_search(self, prefix: str) -> list:
+    async def prefix_search(self, prefix: str, limit: int = 10) -> list:
         search_prefix = f"{prefix}*"
         query = """
             CALL db.idx.fulltext.queryNodes('Searchable', $prefix)
             YIELD node
             WITH node
             RETURN node
-            LIMIT 10
+            LIMIT $limit
         """
-        result_set = (await self._query(query, {'prefix': search_prefix})).result_set
+        result_set = (await self._query(query, {'prefix': search_prefix, 'limit': int(limit)})).result_set
         return [encode_node(row[0]) for row in result_set]
 
-    async def find_paths(self, src: int, dest: int) -> list:
+    async def find_paths(self, src: int, dest: int, limit: Optional[int] = None) -> list:
         q = """MATCH (src), (dest)
                WHERE ID(src) = $src_id AND ID(dest) = $dest_id
                WITH src, dest
                MATCH p = (src)-[:CALLS*]->(dest)
                RETURN p
            """
-        result_set = (await self._query(q, {'src_id': src, 'dest_id': dest})).result_set
+        params = {'src_id': src, 'dest_id': dest}
+        if limit is not None:
+            q += "        LIMIT $limit\n"
+            params['limit'] = int(limit)
+        result_set = (await self._query(q, params)).result_set
         paths = []
         for row in result_set:
             path  = []
