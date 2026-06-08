@@ -413,9 +413,13 @@ async def find_path(
         node_seq = [
             _node_summary(x)
             for x in entry
-            # Edges in the alternating list carry a top-level ``relation``
-            # key (from ``encode_edge``); nodes carry ``properties``.
-            if isinstance(x, dict) and "properties" in x
+            # Discriminate on ``labels``: ``encode_node`` emits a top-level
+            # ``labels`` key, while ``encode_edge`` does not (edges carry
+            # ``relation``/``src_node``/``dest_node`` instead). Filtering on
+            # ``properties`` would be wrong because FalkorDB's Edge also has a
+            # ``properties`` attribute, so edges would slip through as bogus
+            # all-null node entries.
+            if isinstance(x, dict) and "labels" in x
         ]
         paths.append({"path": node_seq})
     return paths

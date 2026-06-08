@@ -7,7 +7,6 @@ Bundled because all three tools are thin async wrappers around existing
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -103,7 +102,7 @@ async def test_get_callees_of_entrypoint(indexed_fixture, expected_contract):
         branch=indexed_fixture.branch,
     )
     names = {c["name"] for c in callees}
-    expected = set(expected_contract["calls"]["entrypoint"]["callees_any_of"])
+    expected = set(expected_contract["calls"]["entrypoint"]["callees"])
     assert names & expected, (
         f"entrypoint callees {names} disjoint from expected {expected}"
     )
@@ -189,7 +188,7 @@ async def test_find_path_entrypoint_to_db(indexed_fixture, expected_contract):
     )
     # The contract requires at least one path entrypoint -> ... -> db
     expected_min = next(
-        p["min_paths"] for p in expected_contract["paths"]
+        p["paths_count"] for p in expected_contract["paths"]
         if p["source"] == "entrypoint" and p["dest"] == "db"
     )
     assert len(paths) >= expected_min
@@ -201,6 +200,12 @@ async def test_find_path_entrypoint_to_db(indexed_fixture, expected_contract):
         assert len(seq) >= 2
         assert seq[0]["name"] == "entrypoint"
         assert seq[-1]["name"] == "db"
+        # Every element must be a real node, not an edge that leaked through
+        # the alternating [node, edge, node, ...] list as a bogus all-null
+        # entry. Real nodes always resolve a name and a label.
+        for node in seq:
+            assert node["name"] is not None, f"edge leaked into path: {node}"
+            assert node["label"] is not None, f"edge leaked into path: {node}"
 
 
 async def test_find_path_no_path_returns_empty(indexed_fixture):
