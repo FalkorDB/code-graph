@@ -19,6 +19,7 @@ from multilspy.multilspy_config import MultilspyConfig
 from multilspy.multilspy_logger import MultilspyLogger
 
 import logging
+import sys
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
 
@@ -164,7 +165,29 @@ class SourceAnalyzer():
         else:
             lsps[".java"] = NullLanguageServer()
         if any(path.rglob('*.py')):
-            config = MultilspyConfig.from_dict({"code_language": "python", "environment_path": f"{path}/venv"})
+            py_venv = path / "venv"
+            py_dotvenv = path / ".venv"
+            if py_venv.is_dir() and (py_venv / "bin" / "python").exists():
+                env_path = str(py_venv)
+            elif py_dotvenv.is_dir() and (py_dotvenv / "bin" / "python").exists():
+                env_path = str(py_dotvenv)
+            else:
+                # Fall back to the host's Python environment so jedi has a
+                # valid interpreter to introspect; otherwise every
+                # request_definition() raises InvalidPythonEnvironment and
+                # we'd silently produce a graph with zero CALLS edges.
+                # sys.prefix is the active environment root and is more
+                # reliable than deriving it from sys.executable (which breaks
+                # when the interpreter is a wrapper/shim).
+                env_path = sys.prefix
+                logging.info(
+                    "No venv at %s; falling back to host env %s for jedi LSP",
+                    path, env_path,
+                )
+            config = MultilspyConfig.from_dict({
+                "code_language": "python",
+                "environment_path": env_path,
+            })
             lsps[".py"] = SyncLanguageServer.create(config, logger, str(path))
         else:
             lsps[".py"] = NullLanguageServer()
@@ -189,6 +212,14 @@ class SourceAnalyzer():
             resolvable: list[Path] = []
             for file_path in files:
                 if file_path not in self.files:
+                    # first_pass skipped this file (e.g. parse error, empty,
+                    # untracked, or ignored after entering the candidate list).
+                    # Skip in second_pass too instead of crashing the whole
+                    # index.
+                    logging.warning(
+                        "second_pass: %s not in files map (first_pass skipped it); skipping",
+                        file_path,
+                    )
                     continue
                 if isinstance(lsps.get(file_path.suffix), NullLanguageServer):
                     continue
@@ -287,21 +318,26 @@ class SourceAnalyzer():
 
         logging.info("Done analyzing path")
 
-    def analyze_local_repository(self, path: str, ignore: Optional[list[str]] = None) -> Graph:
+    def analyze_local_repository(self, path: str, ignore: Optional[list[str]] = None, branch: Optional[str] = None) -> Graph:
         """
         Analyze a local Git repository.
 
         Args:
             path (str): Path to a local git repository
             ignore (List(str)): List of paths to skip
+            branch (Optional[str]): Branch name. Auto-detected from the
+                checkout when ``None``.
         """
         if ignore is None:
             ignore = []
 
         from pygit2.repository import Repository
+        from ..project import detect_branch
 
         proj_name = Path(path).name
-        graph = Graph(proj_name)
+        if branch is None:
+            branch = detect_branch(Path(path))
+        graph = Graph(proj_name, branch=branch)
         self.analyze_local_folder(path, graph, ignore)
 
         # Save processed commit hash to the DB

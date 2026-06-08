@@ -88,7 +88,9 @@ class TestCLIIndex(unittest.TestCase):
         result = runner.invoke(app, ["list"])
         self.assertEqual(result.exit_code, 0)
         data = _parse_json(result.output)
-        self.assertIn(self.REPO_NAME, data["repos"])
+        # T17: repos are now {project, branch, graph} dicts.
+        projects = [r["project"] for r in data["repos"]]
+        self.assertIn(self.REPO_NAME, projects)
 
 
 class TestCLIHelp(unittest.TestCase):
