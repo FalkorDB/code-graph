@@ -54,3 +54,15 @@ search_prefixes:
   Base:
     # Case-insensitive prefix match against Searchable.name.
     must_include: ["BaseRepo"]
+
+# Transitive impact (used by T6 — impact_analysis).
+# Names listed under ``upstream_includes_any_of`` MUST appear when running
+# impact_analysis(<symbol>, direction="IN", depth >= 3). Names under
+# ``downstream_includes_any_of`` MUST appear with direction="OUT".
+impact:
+  db:
+    # Anything that transitively calls db(): repo() variants and service().
+    upstream_includes_any_of: ["repo", "service", "entrypoint"]
+  entrypoint:
+    # Anything entrypoint() transitively reaches.
+    downstream_includes_any_of: ["service", "repo", "db"]

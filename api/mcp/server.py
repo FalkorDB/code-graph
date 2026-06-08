@@ -13,6 +13,11 @@ from mcp.server.fastmcp import FastMCP
 
 app: FastMCP = FastMCP("code-graph")
 
+# Register tools on import so both direct ``import api.mcp.server`` and the
+# stdio entry point see the same tool list. Imported below ``app`` because
+# the tool modules need a reference to it.
+from . import tools  # noqa: F401, E402
+
 
 def main() -> None:
     """Run the MCP server over stdio.
