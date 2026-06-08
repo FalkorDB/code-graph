@@ -28,21 +28,23 @@ def anyio_backend() -> str:
 async def test_search_code_finds_entrypoint(indexed_fixture, expected_contract):
     from api.mcp.tools.structural import search_code
 
+    # search_code is file-oriented: a free-text query naming a symbol must
+    # surface the file that defines it.
+    symbol = expected_contract["search_prefixes"]["ent"]["must_include"][0]
     results = await search_code(
-        prefix="ent",
+        query=symbol,
         project=indexed_fixture.project,
         branch=indexed_fixture.branch,
     )
-    names = {r["name"] for r in results}
-    for required in expected_contract["search_prefixes"]["ent"]["must_include"]:
-        assert required in names, f"expected {required} in {names}"
+    files = [r["file"] for r in results if r.get("file")]
+    assert any(f.endswith(f"{symbol}.py") for f in files), files
 
 
 async def test_search_code_honors_limit(indexed_fixture):
     from api.mcp.tools.structural import search_code
 
     results = await search_code(
-        prefix="r",  # broad prefix
+        query="entrypoint service repo db",  # broad: matches several files
         project=indexed_fixture.project,
         branch=indexed_fixture.branch,
         limit=1,
@@ -54,7 +56,7 @@ async def test_search_code_empty_for_nonsense(indexed_fixture):
     from api.mcp.tools.structural import search_code
 
     results = await search_code(
-        prefix="zzz_no_such_symbol_zzz",
+        query="zzz_no_such_symbol_zzz",
         project=indexed_fixture.project,
         branch=indexed_fixture.branch,
     )
@@ -65,7 +67,7 @@ async def test_search_code_result_serialisable(indexed_fixture):
     from api.mcp.tools.structural import search_code
 
     results = await search_code(
-        prefix="serv",
+        query="service",
         project=indexed_fixture.project,
         branch=indexed_fixture.branch,
     )
@@ -101,7 +103,7 @@ async def test_search_code_returns_relative_paths(indexed_fixture):
     from api.mcp.tools.structural import search_code
 
     results = await search_code(
-        prefix="ent",
+        query="entrypoint",
         project=indexed_fixture.project,
         branch=indexed_fixture.branch,
     )
@@ -112,20 +114,20 @@ async def test_search_code_returns_relative_paths(indexed_fixture):
 
 
 async def test_search_code_ranks_exact_match_within_limit(indexed_fixture, expected_contract):
-    """An exact name==prefix match must survive the ``[:limit]`` cut and rank
-    ahead of the looser prefix matches."""
+    """A query naming a symbol must surface that symbol's file as the top hit,
+    with the matching symbol as the file's representative."""
     from api.mcp.tools.structural import search_code
 
-    # pick a known symbol from the contract and query its exact name
-    exact = next(iter(expected_contract["search_prefixes"]["ent"]["must_include"]))
+    symbol = next(iter(expected_contract["search_prefixes"]["ent"]["must_include"]))
     results = await search_code(
-        prefix=exact,
+        query=symbol,
         project=indexed_fixture.project,
         branch=indexed_fixture.branch,
         limit=1,
     )
-    assert results, f"no results for exact prefix {exact!r}"
-    assert results[0]["name"] == exact
+    assert results, f"no results for query {symbol!r}"
+    assert results[0]["file"].endswith(f"{symbol}.py")
+    assert results[0]["name"] == symbol
 
 
 # ---------------------------------------------------------------------------
@@ -134,18 +136,28 @@ async def test_search_code_ranks_exact_match_within_limit(indexed_fixture, expec
 
 
 async def _find_id(indexed_fixture, name: str) -> int:
-    """Helper: resolve a symbol name to its int node id via search_code."""
-    from api.mcp.tools.structural import search_code
+    """Resolve a symbol name to its int node id directly from the graph.
 
-    rows = await search_code(
-        prefix=name,
-        project=indexed_fixture.project,
-        branch=indexed_fixture.branch,
-    )
-    for r in rows:
-        if r["name"] == name:
-            return r["id"]
-    raise AssertionError(f"symbol {name!r} not found via search_code")
+    ``search_code`` is file-oriented and no longer returns per-symbol ids, so
+    the neighbor/path/impact tests resolve the id straight from FalkorDB. The
+    names used here (entrypoint/service/db) are unique Functions in the fixture,
+    so a uniqueness assertion guards against silently picking the wrong node.
+    """
+    from api.mcp.tools.structural import _project_arg
+
+    g = _project_arg(indexed_fixture.project, indexed_fixture.branch)
+    try:
+        res = await g._query(
+            "MATCH (n) WHERE (n:Function OR n:Class) AND n.name = $name "
+            "RETURN ID(n)",
+            {"name": name},
+        )
+    finally:
+        await g.close()
+    rows = res.result_set
+    assert rows, f"symbol {name!r} not found in graph"
+    assert len(rows) == 1, f"ambiguous symbol {name!r}: {len(rows)} matches"
+    return rows[0][0]
 
 
 async def test_get_callees_of_entrypoint(indexed_fixture, expected_contract):

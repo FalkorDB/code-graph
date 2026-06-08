@@ -100,6 +100,22 @@ def _minmax(d: dict[str, float]) -> dict[str, float]:
     return {k: (v - lo) / (hi - lo) for k, v in d.items()}
 
 
+def _rep_key(d: dict[str, Any]) -> tuple:
+    """Stable ordering key for a file's representative-symbol candidate.
+
+    Lower is better: exact query-id match first, then lowest ``src_start``,
+    then ``name`` then ``src_end`` as deterministic tie-breakers so the chosen
+    representative never depends on FalkorDB row order (even when ``src_start``
+    ties or is missing).
+    """
+    return (
+        0 if d.get("exact") else 1,
+        d["src_start"] if d.get("src_start") is not None else math.inf,
+        d.get("name") or "",
+        d["src_end"] if d.get("src_end") is not None else math.inf,
+    )
+
+
 def _bm25(query_tokens: set[str], files: list[str],
           tokmap: dict[str, list[str]]) -> dict[str, float]:
     docs = [tokmap.get(f, []) for f in files]
@@ -141,7 +157,11 @@ async def _hybrid_rank(g, query: str, project: Optional[str]) -> list[dict[str, 
     symbol per file, used for the snippet). Pure read; no graph mutation.
     """
     files, comps, rep, abs_of, file_id_of = await _hybrid_components(g, query, project)
-    return _hybrid_score(files, comps, rep, abs_of, file_id_of)
+    scored = _hybrid_score(files, comps, rep, abs_of, file_id_of)
+    # Relevance floor: a query with no lexical overlap (e.g. a nonsense token)
+    # would otherwise be ranked purely by query-independent centrality and
+    # return noise. Drop files with no lexical signal so such queries yield [].
+    return [r for r in scored if r.get("lex", 0.0) > 0]
 
 
 async def _hybrid_components(g, query: str, project: Optional[str]):
@@ -194,14 +214,19 @@ async def _hybrid_components(g, query: str, project: Optional[str]):
             continue
         if name:
             bodytok[rp].extend(_subtokens(name))
-            if name.lower() in qids:
+            is_exact = name.lower() in qids
+            if is_exact:
                 name_exact[rp] += 1.0
-                rep.setdefault(rp, {"name": name, "src_start": start, "src_end": end})
-        if rp not in rep and name:
+            # Representative symbol for the file's snippet: prefer one whose name
+            # exactly matches a query identifier, otherwise the lowest-``src_start``
+            # symbol. Fully deterministic regardless of result-set order via a
+            # stable sort key (exact first, then src_start, then name, then
+            # src_end) so ties / missing ``src_start`` never depend on row order.
+            cand = {"name": name, "src_start": start, "src_end": end,
+                    "exact": is_exact}
             cur = rep.get(rp)
-            if cur is None or (start is not None and (
-                cur.get("src_start") is None or start < cur["src_start"])):
-                rep[rp] = {"name": name, "src_start": start, "src_end": end}
+            if cur is None or _rep_key(cand) < _rep_key(cur):
+                rep[rp] = cand
         if doc and body_used[rp] < _HYBRID_BODY_TOKEN_CAP:
             toks = _tokenize(doc)[: _HYBRID_BODY_TOKEN_CAP - body_used[rp]]
             bodytok[rp].extend(toks)
@@ -221,9 +246,10 @@ async def _hybrid_components(g, query: str, project: Optional[str]):
         return [], {}, {}, {}, {}
 
     path_overlap = {f: float(len(qtok & set(pathtok.get(f, [])))) for f in files}
+    raw_bm25 = _bm25(qtok, files, bodytok)
     n_name = _minmax(name_exact if name_exact else {f: 0.0 for f in files})
     n_path = _minmax(path_overlap)
-    n_bm25 = _minmax(_bm25(qtok, files, bodytok))
+    n_bm25 = _minmax(raw_bm25)
     n_cent = _minmax({f: centrality.get(f, 0.0) for f in files})
 
     comps: dict[str, dict[str, float]] = {}
@@ -234,6 +260,13 @@ async def _hybrid_components(g, query: str, project: Optional[str]):
             "bm25": n_bm25.get(f, 0.0),
             "cent": n_cent.get(f, 0.0),
             "pen": _HYBRID_W_PEN if _PENALTY_RE.search(f) else 0.0,
+            # Raw (un-normalized) query-dependent signal. A file with zero
+            # lexical overlap (name/path/body) is not relevant to the query —
+            # only query-independent centrality could rank it — so search_code
+            # drops it rather than returning noise for an unmatched query.
+            "lex": (name_exact.get(f, 0.0)
+                    + path_overlap.get(f, 0.0)
+                    + raw_bm25.get(f, 0.0)),
         }
 
     return files, comps, rep, abs_of, file_id_of
@@ -271,6 +304,7 @@ def _hybrid_score(
             "name": r.get("name"),
             "src_start": r.get("src_start"),
             "src_end": r.get("src_end"),
+            "lex": c.get("lex", 0.0),
         })
     scored.sort(key=lambda d: -d["score"])
     return scored
@@ -575,9 +609,10 @@ def _node_summary(
     ``encode_node`` returns ``{id, labels, properties: {...}}`` because Node
     properties live on a nested attribute. Agents want a flat record. We keep
     the single meaningful ``label`` (File, Class, Function — not the fulltext
-    marker ``Searchable``) only for ``search_code``, where File-vs-Function
-    disambiguation matters; neighbor/path results omit it via ``with_label``
-    since the relation already implies the type.
+    marker ``Searchable``) for ``search_code`` (File-vs-Function disambiguation)
+    and for ``find_path`` (a path is bare nodes with no per-hop relation, so the
+    label is the only type signal). Single-hop neighbor results omit it via
+    ``with_label`` since the relation already implies the node type.
 
     When ``rel_to`` is given (the project/worktree identifier), ``file`` is
     relativized to drop the absolute worktree prefix.
@@ -893,7 +928,7 @@ async def find_path(
     paths: list[dict[str, Any]] = []
     for entry in raw:
         node_seq = [
-            _node_summary(x, rel_to=project, with_label=False)
+            _node_summary(x, rel_to=project, with_label=True)
             for x in entry
             # Discriminate on ``labels``: ``encode_node`` emits a top-level
             # ``labels`` key, while ``encode_edge`` does not (edges carry
@@ -1036,6 +1071,7 @@ async def get_file_neighbors(
         if abs_path is None:
             return {
                 "file": _relativize(str(file), project),
+                "file_id": None,
                 "total_neighbors": 0,
                 "truncated": False,
                 "neighbors": [],
@@ -1051,6 +1087,7 @@ async def get_file_neighbors(
         if not ids:
             return {
                 "file": _relativize(abs_path, project),
+                "file_id": fid,
                 "total_neighbors": 0,
                 "truncated": False,
                 "neighbors": [],

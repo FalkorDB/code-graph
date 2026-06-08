@@ -69,17 +69,25 @@ async def test_impact_analysis_registered_via_app():
 
 
 async def _find_id(indexed_fixture, name: str) -> int:
-    from api.mcp.tools.structural import search_code
+    """Resolve a symbol name to its int node id directly from the graph.
 
-    rows = await search_code(
-        prefix=name,
-        project=indexed_fixture.project,
-        branch=indexed_fixture.branch,
-    )
-    for r in rows:
-        if r["name"] == name:
-            return r["id"]
-    raise AssertionError(f"symbol {name!r} not found")
+    ``search_code`` is file-oriented and no longer returns per-symbol ids.
+    """
+    from api.mcp.tools.structural import _project_arg
+
+    g = _project_arg(indexed_fixture.project, indexed_fixture.branch)
+    try:
+        res = await g._query(
+            "MATCH (n) WHERE (n:Function OR n:Class) AND n.name = $name "
+            "RETURN ID(n)",
+            {"name": name},
+        )
+    finally:
+        await g.close()
+    rows = res.result_set
+    assert rows, f"symbol {name!r} not found in graph"
+    assert len(rows) == 1, f"ambiguous symbol {name!r}: {len(rows)} matches"
+    return rows[0][0]
 
 
 async def test_impact_upstream_of_db(indexed_fixture, expected_contract):
