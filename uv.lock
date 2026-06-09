@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12, <3.14"
 
 [[package]]
@@ -372,6 +372,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+light = [
+    { name = "falkordblite" },
+]
 test = [
     { name = "anyio" },
     { name = "httpx" },
@@ -391,6 +394,7 @@ requires-dist = [
     { name = "anyio", marker = "extra == 'test'", specifier = ">=4.0,<5.0" },
     { name = "falkordb", specifier = ">=1.1.3,<2.0.0" },
     { name = "falkordb-multilspy", specifier = ">=0.1.0,<1.0.0" },
+    { name = "falkordblite", marker = "extra == 'light'", specifier = ">=0.10.0,<1.0.0" },
     { name = "fastapi", specifier = ">=0.115.0,<1.0.0" },
     { name = "graphrag-sdk", specifier = ">=0.8.1,<0.9.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.28.0,<1.0.0" },
@@ -411,7 +415,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0,<1.0.0" },
     { name = "validators", specifier = ">=0.35.0,<0.36.0" },
 ]
-provides-extras = ["test"]
+provides-extras = ["light", "test"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -433,6 +437,26 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f0/4e/50ac939db4243dff2cf3ddd94cd75233b30f06470141cca09ed0d70a2f6c/falkordb_multilspy-0.1.0.tar.gz", hash = "sha256:779117d1b801322e30dc593d03da5eeda1d848209fc47d33534d3c9422a6f255", size = 115180, upload-time = "2026-03-23T14:29:34.639Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/84/15/97032c229a031b29795c2d0a74646bc24b1bdbb71930c44d1d37ef9d98c6/falkordb_multilspy-0.1.0-py3-none-any.whl", hash = "sha256:3429f11a83c4fbf06c2b8f0078b8a257e0870da9d50ebd964c6de2ad33164f57", size = 129555, upload-time = "2026-03-23T14:29:32.936Z" },
+]
+
+[[package]]
+name = "falkordblite"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "falkordb" },
+    { name = "psutil" },
+    { name = "redis" },
+    { name = "setuptools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/70/03/afbb6e0f03c302aa9b64a38e1a2c43664f86921f0dcbf03ec9e31da06ac6/falkordblite-0.10.0.tar.gz", hash = "sha256:65a72abafd30711f699c15571df6959edb8901605053ce940ccdd837832e709b", size = 23675620, upload-time = "2026-05-02T13:12:29.429Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0e/43/39d8cf13964784447676d24f0cefa3bdc99c10e647c71e6a4172d302dcac/falkordblite-0.10.0-cp312-cp312-macosx_10_13_x86_64.macosx_15_0_arm64.whl", hash = "sha256:741fda166170513db1815d5369870e47d44da2e9b85320fddbc50c88a7338d51", size = 17752268, upload-time = "2026-05-02T13:11:57.906Z" },
+    { url = "https://files.pythonhosted.org/packages/61/17/3ec180ca7c2e79a0c3e9912ac04b446e733745cd944845fe4306be016efd/falkordblite-0.10.0-cp312-cp312-manylinux_2_39_aarch64.whl", hash = "sha256:bfe1f47ae03decdc0ad111ec82606bac82ee6cdd7fea04cbcff1283608cc2d2e", size = 34579293, upload-time = "2026-05-02T13:12:01.601Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/5e/d343c5249bd24c6614e8c1b718a73bb9f68beb2cf90464bc51c9436d25af/falkordblite-0.10.0-cp312-cp312-manylinux_2_39_x86_64.whl", hash = "sha256:ee9659bd0c7cdf0c2532977f2ec8bf1d1ab01cb3b6776e50c67046481f3162c7", size = 36154066, upload-time = "2026-05-02T13:12:05.435Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/1e/18612dc9e75e5c02a281a49d97b56b5504eb5907f971c68e8a5801033f36/falkordblite-0.10.0-cp313-cp313-macosx_10_13_x86_64.macosx_15_0_arm64.whl", hash = "sha256:54a051cbc0bb25b30e65f46ddb1b63149a80bb7004c97615d39c491d492a6d9b", size = 17752240, upload-time = "2026-05-02T13:12:08.837Z" },
+    { url = "https://files.pythonhosted.org/packages/29/b3/63f9b1168c4d1abbee4418a0a165496f57cd4b93a261cb481272ce353890/falkordblite-0.10.0-cp313-cp313-manylinux_2_39_aarch64.whl", hash = "sha256:ce1bd408ebaafc3dbdf39e860888382aae69de2b3c949dadfd132779130b99b2", size = 34579294, upload-time = "2026-05-02T13:12:12.069Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/cf/d792cf46292f7756f96727916e77ebf9821371e22bff65ed8e90db6b80b9/falkordblite-0.10.0-cp313-cp313-manylinux_2_39_x86_64.whl", hash = "sha256:7d52a3665f6de30cbffc5809a1c6d722492c95bf8dae4a7ee108ca58da939b25", size = 36154069, upload-time = "2026-05-02T13:12:15.742Z" },
 ]
 
 [[package]]
@@ -1613,6 +1637,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/28/3a/950367aee7c69027f4f422059227b290ed780366b6aecee5de5039d50fa8/ruff-0.15.5-py3-none-win32.whl", hash = "sha256:732e5ee1f98ba5b3679029989a06ca39a950cced52143a0ea82a2102cb592b74", size = 10551676, upload-time = "2026-03-05T20:06:13.705Z" },
     { url = "https://files.pythonhosted.org/packages/b8/00/bf077a505b4e649bdd3c47ff8ec967735ce2544c8e4a43aba42ee9bf935d/ruff-0.15.5-py3-none-win_amd64.whl", hash = "sha256:821d41c5fa9e19117616c35eaa3f4b75046ec76c65e7ae20a333e9a8696bc7fe", size = 11678972, upload-time = "2026-03-05T20:06:45.379Z" },
     { url = "https://files.pythonhosted.org/packages/fe/4e/cd76eca6db6115604b7626668e891c9dd03330384082e33662fb0f113614/ruff-0.15.5-py3-none-win_arm64.whl", hash = "sha256:b498d1c60d2fe5c10c45ec3f698901065772730b411f164ae270bb6bfcc4740b", size = 10965572, upload-time = "2026-03-05T20:06:16.984Z" },
+]
+
+[[package]]
+name = "setuptools"
+version = "82.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/db/cfac1baf10650ab4d1c111714410d2fbb77ac5a616db26775db562c8fab2/setuptools-82.0.1.tar.gz", hash = "sha256:7d872682c5d01cfde07da7bccc7b65469d3dca203318515ada1de5eda35efbf9", size = 1152316, upload-time = "2026-03-09T12:47:17.221Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl", hash = "sha256:a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", size = 1006223, upload-time = "2026-03-09T12:47:15.026Z" },
 ]
 
 [[package]]
