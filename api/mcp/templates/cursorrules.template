@@ -1,0 +1,32 @@
+# Cursor rules — code-graph MCP
+
+This project is indexed into a FalkorDB code knowledge graph via the
+`code-graph` MCP server. Use it instead of grepping when you need to
+understand how symbols connect.
+
+## Tool selection
+
+- Symbol lookup by name: use `code-graph.search_code` (hybrid prefix +
+  ranked match) or `code-graph.find_symbol` for an exact name — both give
+  you the numeric id every other tool needs.
+- "Who calls X?": `code-graph.get_neighbors` with `direction="IN"`.
+- "What does X call?": `code-graph.get_neighbors` with `direction="OUT"`.
+- Other edges (IMPORTS / DEFINES): `code-graph.get_neighbors` with the
+  matching `relation`.
+- What a file defines/touches: `code-graph.get_file_neighbors`.
+- Refactoring impact ("what breaks if I change X"):
+  `code-graph.impact_analysis` with `direction="IN"`.
+- Call chain between two specific symbols: `code-graph.find_path`.
+
+## Rules
+
+- Always `search_code`/`find_symbol` first to resolve names to ids.
+- Use `get_neighbors(direction=...)` for "who/what calls" questions.
+- Run `impact_analysis(direction="IN", depth=3)` before any non-trivial
+  refactor.
+- Pass `branch` when on a feature branch.
+
+## First run
+
+If the repo isn't indexed yet, call `index_repo(path=".")` once. After
+that, navigate via the structural tools.
