@@ -22,7 +22,8 @@ import logging
 import math
 import os
 import re
-from collections import Counter, defaultdict
+from collections import Counter, OrderedDict, defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -165,26 +166,192 @@ async def _hybrid_rank(g, query: str, project: Optional[str]) -> list[dict[str, 
 
 
 async def _hybrid_components(g, query: str, project: Optional[str]):
-    """Fetch graph data and build per-file, weight-independent components.
+    """Build the per-file, weight-independent components for ``query``.
 
     Returns ``(files, comps, rep, abs_of, file_id_of)`` where ``comps[f]`` holds
     the min-max-normalized ``name``/``path``/``bm25``/``cent`` scores plus the
     ``pen`` penalty, and ``file_id_of[f]`` is the File node id (handle the agent
     feeds to ``get_file_neighbors``). Separated from weighting so weight sweeps
     reuse the exact same normalized inputs as the live ranker.
+
+    The expensive, query-INDEPENDENT half (three full-graph reads + tokenization)
+    is built once by :func:`_build_corpus` and cached per ``(graph, project)``;
+    only the cheap per-query overlay (:func:`_overlay`) runs on every call. See
+    the corpus-cache block below for the latency rationale and invalidation.
+    """
+    corpus = await _get_corpus(g, project)
+    return _overlay(corpus, query)
+
+
+# ---------------------------------------------------------------------------
+# Corpus cache (search_code hot path)
+# ---------------------------------------------------------------------------
+# ``search_code`` is the agent's most-called tool. Its ranker used to run three
+# full-graph Cypher reads (every File, every Function/Class incl. ``n.doc``,
+# every cross-file edge) and rebuild the BM25 corpus in Python on EVERY call.
+# Measured latency scales ~linearly with graph size (77ms @2.3K nodes, 320ms
+# @12K, ~1s extrapolated to a 41K-symbol repo), so on large repos that read +
+# rebuild dominated harness wall-time (PR #701 review).
+#
+# Everything :func:`_build_corpus` produces is query-INDEPENDENT, so we cache it
+# per ``(graph_name, project)`` and let :func:`_overlay` apply the cheap
+# per-query scoring. Invalidation is two-layered:
+#   * Explicit: ``reset_corpus_cache(graph_name)`` from ``index_repo`` after a
+#     (re)index -- covers the in-process writer.
+#   * Implicit: a ``(node_count, edge_count, commit)`` signature probe on every
+#     hit (~1ms; FalkorDB ``count()`` is O(1) metadata, the commit marker is a
+#     single Redis HGET). Covers cross-process mutation -- notably the web API's
+#     ``/api/switch_commit``, which rewrites the Redis commit marker even when
+#     node/edge counts are preserved. A rebuild whose graph mutates mid-build,
+#     or that races an explicit reset, is detected (pre/post sig + generation
+#     check) and served WITHOUT being cached, so a torn snapshot never persists.
+
+
+@dataclass
+class _Corpus:
+    """Cached, query-independent search corpus for one ``(graph, project)``."""
+
+    files: list[str]
+    abs_of: dict[str, str]
+    file_id_of: dict[str, Any]
+    pathtok: dict[str, list[str]]
+    bodytok: dict[str, list[str]]
+    # name-bearing symbols per file: (name, name_lower, src_start, src_end).
+    sym_by_file: dict[str, list[tuple[str, str, Any, Any]]]
+    n_cent: dict[str, float]  # min-max centrality (query-independent)
+    sig: tuple = field(default_factory=tuple)
+
+
+_CORPUS_CACHE: "OrderedDict[tuple, _Corpus]" = OrderedDict()
+_CORPUS_LOCKS: dict[tuple, asyncio.Lock] = {}
+_CORPUS_GEN: dict[str, int] = defaultdict(int)
+_CORPUS_META_LOCK = asyncio.Lock()  # guards lazy per-key lock creation
+_REDIS_MARKER_CLIENT: Any = None  # lazily created, reused (connection pool)
+
+
+def _corpus_cache_max() -> int:
+    """Max number of corpora to retain (LRU). Each holds a full token corpus."""
+    try:
+        return max(1, int(os.getenv("CODE_GRAPH_SEARCH_CACHE_MAX", "8")))
+    except ValueError:
+        return 8
+
+
+def _commit_marker(project: Optional[str], branch: Optional[str]) -> Optional[str]:
+    """Best-effort, quiet read of the recorded commit for ``(project, branch)``.
+
+    Folded into the corpus signature so a cross-process ``switch_commit`` /
+    reindex (which rewrites the Redis commit marker) invalidates the cache even
+    when node/edge counts happen to be preserved. Any failure -> ``None`` (the
+    signature degrades to counts-only and never raises into ``search_code``).
+    Reads Redis directly rather than via ``get_repo_commit`` so a missing marker
+    (non-git folder) doesn't log a warning on every probe.
+    """
+    global _REDIS_MARKER_CLIENT
+    if not project:
+        return None
+    try:
+        from api.info import _repo_info_key, get_redis_connection
+
+        if _REDIS_MARKER_CLIENT is None:
+            _REDIS_MARKER_CLIENT = get_redis_connection()
+        return _REDIS_MARKER_CLIENT.hget(_repo_info_key(project, branch), "commit")
+    except Exception:
+        return None
+
+
+async def _graph_sig(g, project: Optional[str]) -> tuple:
+    """Cheap (~1ms) cache-validity signature for the graph behind ``g``.
+
+    On any probe failure returns a never-equal sentinel so the caller rebuilds
+    (degrading to the always-fresh status quo) rather than serving a stale hit.
+    """
+    try:
+        n = (await g._query("MATCH (n) RETURN count(n)")).result_set[0][0]
+        e = (await g._query("MATCH ()-[r]->() RETURN count(r)")).result_set[0][0]
+    except Exception:
+        return (None, None, object())
+    commit = _commit_marker(project, getattr(g, "branch", None))
+    return (int(n or 0), int(e or 0), commit)
+
+
+async def _corpus_lock(key: tuple) -> asyncio.Lock:
+    async with _CORPUS_META_LOCK:
+        lock = _CORPUS_LOCKS.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            _CORPUS_LOCKS[key] = lock
+        return lock
+
+
+def reset_corpus_cache(graph_name: Optional[str] = None) -> None:
+    """Invalidate cached search corpora.
+
+    Called by ``index_repo`` after a (re)index so the next ``search_code``
+    rebuilds. ``graph_name`` ``None`` clears everything; otherwise clears
+    entries for that graph identity. Bumps a per-graph generation counter so a
+    rebuild that started before the reset won't store its now-stale corpus.
+    """
+    if graph_name is None:
+        _CORPUS_CACHE.clear()
+        for gname in list(_CORPUS_GEN.keys()):
+            _CORPUS_GEN[gname] += 1
+        return
+    for key in [k for k in _CORPUS_CACHE if k[0] == graph_name]:
+        del _CORPUS_CACHE[key]
+    _CORPUS_GEN[graph_name] += 1
+
+
+async def _get_corpus(g, project: Optional[str]) -> _Corpus:
+    """Return a cached corpus for ``(g, project)`` or build (and maybe cache) one."""
+    key = (g.name, project)
+    sig = await _graph_sig(g, project)
+    ent = _CORPUS_CACHE.get(key)
+    if ent is not None and ent.sig == sig:
+        _CORPUS_CACHE.move_to_end(key)
+        return ent
+
+    lock = await _corpus_lock(key)
+    async with lock:
+        # Re-check: another coroutine may have rebuilt while we waited.
+        sig_before = await _graph_sig(g, project)
+        ent = _CORPUS_CACHE.get(key)
+        if ent is not None and ent.sig == sig_before:
+            _CORPUS_CACHE.move_to_end(key)
+            return ent
+
+        gen_before = _CORPUS_GEN[g.name]
+        corpus = await _build_corpus(g, project)
+        sig_after = await _graph_sig(g, project)
+        corpus.sig = sig_after
+
+        # Only cache a corpus that is internally consistent (the graph did not
+        # change across the reads) and was not invalidated by a reset mid-build.
+        stable = sig_after == sig_before and _CORPUS_GEN[g.name] == gen_before
+        if stable:
+            _CORPUS_CACHE[key] = corpus
+            _CORPUS_CACHE.move_to_end(key)
+            while len(_CORPUS_CACHE) > _corpus_cache_max():
+                _CORPUS_CACHE.popitem(last=False)
+        return corpus
+
+
+async def _build_corpus(g, project: Optional[str]) -> _Corpus:
+    """Run the three graph reads + tokenization (the query-independent half).
+
+    Mirrors the original ``_hybrid_components`` read/build logic exactly, minus
+    the query-dependent ``name_exact``/``rep`` selection (moved to
+    :func:`_overlay`). ``bodytok`` (path + symbol-name subtokens + capped doc
+    tokens) and ``centrality`` are query-independent and built identically here.
     """
     def rel(p: Optional[str]) -> str:
         return _relativize(p, project) if p else ""
-
-    qtok = set(_tokenize(query))
-    qids = _issue_identifiers(query)
 
     pathtok: dict[str, list[str]] = {}
     bodytok: dict[str, list[str]] = defaultdict(list)
     abs_of: dict[str, str] = {}
     file_id_of: dict[str, Any] = {}
-    name_exact: dict[str, float] = defaultdict(float)
-    rep: dict[str, dict[str, Any]] = {}
+    sym_by_file: dict[str, list[tuple[str, str, Any, Any]]] = defaultdict(list)
 
     files_res = await g._query("MATCH (f:File) RETURN f.path, ID(f)")
     for row in files_res.result_set:
@@ -214,19 +381,9 @@ async def _hybrid_components(g, query: str, project: Optional[str]):
             continue
         if name:
             bodytok[rp].extend(_subtokens(name))
-            is_exact = name.lower() in qids
-            if is_exact:
-                name_exact[rp] += 1.0
-            # Representative symbol for the file's snippet: prefer one whose name
-            # exactly matches a query identifier, otherwise the lowest-``src_start``
-            # symbol. Fully deterministic regardless of result-set order via a
-            # stable sort key (exact first, then src_start, then name, then
-            # src_end) so ties / missing ``src_start`` never depend on row order.
-            cand = {"name": name, "src_start": start, "src_end": end,
-                    "exact": is_exact}
-            cur = rep.get(rp)
-            if cur is None or _rep_key(cand) < _rep_key(cur):
-                rep[rp] = cand
+            # Record name-bearing symbols so _overlay can recompute name_exact
+            # and the representative symbol against the (query-dependent) ids.
+            sym_by_file[rp].append((name, name.lower(), start, end))
         if doc and body_used[rp] < _HYBRID_BODY_TOKEN_CAP:
             toks = _tokenize(doc)[: _HYBRID_BODY_TOKEN_CAP - body_used[rp]]
             bodytok[rp].extend(toks)
@@ -242,15 +399,63 @@ async def _hybrid_components(g, query: str, project: Optional[str]):
         centrality[rel(bpath)] += math.log1p(int(deg or 0))
 
     files = sorted(abs_of)
+    n_cent = (
+        _minmax({f: centrality.get(f, 0.0) for f in files}) if files else {}
+    )
+
+    return _Corpus(
+        files=files,
+        abs_of=dict(abs_of),
+        file_id_of=dict(file_id_of),
+        pathtok=dict(pathtok),
+        bodytok=dict(bodytok),
+        sym_by_file=dict(sym_by_file),
+        n_cent=n_cent,
+    )
+
+
+def _overlay(corpus: _Corpus, query: str):
+    """Apply the cheap, query-dependent scoring over a cached corpus.
+
+    Reproduces the original ``_hybrid_components`` output exactly: name-exact
+    counts and the representative symbol come from ``corpus.sym_by_file`` (the
+    ``_rep_key`` ordering is row-order independent), BM25 and path overlap run
+    over the cached corpus, and the ``n_name`` normalization preserves the
+    original ``name_exact if name_exact else zeros`` quirk.
+    """
+    files = corpus.files
     if not files:
         return [], {}, {}, {}, {}
 
-    path_overlap = {f: float(len(qtok & set(pathtok.get(f, [])))) for f in files}
-    raw_bm25 = _bm25(qtok, files, bodytok)
+    qtok = set(_tokenize(query))
+    qids = _issue_identifiers(query)
+
+    name_exact: dict[str, float] = defaultdict(float)
+    rep: dict[str, dict[str, Any]] = {}
+    for f, syms in corpus.sym_by_file.items():
+        best: Optional[dict[str, Any]] = None
+        cnt = 0.0
+        for (name, name_lower, start, end) in syms:
+            is_exact = name_lower in qids
+            if is_exact:
+                cnt += 1.0
+            cand = {"name": name, "src_start": start, "src_end": end,
+                    "exact": is_exact}
+            if best is None or _rep_key(cand) < _rep_key(best):
+                best = cand
+        if cnt:
+            name_exact[f] = cnt
+        if best is not None:
+            rep[f] = best
+
+    path_overlap = {
+        f: float(len(qtok & set(corpus.pathtok.get(f, [])))) for f in files
+    }
+    raw_bm25 = _bm25(qtok, files, corpus.bodytok)
     n_name = _minmax(name_exact if name_exact else {f: 0.0 for f in files})
     n_path = _minmax(path_overlap)
     n_bm25 = _minmax(raw_bm25)
-    n_cent = _minmax({f: centrality.get(f, 0.0) for f in files})
+    n_cent = corpus.n_cent
 
     comps: dict[str, dict[str, float]] = {}
     for f in files:
@@ -261,15 +466,15 @@ async def _hybrid_components(g, query: str, project: Optional[str]):
             "cent": n_cent.get(f, 0.0),
             "pen": _HYBRID_W_PEN if _PENALTY_RE.search(f) else 0.0,
             # Raw (un-normalized) query-dependent signal. A file with zero
-            # lexical overlap (name/path/body) is not relevant to the query —
-            # only query-independent centrality could rank it — so search_code
+            # lexical overlap (name/path/body) is not relevant to the query --
+            # only query-independent centrality could rank it -- so search_code
             # drops it rather than returning noise for an unmatched query.
             "lex": (name_exact.get(f, 0.0)
                     + path_overlap.get(f, 0.0)
                     + raw_bm25.get(f, 0.0)),
         }
 
-    return files, comps, rep, abs_of, file_id_of
+    return files, comps, rep, corpus.abs_of, corpus.file_id_of
 
 
 def _hybrid_score(
@@ -488,7 +693,12 @@ async def index_repo(
             "mode": "full",
         }
 
-    return await loop.run_in_executor(None, _do_index)
+    result = await loop.run_in_executor(None, _do_index)
+    # A (re)index invalidates any cached search corpus for this graph so the
+    # next search_code rebuilds against the new contents (covers the in-process
+    # writer; cross-process mutation is caught by the signature probe).
+    reset_corpus_cache(result.get("graph_name"))
+    return result
 
 
 # ---------------------------------------------------------------------------
