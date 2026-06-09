@@ -90,6 +90,8 @@ def synth_graph():
         try:
             g.delete()
         except Exception:
+            # Best-effort teardown: never fail a test because cleanup couldn't
+            # reach FalkorDB or the throwaway graph was already gone.
             pass
 
 
@@ -112,7 +114,7 @@ async def test_warm_call_reuses_corpus(synth_graph, monkeypatch):
     import api.mcp.tools.structural as S
     from api.graph import AsyncGraphQuery
 
-    name, project, branch = synth_graph
+    name, project, _branch = synth_graph
     calls = _spy_build(monkeypatch)
 
     g = AsyncGraphQuery(name)
@@ -131,7 +133,7 @@ async def test_different_queries_share_one_corpus(synth_graph, monkeypatch):
     import api.mcp.tools.structural as S
     from api.graph import AsyncGraphQuery
 
-    name, project, branch = synth_graph
+    name, project, _branch = synth_graph
     calls = _spy_build(monkeypatch)
 
     g = AsyncGraphQuery(name)
@@ -149,7 +151,7 @@ async def test_signature_change_triggers_rebuild(synth_graph, monkeypatch):
     import api.mcp.tools.structural as S
     from api.graph import AsyncGraphQuery
 
-    name, project, branch = synth_graph
+    name, project, _branch = synth_graph
     calls = _spy_build(monkeypatch)
 
     g = AsyncGraphQuery(name)
@@ -172,7 +174,7 @@ async def test_reset_corpus_cache_forces_rebuild(synth_graph, monkeypatch):
     import api.mcp.tools.structural as S
     from api.graph import AsyncGraphQuery
 
-    name, project, branch = synth_graph
+    name, project, _branch = synth_graph
     calls = _spy_build(monkeypatch)
 
     g = AsyncGraphQuery(name)
@@ -192,7 +194,7 @@ async def test_reset_all_clears_every_graph(synth_graph, monkeypatch):
     import api.mcp.tools.structural as S
     from api.graph import AsyncGraphQuery
 
-    name, project, branch = synth_graph
+    name, project, _branch = synth_graph
     calls = _spy_build(monkeypatch)
 
     g = AsyncGraphQuery(name)
@@ -217,7 +219,7 @@ async def test_concurrent_first_calls_build_once(synth_graph, monkeypatch):
     import api.mcp.tools.structural as S
     from api.graph import AsyncGraphQuery
 
-    name, project, branch = synth_graph
+    name, project, _branch = synth_graph
     calls = _spy_build(monkeypatch)
 
     async def one():
@@ -238,7 +240,7 @@ async def test_mutation_during_build_is_not_cached(synth_graph, monkeypatch):
     import api.mcp.tools.structural as S
     from api.graph import AsyncGraphQuery
 
-    name, project, branch = synth_graph
+    name, project, _branch = synth_graph
 
     g_probe = AsyncGraphQuery(name)
     orig = S._build_corpus

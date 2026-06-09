@@ -752,11 +752,60 @@ _SNIPPET_LINE_CHARS = 200
 """Per-line char cap so a single minified line cannot blow up the payload."""
 
 
+def _is_within(path: str, root: str) -> bool:
+    """True when ``path`` is ``root`` or lives inside it (both absolute)."""
+    try:
+        return os.path.commonpath([path, root]) == root
+    except ValueError:
+        # Different drives / mixed absolute-relative -> not contained.
+        return False
+
+
+def _snippet_path_allowed(abs_path: str, project: Optional[str]) -> bool:
+    """Symlink-safe guard for snippet file reads.
+
+    Snippet paths come from indexed ``File.path`` values, i.e. ultimately from
+    repo content. A malicious repo could store (or symlink) a path resolving
+    outside the indexed worktree, turning a snippet read into an arbitrary
+    host-file read. We resolve the real path (following symlinks) and require it
+    to live inside an allowed root: ``ALLOWED_ANALYSIS_DIR`` when set, and/or the
+    indexed repo root derived from the first ``/<project>/`` marker in the
+    stored path. When neither root is derivable (no allow-list and no project
+    marker in the path) we preserve the legacy read rather than block a
+    legitimate snippet.
+    """
+    try:
+        real = os.path.realpath(abs_path)
+    except OSError:
+        return False
+
+    roots: list[str] = []
+    allowed_env = os.getenv("ALLOWED_ANALYSIS_DIR")
+    if allowed_env:
+        try:
+            roots.append(os.path.realpath(os.path.expanduser(allowed_env)))
+        except OSError:
+            pass
+    if project:
+        marker = f"/{project}/"
+        idx = abs_path.find(marker)
+        if idx != -1:
+            try:
+                roots.append(os.path.realpath(abs_path[: idx + len(marker)]))
+            except OSError:
+                pass
+
+    if not roots:
+        return True
+    return any(_is_within(real, root) for root in roots)
+
+
 def _read_snippet(
     abs_path: Optional[str],
     src_start: Any,
     src_end: Any,
     max_lines: int,
+    project: Optional[str] = None,
 ) -> Optional[str]:
     """Read up to ``max_lines`` leading source lines for an entity from disk.
 
@@ -766,8 +815,14 @@ def _read_snippet(
     info is missing or unreadable. Each line is capped at
     ``_SNIPPET_LINE_CHARS``. Carrying a snippet in the result lets a single
     tool call replace a follow-up ``view`` of a large file.
+
+    ``project`` (the indexed repo identifier) enables a symlink-safe allow-list
+    check via :func:`_snippet_path_allowed` so a snippet read can't escape the
+    indexed worktree.
     """
     if not abs_path or max_lines <= 0:
+        return None
+    if not _snippet_path_allowed(abs_path, project):
         return None
     try:
         start = int(src_start)
@@ -852,6 +907,7 @@ def _node_summary(
             props.get("src_start"),
             props.get("src_end"),
             snippet_lines,
+            project=rel_to,
         )
         if snip:
             summary["snippet"] = snip
@@ -1206,6 +1262,7 @@ async def search_code(
             r["src_start"] if r["src_start"] is not None else 1,
             r["src_end"] if r["src_end"] is not None else r["src_start"],
             SEARCH_SNIPPET_LINES,
+            project=project,
         )
         if snip:
             rec["snippet"] = snip
@@ -1366,7 +1423,9 @@ async def get_file_neighbors(
             }
             rep = rep_of.get(ap)
             if rep:
-                snip = _read_snippet(ap, rep[0], rep[1], NEIGHBOR_SNIPPET_LINES)
+                snip = _read_snippet(
+                    ap, rep[0], rep[1], NEIGHBOR_SNIPPET_LINES, project=project
+                )
                 if snip:
                     entry["snippet"] = snip
             neighbors.append(entry)
