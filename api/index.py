@@ -113,6 +113,25 @@ app = FastAPI()
 # API routes
 # ---------------------------------------------------------------------------
 
+@app.get('/api/_health')
+async def _health():
+    """Diagnostic endpoint: reports the running server's resolver + DB config.
+
+    Used by the bench harness to fail-fast when the API server was started
+    without ``CODE_GRAPH_PY_RESOLVER=tree_sitter`` — without that flag the
+    Python indexer falls back to jedi/multilspy, which on real-world repos
+    (sphinx, sympy, …) spawns a per-repo venv + ``pip install poetry`` and
+    can wedge for hours at 100% CPU. Cheap (no DB call); safe to ship.
+    """
+    return {
+        "status": "ok",
+        "py_resolver": os.environ.get("CODE_GRAPH_PY_RESOLVER", "jedi"),
+        "falkordb_host": os.environ.get("FALKORDB_HOST", "localhost"),
+        "falkordb_port": os.environ.get("FALKORDB_PORT", "6379"),
+        "public": os.environ.get("CODE_GRAPH_PUBLIC", "0"),
+    }
+
+
 @app.get('/api/graph_entities')
 async def graph_entities(repo: str = Query(None), branch: Optional[str] = Query(None), _=Depends(public_or_auth)):
     """Fetch sub-graph entities from a given repository."""

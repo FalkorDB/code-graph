@@ -1,0 +1,7 @@
+cache/
+*.jsonl
+report/results.md
+report/results.jsonl
+__pycache__/
+*.pyc
+.pytest_cache/

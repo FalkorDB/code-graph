@@ -58,3 +58,8 @@ htmlcov/
 pytest_cache/
 *.log
 repositories/
+
+# bench: SWE-bench harness output (regrade reports + per-instance logs)
+bench/cache/verify/
+logs/run_evaluation/
+code-graph-bench.*.json
