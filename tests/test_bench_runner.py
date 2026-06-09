@@ -7,7 +7,7 @@ These tests run **without** an LLM API key. They use the runner's
 - the trajectory is captured and persisted,
 - the metrics module extracts tokens + tool calls from the
   mini-swe-agent trajectory shape,
-- the per-config env wiring (PATH for lsp/code_graph, baseline
+- the per-config env wiring (PATH for lsp/code_graph_mcp, baseline
   PATH untouched) reaches the bash subprocess.
 
 We deliberately keep these tests off the network and off any LLM.
@@ -81,10 +81,12 @@ def test_config_env_lsp_prepends_cli_dir_and_sets_repo_root(tmp_path: Path) -> N
     assert env["LSP_LANGUAGE"] == "python"
 
 
-def test_config_env_code_graph_prepends_cli_dir_and_sets_url(tmp_path: Path) -> None:
-    env = mini_runner.config_env("code_graph", tmp_path)
-    assert env["PATH"].startswith(str(mini_runner.CLI_DIR))
-    assert "CODEGRAPH_URL" in env
+def test_config_env_code_graph_mcp_prepends_cli_dir_and_sets_project(tmp_path: Path) -> None:
+    env = mini_runner.config_env("code_graph_mcp", tmp_path)
+    assert str(mini_runner.CLI_DIR) in env["PATH"]
+    assert env["PROJECT_NAME"] == tmp_path.name
+    assert "FALKORDB_HOST" in env
+    assert "FALKORDB_PORT" in env
 
 
 # ---------------------------------------------------------------------------
@@ -122,16 +124,6 @@ def test_run_batch_writes_results_jsonl_and_trajectories(tmp_path: Path) -> None
 # ---------------------------------------------------------------------------
 
 
-def test_cg_cli_help_exits_zero() -> None:
-    out = subprocess.run(
-        ["uv", "run", "python", "-m", "bench.cli.cg", "--help"],
-        capture_output=True, text=True, cwd=mini_runner.REPO_ROOT, check=False,
-    )
-    assert out.returncode == 0
-    assert "graph-entities" in out.stdout
-    assert "find-paths" in out.stdout
-
-
 def test_lsp_cli_help_exits_zero() -> None:
     out = subprocess.run(
         ["uv", "run", "python", "-m", "bench.cli.lsp", "--help"],
@@ -140,11 +132,3 @@ def test_lsp_cli_help_exits_zero() -> None:
     assert out.returncode == 0
     assert "goto-definition" in out.stdout
     assert "document-symbols" in out.stdout
-
-
-def test_cg_cli_rejects_unknown_subcommand() -> None:
-    out = subprocess.run(
-        ["uv", "run", "python", "-m", "bench.cli.cg", "nope"],
-        capture_output=True, text=True, cwd=mini_runner.REPO_ROOT, check=False,
-    )
-    assert out.returncode != 0

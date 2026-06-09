@@ -50,7 +50,7 @@ TOOLS_DIR = BENCH_DIR / "tools"
 DEFAULT_CACHE_DIR = BENCH_DIR / "cache"
 DEFAULT_RESULTS = DEFAULT_CACHE_DIR / "results.jsonl"
 
-VALID_CONFIGS = ("baseline", "lsp", "code_graph", "code_graph_mcp")
+VALID_CONFIGS = ("baseline", "lsp", "code_graph_mcp")
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ message that contains a unified diff of your changes inside a fenced
 """
 
 
-# The lsp / code_graph configs use a sharper template that mandates an
+# The lsp / code_graph_mcp configs use a sharper template that mandates an
 # initial tool call. Smoke #2 showed Claude reads the system preamble's
 # "use cg/lsp first" guidance and then ignores it; embedding the
 # requirement in the per-instance task description is more obtrusive.
@@ -128,33 +128,6 @@ message that contains a unified diff of your changes inside a fenced
 ``` block, then exit. Do not commit; the harness reads the diff via
 `git diff`.
 """
-
-INSTANCE_TEMPLATE_CODE_GRAPH = """\
-You are working in the repository at {{cwd}}.
-The code-graph service has already indexed this repository under the
-name `$REPO_NAME` (use the env var literally).
-
-The task to solve:
-
-{{task}}
-
-**Required workflow.** Before reading or editing any file, your first
-bash command MUST be:
-
-  `cg find-symbol --repo "$REPO_NAME" --name <a symbol named in the task description>`
-
-then use `cg get-neighbors --repo "$REPO_NAME" --ids <id>` to expand
-relationships before doing any textual search. After every file edit,
-run `cg note-edit --repo "$REPO_NAME" --path <relpath>` so subsequent
-graph queries reflect your change. Reach for grep/sed/cat only for
-content reading after `cg` has located the right place.
-
-When you believe the task is complete, finish your turn with a final
-message that contains a unified diff of your changes inside a fenced
-``` block, then exit. Do not commit; the harness reads the diff via
-`git diff`.
-"""
-
 
 INSTANCE_TEMPLATE_CODE_GRAPH_MCP = """\
 You are working in the repository at {{cwd}}.
@@ -189,8 +162,6 @@ message that contains a unified diff of your changes inside a fenced
 def load_instance_template(config: str) -> str:
     if config == "lsp":
         return INSTANCE_TEMPLATE_LSP
-    if config == "code_graph":
-        return INSTANCE_TEMPLATE_CODE_GRAPH
     if config == "code_graph_mcp":
         return INSTANCE_TEMPLATE_CODE_GRAPH_MCP
     return INSTANCE_TEMPLATE
@@ -237,12 +208,6 @@ def config_env(config: str, repo_path: Path) -> dict[str, str]:
     if config == "lsp":
         env["LSP_REPO_ROOT"] = str(repo_path)
         env.setdefault("LSP_LANGUAGE", "python")
-    elif config == "code_graph":
-        # The runner is responsible for ensuring the service is up.
-        env.setdefault("CODEGRAPH_URL", "http://127.0.0.1:5000")
-        # The agent's preamble references $REPO_NAME — set it to the
-        # worktree dirname, which is what analyze_folder used as the id.
-        env["REPO_NAME"] = repo_path.name
     elif config == "code_graph_mcp":
         # MCP transport: agent calls `cg-mcp …` which spawns the
         # `cgraph-mcp` stdio server per call. FalkorDB coordinates
@@ -263,110 +228,13 @@ def config_env(config: str, repo_path: Path) -> dict[str, str]:
     return env
 
 
-def _ensure_indexed(repo_path: Path) -> float:
-    """Trigger /api/analyze_folder so `cg --repo <dirname>` returns data.
-
-    The code-graph backend uses `Path(folder).name` as the repo identifier;
-    each (instance, config) worktree has a unique directory name like
-    `pytest-dev__pytest-6202__code_graph`, which becomes the `--repo` value
-    the agent passes to `cg`. We skip indexing if the graph already exists
-    in FalkorDB (cheap GRAPH.LIST scan, matches the MCP-track behavior).
-
-    Returns wall-clock seconds spent indexing (0.0 if cache hit / skip).
-    """
-    import httpx
-    import redis
-    start = time.monotonic()
-
-    base = os.environ.get("CODEGRAPH_URL", "http://127.0.0.1:5000").rstrip("/")
-    repo_name = repo_path.name
-    token = os.environ.get("SECRET_TOKEN") or os.environ.get("CODEGRAPH_TOKEN")
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
-
-    # Sanity-check the server before we ask it to index anything. We've
-    # been bitten twice now by an API server launched without
-    # CODE_GRAPH_PY_RESOLVER=tree_sitter: the jedi/multilspy path tries
-    # to ``python -m venv venv && pip install poetry && poetry install``
-    # per repo, then runs jedi over the full transitive dep tree. On
-    # sphinx-8035 that wedged the server at 100% CPU for 3h+. Refuse
-    # to proceed instead of letting it happen again.
-    try:
-        with httpx.Client(timeout=5.0, headers=headers) as c:
-            meta = c.get(f"{base}/api/_health").json()
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(
-            f"could not reach API server at {base}/api/_health ({exc!r}). "
-            "Start it with bench/scripts/start-api.sh."
-        ) from exc
-    if meta.get("py_resolver") != "tree_sitter":
-        raise RuntimeError(
-            f"API server at {base} is using py_resolver={meta.get('py_resolver')!r}. "
-            "The bench requires the tree-sitter static resolver — restart the "
-            "server with: CODE_GRAPH_PY_RESOLVER=tree_sitter "
-            "(bench/scripts/start-api.sh sets this by default)."
-        )
-
-    # Cheap precheck via FalkorDB GRAPH.LIST. The HTTP /api/list_repos
-    # path returned a list of names historically; it now returns dicts
-    # ({project, branch, graph}), so the old `name in repositories`
-    # match silently failed and every run re-indexed. GRAPH.LIST avoids
-    # that schema churn.
-    host = os.environ.get("FALKORDB_HOST", "127.0.0.1")
-    port = int(os.environ.get("FALKORDB_PORT", "6379"))
-    expected_graph = repo_name  # the HTTP path uses bare folder name as graph key
-    try:
-        r = redis.Redis(host=host, port=port, decode_responses=True, socket_timeout=2)
-        graphs = r.execute_command("GRAPH.LIST") or []
-        # Match either bare name (legacy) or "code:<name>:<branch>" pattern.
-        if expected_graph in graphs or any(
-            g == repo_name or g.startswith(f"code:{repo_name}:") for g in graphs
-        ):
-            print(f"[index] {repo_name} already in FalkorDB; skip")
-            return 0.0
-    except Exception as exc:  # noqa: BLE001
-        print(f"[index] WARN GRAPH.LIST precheck failed ({exc!r}); attempting index anyway")
-
-    print(f"[index] analyzing {repo_path} ...")
-    default_ignore = [
-        ".git", "venv", ".venv", "node_modules", "__pycache__",
-        "rubi/rules",  # sympy: blocks indexing for ~hours otherwise
-        "build", "dist", ".tox", ".eggs",
-    ]
-    # Bounded timeout so a server-side hang surfaces instead of stalling
-    # the entire benchmark. 30 min is generous for any sane repo and
-    # well below the previous 7200s that masked failures for an hour.
-    try:
-        with httpx.Client(timeout=httpx.Timeout(connect=10.0, read=1800.0, write=30.0, pool=10.0),
-                          headers=headers) as c:
-            r = c.post(
-                f"{base}/api/analyze_folder",
-                json={"path": str(repo_path), "ignore": default_ignore},
-            )
-            if r.status_code != 200:
-                raise RuntimeError(
-                    f"analyze_folder returned {r.status_code}: {r.text[:300]}. "
-                    f"Check ALLOWED_ANALYSIS_DIR on the API server covers {repo_path}."
-                )
-        elapsed = time.monotonic() - start
-        print(f"[index] indexed {repo_name} in {elapsed:.1f}s")
-        return elapsed
-    except httpx.ReadTimeout as exc:
-        elapsed = time.monotonic() - start
-        raise RuntimeError(
-            f"analyze_folder read-timeout after {elapsed:.0f}s on {repo_name} — "
-            f"API server likely hung indexing. Check uvicorn logs."
-        ) from exc
-    except Exception as exc:
-        raise RuntimeError(f"failed to index {repo_name} at {repo_path}: {exc}") from exc
-
-
 def _ensure_indexed_mcp(repo_path: Path) -> float:
-    """MCP-track equivalent of _ensure_indexed.
+    """Index the repo for the MCP track.
 
     Drives the `index_repo` MCP tool in-process via the bench adapter
     (avoids spawning a second cgraph-mcp just to bootstrap; the agent
-    will spawn its own per call). Same skip-if-present optimization
-    as the HTTP path: cheap GRAPH.LIST scan against FalkorDB.
+    will spawn its own per call). Skip-if-present optimization via a
+    cheap GRAPH.LIST scan against FalkorDB.
 
     Returns wall-clock seconds spent indexing (0.0 if cache hit / skip).
     """
@@ -496,7 +364,6 @@ def verify_tool_available(config: str, env: dict[str, str], cwd: Path) -> tuple[
         return True, "baseline: no tool"
     cmd_map = {
         "lsp": ["lsp", "--help"],
-        "code_graph": ["cg", "--help"],
         "code_graph_mcp": ["cg-mcp", "--help"],
     }
     cmd = cmd_map.get(config)
@@ -520,7 +387,6 @@ def verify_tool_available(config: str, env: dict[str, str], cwd: Path) -> tuple[
 TOOL_KEYWORDS = {
     "baseline": (),
     "lsp": ("lsp",),
-    "code_graph": ("cg ",),
     "code_graph_mcp": ("cg-mcp",),
 }
 
@@ -850,7 +716,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = argparse.ArgumentParser(description="code-graph benchmark runner")
     p.add_argument("--config", choices=VALID_CONFIGS, action="append",
-                   help="one of baseline / lsp / code_graph / code_graph_mcp; repeatable. "
+                   help="one of baseline / lsp / code_graph_mcp; repeatable. "
                         "Default: all three.")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true",
@@ -929,13 +795,11 @@ def main(argv: list[str] | None = None) -> int:
                     shutil.rmtree(cfg_wt)
                 wt.rename(cfg_wt)
                 task = instance_to_task(inst, cfg_wt)
-                # For the code-graph track, the agent's `cg` commands query
-                # FalkorDB by repo name (= worktree dir name). The graph must
-                # exist before the task runs, otherwise every `cg find-symbol`
-                # call returns nothing and the agent abandons the tool.
-                if cfg == "code_graph":
-                    index_sec = _ensure_indexed(cfg_wt)
-                elif cfg == "code_graph_mcp":
+                # For the code-graph MCP track, the agent's `cg-mcp` commands
+                # query FalkorDB by repo name (= worktree dir name). The graph
+                # must exist before the task runs, otherwise every graph query
+                # returns nothing and the agent abandons the tool.
+                if cfg == "code_graph_mcp":
                     index_sec = _ensure_indexed_mcp(cfg_wt)
                 else:
                     index_sec = None

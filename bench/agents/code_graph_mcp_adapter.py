@@ -1,9 +1,7 @@
 """MCP-transport adapter to cgraph-mcp for the benchmark.
 
-Sibling of `code_graph_adapter.py` (HTTP). Where the HTTP adapter talks
-to the host FastAPI service over the network, this one spawns the
-`cgraph-mcp` stdio MCP server in-process via the official MCP Python
-SDK and dispatches tool calls over JSON-RPC.
+This adapter spawns the `cgraph-mcp` stdio MCP server in-process via the
+official MCP Python SDK and dispatches tool calls over JSON-RPC.
 
 This gives us a second, real-world benchmark track that exercises the
 exact same transport agents (Claude Code, Cursor, …) will use in
@@ -61,9 +59,8 @@ def _env_for_mcp() -> dict[str, str]:
     the spawned server falls back to the legacy jedi/multilspy path,
     which does ``python -m venv && pip install poetry && poetry install``
     per repo before analyzing the transitive dep tree — wedges for hours
-    on large SWE-bench repos (sphinx, sympy). The HTTP track gets this
-    via ``bench/scripts/start-api.sh``; we mirror it here so the MCP
-    track is symmetric regardless of how the caller shell is configured.
+    on large SWE-bench repos (sphinx, sympy). We set it here so the MCP
+    track works regardless of how the caller shell is configured.
     """
     env = dict(os.environ)
     env.setdefault("FALKORDB_HOST", os.environ.get("FALKORDB_HOST", "127.0.0.1"))

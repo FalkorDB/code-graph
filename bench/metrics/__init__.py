@@ -29,7 +29,7 @@ class TaskMetrics:
 
     benchmark: str           # "swe_bench_verified"
     task_id: str             # e.g. "django__django-12345"
-    config: str              # "baseline" | "lsp" | "code_graph"
+    config: str              # "baseline" | "lsp" | "code_graph_mcp"
     run_idx: int             # 0 for pass@1, 1+ for retries
 
     # token cost (LLM only — never combined with indexing)

@@ -4,7 +4,8 @@ Quantify code-graph's value to a coding agent vs:
 
 - `baseline` — no navigation tools (file read/write/grep/bash only).
 - `lsp` — multilspy-driven pyright tools.
-- `code-graph` — primitive graph operations against this repo's HTTP API.
+- `code_graph_mcp` — graph operations over the cgraph-mcp stdio transport
+  (the same MCP surface Claude Code / Cursor use in production).
 
 See `CONTEXT.md` at the repo root for the glossary and locked-in
 decisions. See the session plan at
@@ -29,9 +30,9 @@ bench/
   tools/
     baseline/   # SWE-agent default tools (no navigation)
     lsp/        # baseline + pyright tools via multilspy + shim
-    code_graph/ # baseline + primitive graph tools (graph_entities,
-                #   get_neighbors, find_paths, auto_complete,
-                #   find_symbol, note_edit)
+    code_graph_mcp/ # baseline + graph tools over the cgraph-mcp stdio
+                #   transport (search_code, find_symbol, get_neighbors,
+                #   get_file_neighbors, find_path, impact_analysis)
 ```
 
 ## Headline metric
