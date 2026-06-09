@@ -6,10 +6,12 @@
 # `cgraph-mcp` stdio server for each tool call — the exact transport
 # Claude Code / Cursor / Cline use in production.
 #
-# Tool names mirror the 8 MCP tools registered in api/mcp/tools/
-# (search_code, get_callers, get_callees, get_dependencies,
-# impact_analysis, find_path, index_repo, ask). The bash agent calls
+# Tool names mirror the MCP tools registered in api/mcp/tools/
+# (index_repo, search_code, find_symbol, get_neighbors,
+# get_file_neighbors, impact_analysis, find_path). The bash agent calls
 # them through the `cg-mcp <tool> ...` shim (see bench/cli/cg-mcp).
+# The unified `get_neighbors` (relation+direction) replaces the old
+# get_callers/get_callees/get_dependencies tools.
 #
 # IMPORTANT: `ask` (GraphRAG) is intentionally NOT in the tool list.
 # Including it would double-count tokens (nested LLM agent). Same Q2
@@ -20,10 +22,10 @@ extends: ../baseline/tools.yaml
 
 tools:
   - index_repo            # (path_or_url, branch?) -> indexing stats
-  - search_code           # (project, prefix) -> [symbol]
-  - get_callers           # (project, symbol_id) -> [caller]
-  - get_callees           # (project, symbol_id) -> [callee]
-  - get_dependencies      # (project, symbol_id) -> [dep]
+  - search_code           # (project, query) -> [file]
+  - find_symbol           # (project, name, file?) -> [symbol]
+  - get_neighbors         # (project, symbol_id, relation, direction) -> [neighbor]
+  - get_file_neighbors    # (project, file) -> {neighbors:[file]}
   - impact_analysis       # (project, symbol_id, direction, depth) -> [impacted]
   - find_path             # (project, source_id, dest_id) -> [path]
 

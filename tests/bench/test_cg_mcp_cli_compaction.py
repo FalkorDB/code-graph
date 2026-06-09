@@ -134,13 +134,14 @@ def test_cli_impact_analysis_respects_explicit_limit():
     assert len(out) == 10
 
 
-def test_cli_get_callers_strips_paths():
+def test_cli_get_neighbors_strips_paths():
     fake_response = [_entry(i) for i in range(5)]
-    with patch.object(cg_mcp.cgm, "get_callers", return_value=fake_response):
+    with patch.object(cg_mcp.cgm, "get_neighbors", return_value=fake_response):
         out = _run_cli([
-            "get_callers",
+            "get_neighbors",
             "--project", "sympy__sympy-12481__code_graph_mcp",
             "--symbol-id", "42",
+            "--direction", "IN",
         ])
     assert all("worktrees" not in e["file"] for e in out)
 

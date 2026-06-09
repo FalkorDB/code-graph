@@ -191,8 +191,8 @@ def test_cg_mcp_search_code_end_to_end(tmp_path):
             project,
             "--branch",
             branch,
-            "--prefix",
-            "a",  # broad prefix to match something in the fixture
+            "--query",
+            "a",  # broad query to match something in the fixture
             "--limit",
             "3",
         ],

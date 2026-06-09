@@ -7,9 +7,12 @@ SDK and dispatches tool calls over JSON-RPC.
 
 This gives us a second, real-world benchmark track that exercises the
 exact same transport agents (Claude Code, Cursor, …) will use in
-production. Tool names match the 8-tool MCP surface
-(`index_repo`, `search_code`, `get_callers`, `get_callees`,
-`get_dependencies`, `impact_analysis`, `find_path`, `ask`).
+production. Tool names match the MCP surface
+(`index_repo`, `search_code`, `find_symbol`, `get_neighbors`,
+`get_file_neighbors`, `impact_analysis`, `find_path`). The unified
+`get_neighbors` (relation+direction) replaces the old per-edge
+`get_callers`/`get_callees`/`get_dependencies` tools; `ask` (GraphRAG)
+is intentionally excluded from the benchmark surface.
 
 Each call spawns a fresh server, runs the call, and exits. That's
 ~0.5-1s overhead per call but keeps the model trivially safe to call
@@ -76,8 +79,8 @@ def _extract(result: Any) -> Any:
     chunks** (one per item) AND echoes the full list in
     ``structuredContent['result']``. Earlier versions of this helper
     returned only the *first* TextContent chunk, which meant every
-    list-returning tool (``search_code``, ``get_callers``,
-    ``get_callees``, ``get_dependencies``, ``impact_analysis``,
+    list-returning tool (``search_code``, ``find_symbol``,
+    ``get_neighbors``, ``get_file_neighbors``, ``impact_analysis``,
     ``find_path``) silently returned just the first element. On
     sympy-19040 the Opus agent searched "factor", got back one record
     instead of ten, gave up on the graph entirely and burned ~50 turns
@@ -149,30 +152,64 @@ def index_repo(path_or_url: str, branch: str | None = None, ignore: list[str] | 
     return call_tool("index_repo", args)
 
 
-def search_code(prefix: str, project: str, branch: str | None = None, limit: int = 10) -> Any:
-    args: dict[str, Any] = {"prefix": prefix, "project": project, "limit": limit}
+def search_code(query: str, project: str, branch: str | None = None, limit: int = 10) -> Any:
+    args: dict[str, Any] = {"query": query, "project": project, "limit": limit}
     if branch is not None:
         args["branch"] = branch
     return call_tool("search_code", args)
 
 
-def _neighbors(tool: str, symbol_id: int, project: str, branch: str | None, limit: int) -> Any:
-    args: dict[str, Any] = {"symbol_id": symbol_id, "project": project, "limit": limit}
+def find_symbol(
+    name: str,
+    project: str,
+    file: str | None = None,
+    branch: str | None = None,
+    limit: int = 20,
+) -> Any:
+    args: dict[str, Any] = {"name": name, "project": project, "limit": limit}
+    if file is not None:
+        args["file"] = file
     if branch is not None:
         args["branch"] = branch
-    return call_tool(tool, args)
+    return call_tool("find_symbol", args)
 
 
-def get_callers(symbol_id: int, project: str, branch: str | None = None, limit: int = 50) -> Any:
-    return _neighbors("get_callers", symbol_id, project, branch, limit)
+def get_neighbors(
+    symbol_id: int,
+    project: str,
+    relation: Any = "CALLS",
+    direction: str = "OUT",
+    branch: str | None = None,
+    limit: int = 50,
+) -> Any:
+    """Unified single-hop neighbor traversal (replaces get_callers/callees/deps).
+
+    ``direction="IN"`` + ``relation="CALLS"`` = callers; ``direction="OUT"`` +
+    ``relation="CALLS"`` = callees; ``direction="OUT"`` +
+    ``relation=["CALLS","IMPORTS","DEFINES"]`` = dependencies.
+    """
+    args: dict[str, Any] = {
+        "symbol_id": symbol_id,
+        "project": project,
+        "relation": relation,
+        "direction": direction,
+        "limit": limit,
+    }
+    if branch is not None:
+        args["branch"] = branch
+    return call_tool("get_neighbors", args)
 
 
-def get_callees(symbol_id: int, project: str, branch: str | None = None, limit: int = 50) -> Any:
-    return _neighbors("get_callees", symbol_id, project, branch, limit)
-
-
-def get_dependencies(symbol_id: int, project: str, branch: str | None = None, limit: int = 50) -> Any:
-    return _neighbors("get_dependencies", symbol_id, project, branch, limit)
+def get_file_neighbors(
+    file: str,
+    project: str,
+    branch: str | None = None,
+    limit: int = 50,
+) -> Any:
+    args: dict[str, Any] = {"file": file, "project": project, "limit": limit}
+    if branch is not None:
+        args["branch"] = branch
+    return call_tool("get_file_neighbors", args)
 
 
 def impact_analysis(
@@ -202,10 +239,3 @@ def find_path(source_id: int, dest_id: int, project: str, branch: str | None = N
     if branch is not None:
         args["branch"] = branch
     return call_tool("find_path", args)
-
-
-def ask(question: str, project: str, branch: str | None = None) -> Any:
-    args: dict[str, Any] = {"question": question, "project": project}
-    if branch is not None:
-        args["branch"] = branch
-    return call_tool("ask", args)

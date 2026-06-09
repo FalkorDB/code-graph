@@ -169,10 +169,13 @@ The task to solve:
 **Required workflow.** Before reading or editing any file, your first
 bash command MUST be:
 
-  `cg-mcp search_code --project "$PROJECT_NAME" --branch "$BRANCH" --prefix <a symbol named in the task description>`
+  `cg-mcp search_code --project "$PROJECT_NAME" --branch "$BRANCH" --query "<natural-language description of the buggy behavior>"`
 
-Then use `cg-mcp get_callers --project "$PROJECT_NAME" --branch "$BRANCH" --symbol-id <id>`
-to expand relationships before doing any textual search. Use
+Then resolve a symbol to its id with
+`cg-mcp find_symbol --project "$PROJECT_NAME" --branch "$BRANCH" --name <symbol>`
+and expand relationships with
+`cg-mcp get_neighbors --project "$PROJECT_NAME" --branch "$BRANCH" --symbol-id <id> --direction IN`
+(callers) before doing any textual search. Use
 `cg-mcp impact_analysis ... --symbol-id <id> --depth 3` before
 non-trivial edits.
 

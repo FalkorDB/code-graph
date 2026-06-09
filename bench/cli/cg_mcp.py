@@ -1,4 +1,4 @@
-"""`cg-mcp` — bash-callable CLI exposing code-graph's 8 MCP tools.
+"""`cg-mcp` — bash-callable CLI exposing code-graph's MCP tools.
 
 This is the MCP-transport sibling of `cg`. Where `cg` calls the host
 FastAPI service over HTTP, `cg-mcp` spawns the `cgraph-mcp` stdio
@@ -12,14 +12,20 @@ adapter.
 
 Subcommands mirror the MCP tool names:
 
-  cg-mcp index_repo       --path-or-url . [--branch B] [--ignore PAT ...]
-  cg-mcp search_code      --project P --prefix STR [--branch B] [--limit N]
-  cg-mcp get_callers      --project P --symbol-id ID [--branch B] [--limit N]
-  cg-mcp get_callees      --project P --symbol-id ID [--branch B] [--limit N]
-  cg-mcp get_dependencies --project P --symbol-id ID [--branch B] [--limit N]
-  cg-mcp impact_analysis  --project P --symbol-id ID [--direction IN|OUT] [--depth N]
-  cg-mcp find_path        --project P --source-id ID --dest-id ID [--branch B]
-  cg-mcp ask              --project P --question "..." [--branch B]
+  cg-mcp index_repo        --path-or-url . [--branch B] [--ignore PAT ...]
+  cg-mcp search_code       --project P --query STR [--branch B] [--limit N]
+  cg-mcp find_symbol       --project P --name STR [--file F] [--branch B] [--limit N]
+  cg-mcp get_neighbors     --project P --symbol-id ID [--relation CALLS ...]
+                           [--direction IN|OUT|BOTH] [--branch B] [--limit N]
+  cg-mcp get_file_neighbors --project P --file F [--branch B] [--limit N]
+  cg-mcp impact_analysis   --project P --symbol-id ID [--direction IN|OUT] [--depth N]
+  cg-mcp find_path         --project P --source-id ID --dest-id ID [--branch B]
+
+The unified `get_neighbors` (relation + direction) replaces the old
+`get_callers` / `get_callees` / `get_dependencies` subcommands:
+callers = `--direction IN --relation CALLS`, callees =
+`--direction OUT --relation CALLS`, dependencies =
+`--direction OUT --relation CALLS IMPORTS DEFINES`.
 
 Output: one JSON document per call on stdout. Errors print to stderr
 and exit non-zero.
@@ -124,11 +130,6 @@ def _add_project(p: argparse.ArgumentParser) -> None:
     p.add_argument("--branch", default=None)
 
 
-def _add_symbol(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--symbol-id", type=int, required=True, dest="symbol_id")
-    p.add_argument("--limit", type=int, default=50)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cg-mcp", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -140,13 +141,26 @@ def main(argv: list[str] | None = None) -> int:
 
     sc = sub.add_parser("search_code")
     _add_project(sc)
-    sc.add_argument("--prefix", required=True)
+    sc.add_argument("--query", required=True)
     sc.add_argument("--limit", type=int, default=10)
 
-    for name in ("get_callers", "get_callees", "get_dependencies"):
-        p = sub.add_parser(name)
-        _add_project(p)
-        _add_symbol(p)
+    fs = sub.add_parser("find_symbol")
+    _add_project(fs)
+    fs.add_argument("--name", required=True)
+    fs.add_argument("--file", default=None)
+    fs.add_argument("--limit", type=int, default=20)
+
+    gn = sub.add_parser("get_neighbors")
+    _add_project(gn)
+    gn.add_argument("--symbol-id", type=int, required=True, dest="symbol_id")
+    gn.add_argument("--relation", nargs="*", default=["CALLS"])
+    gn.add_argument("--direction", choices=["IN", "OUT", "BOTH"], default="OUT")
+    gn.add_argument("--limit", type=int, default=50)
+
+    gfn = sub.add_parser("get_file_neighbors")
+    _add_project(gfn)
+    gfn.add_argument("--file", required=True)
+    gfn.add_argument("--limit", type=int, default=50)
 
     ia = sub.add_parser("impact_analysis")
     _add_project(ia)
@@ -162,10 +176,6 @@ def main(argv: list[str] | None = None) -> int:
     fp.add_argument("--source-id", type=int, required=True, dest="source_id")
     fp.add_argument("--dest-id", type=int, required=True, dest="dest_id")
 
-    aq = sub.add_parser("ask")
-    _add_project(aq)
-    aq.add_argument("--question", required=True)
-
     args = parser.parse_args(argv)
     timeout = _timeout()
 
@@ -178,24 +188,36 @@ def main(argv: list[str] | None = None) -> int:
             _print(cgm.index_repo(args.path_or_url, branch=args.branch, ignore=args.ignore))
         elif args.cmd == "search_code":
             _print(_compact_list(
-                cgm.search_code(args.prefix, args.project, branch=args.branch, limit=args.limit),
+                cgm.search_code(args.query, args.project, branch=args.branch, limit=args.limit),
                 proj, args.limit,
             ))
-        elif args.cmd == "get_callers":
+        elif args.cmd == "find_symbol":
             _print(_compact_list(
-                cgm.get_callers(args.symbol_id, args.project, branch=args.branch, limit=args.limit),
+                cgm.find_symbol(
+                    args.name, args.project, file=args.file, branch=args.branch, limit=args.limit
+                ),
                 proj, args.limit,
             ))
-        elif args.cmd == "get_callees":
+        elif args.cmd == "get_neighbors":
             _print(_compact_list(
-                cgm.get_callees(args.symbol_id, args.project, branch=args.branch, limit=args.limit),
+                cgm.get_neighbors(
+                    args.symbol_id,
+                    args.project,
+                    relation=args.relation,
+                    direction=args.direction,
+                    branch=args.branch,
+                    limit=args.limit,
+                ),
                 proj, args.limit,
             ))
-        elif args.cmd == "get_dependencies":
-            _print(_compact_list(
-                cgm.get_dependencies(args.symbol_id, args.project, branch=args.branch, limit=args.limit),
-                proj, args.limit,
-            ))
+        elif args.cmd == "get_file_neighbors":
+            res = cgm.get_file_neighbors(
+                args.file, args.project, branch=args.branch, limit=args.limit
+            )
+            if isinstance(res, dict) and isinstance(res.get("neighbors"), list):
+                res = dict(res)
+                res["neighbors"] = _compact_list(res["neighbors"], proj, args.limit)
+            _print(_compact_entry(res, proj))
         elif args.cmd == "impact_analysis":
             # impact_analysis has no server-side `limit`; cap + compact in CLI.
             _print(_compact_list(
@@ -213,8 +235,6 @@ def main(argv: list[str] | None = None) -> int:
                 cgm.find_path(args.source_id, args.dest_id, args.project, branch=args.branch),
                 proj,
             ))
-        elif args.cmd == "ask":
-            _print(cgm.ask(args.question, args.project, branch=args.branch))
         else:  # pragma: no cover — argparse already enforces this
             parser.error(f"unknown subcommand: {args.cmd}")
     except Exception as e:  # noqa: BLE001 — surface everything to the agent
