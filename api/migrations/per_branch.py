@@ -20,11 +20,11 @@ multiple times — already-migrated graphs are skipped — and exposes a
 from __future__ import annotations
 
 import logging
+import os
 from typing import Iterable
 
 from falkordb import FalkorDB
 
-from ..db import create_falkordb
 from ..graph import (
     DEFAULT_BRANCH,
     compose_graph_name,
@@ -37,7 +37,12 @@ logger = logging.getLogger(__name__)
 
 
 def _connect() -> FalkorDB:
-    return create_falkordb()
+    return FalkorDB(
+        host=os.getenv("FALKORDB_HOST", "localhost"),
+        port=os.getenv("FALKORDB_PORT", 6379),
+        username=os.getenv("FALKORDB_USERNAME", None),
+        password=os.getenv("FALKORDB_PASSWORD", None),
+    )
 
 
 def _legacy_graphs(all_graphs: Iterable[str]) -> list[str]:

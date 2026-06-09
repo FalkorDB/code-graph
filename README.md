@@ -56,7 +56,7 @@ code-graph/
 - Python `>=3.12,<3.14`
 - Node.js 20+
 - [`uv`](https://docs.astral.sh/uv/)
-- A FalkorDB instance (local/cloud) or the optional FalkorDBLite backend
+- A FalkorDB instance (local or cloud)
 
 ### 1. Start FalkorDB
 
@@ -68,16 +68,6 @@ code-graph/
 docker run -p 6379:6379 -it --rm falkordb/falkordb
 ```
 
-**Option C:** Use embedded FalkorDBLite:
-
-```bash
-uv sync --extra light
-export CODE_GRAPH_DB_BACKEND=lite
-export FALKORDB_LITE_PATH=~/.cache/code-graph/falkordblite.rdb
-```
-
-FalkorDBLite runs a local embedded server over a private Unix socket by default. Set `FALKORDB_LITE_PORT` only when a host/port-only integration, such as GraphRAG chat, must connect to the embedded database.
-
 ### 2. Configure environment variables
 
 Copy the template and adjust it for your setup:
@@ -88,14 +78,10 @@ cp .env.template .env
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `CODE_GRAPH_DB_BACKEND` | Database backend: `falkordb` or `lite` | No | `falkordb` |
 | `FALKORDB_HOST` | FalkorDB hostname | No | `localhost` |
 | `FALKORDB_PORT` | FalkorDB port | No | `6379` |
 | `FALKORDB_USERNAME` | Optional FalkorDB username | No | empty |
 | `FALKORDB_PASSWORD` | Optional FalkorDB password | No | empty |
-| `FALKORDB_LITE_PATH` | FalkorDBLite database file path | No | `~/.cache/code-graph/falkordblite.rdb` |
-| `FALKORDB_LITE_HOST` | Host used when exposing FalkorDBLite over TCP | No | `127.0.0.1` |
-| `FALKORDB_LITE_PORT` | Optional TCP port for FalkorDBLite host/port clients | No | empty |
 | `SECRET_TOKEN` | Token checked by protected endpoints | No | empty |
 | `CODE_GRAPH_PUBLIC` | Set `1` to skip auth on read-only endpoints | No | `0` |
 | `ALLOWED_ANALYSIS_DIR` | Root path allowed for `/api/analyze_folder` | No | repository root |

@@ -62,18 +62,6 @@ def _check_connection(host: str, port: int) -> bool:
 def ensure_db() -> None:
     """Ensure FalkorDB is running, auto-starting a Docker container if needed."""
 
-    from .db import create_falkordb, is_lite_backend
-
-    if is_lite_backend():
-        try:
-            db = create_falkordb()
-            db.connection.ping()
-        except Exception as e:
-            _json_error(f"Failed to initialize FalkorDBLite: {e}")
-        _stderr("FalkorDBLite embedded backend is ready")
-        _json_out({"status": "ok", "backend": "lite"})
-        return
-
     host = os.getenv("FALKORDB_HOST", "localhost")
     try:
         port = int(os.getenv("FALKORDB_PORT", "6379"))

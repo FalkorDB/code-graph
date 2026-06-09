@@ -1,9 +1,9 @@
+import os
 import redis
 import redis.asyncio as aioredis
 import logging
 from typing import Optional, Dict
 
-from .db import create_async_redis_connection, create_redis_connection
 from .graph import DEFAULT_BRANCH
 
 # Configure logging
@@ -39,7 +39,13 @@ def get_redis_connection() -> redis.Redis:
         redis.Redis: A Redis connection object.
     """
     try:
-        return create_redis_connection()
+        return redis.Redis(
+            host             = os.getenv('FALKORDB_HOST', "localhost"),
+            port             = int(os.getenv('FALKORDB_PORT', "6379")),
+            username         = os.getenv('FALKORDB_USERNAME'),
+            password         = os.getenv('FALKORDB_PASSWORD'),
+            decode_responses = True  # To ensure string responses
+        )
     except Exception as e:
         logging.error(f"Error connecting to Redis: {e}")
         raise
@@ -154,7 +160,13 @@ def get_repo_info(repo_name: str, branch: Optional[str] = None) -> Optional[Dict
 # ---------------------------------------------------------------------------
 
 async def async_get_redis_connection() -> aioredis.Redis:
-    return create_async_redis_connection()
+    return aioredis.Redis(
+        host=os.getenv('FALKORDB_HOST', "localhost"),
+        port=int(os.getenv('FALKORDB_PORT', "6379")),
+        username=os.getenv('FALKORDB_USERNAME'),
+        password=os.getenv('FALKORDB_PASSWORD'),
+        decode_responses=True,
+    )
 
 
 async def async_get_repo_info(repo_name: str, branch: Optional[str] = None) -> Optional[Dict[str, str]]:
@@ -175,3 +187,4 @@ async def async_get_repo_info(repo_name: str, branch: Optional[str] = None) -> O
     except Exception as e:
         logging.error(f"Error retrieving repo info for '{repo_name}': {e}")
         raise
+

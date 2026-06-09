@@ -1,9 +1,10 @@
+import os
 import re
 import time
+from .entities import *
 from typing import Optional
-from falkordb import Path, Node, QueryResult
-from .db import create_async_falkordb, create_falkordb
-from .entities import File, encode_edge, encode_node
+from falkordb import FalkorDB, Path, Node, QueryResult
+from falkordb.asyncio import FalkorDB as AsyncFalkorDB
 
 # Configure the logger
 import logging
@@ -61,7 +62,10 @@ def parse_graph_name(graph_name: str) -> Optional[tuple[str, str]]:
 
 
 def graph_exists(name: str):
-    db = create_falkordb()
+    db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
+                  port=os.getenv('FALKORDB_PORT', 6379),
+                  username=os.getenv('FALKORDB_USERNAME', None),
+                  password=os.getenv('FALKORDB_PASSWORD', None))
 
     return name in db.list_graphs()
 
@@ -82,7 +86,10 @@ def get_repos() -> list[dict]:
         single graph until the migration is run.
     """
 
-    db = create_falkordb()
+    db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
+                  port=os.getenv('FALKORDB_PORT', 6379),
+                  username=os.getenv('FALKORDB_USERNAME', None),
+                  password=os.getenv('FALKORDB_PASSWORD', None))
 
     repos = []
     for g in db.list_graphs():
@@ -133,7 +140,10 @@ class Graph():
             self.branch = branch or DEFAULT_BRANCH
             self.name = compose_graph_name(self.project, self.branch)
 
-        self.db = create_falkordb()
+        self.db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
+                           port=os.getenv('FALKORDB_PORT', 6379),
+                           username=os.getenv('FALKORDB_USERNAME', None),
+                           password=os.getenv('FALKORDB_PASSWORD', None))
         self.g = self.db.select_graph(self.name)
 
         # Initialize the backlog as disabled by default
@@ -170,7 +180,10 @@ class Graph():
             obj.branch = DEFAULT_BRANCH
         else:
             obj.project, obj.branch = parsed
-        obj.db = create_falkordb()
+        obj.db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
+                          port=os.getenv('FALKORDB_PORT', 6379),
+                          username=os.getenv('FALKORDB_USERNAME', None),
+                          password=os.getenv('FALKORDB_PASSWORD', None))
         obj.g = obj.db.select_graph(raw_name)
         obj.backlog = None
         return obj
@@ -284,7 +297,7 @@ class Graph():
 
         return result_set
 
-    def get_sub_graph(self, limit: int) -> dict:
+    def get_sub_graph(self, l: int) -> dict:
 
         q = """MATCH (src)
                    OPTIONAL MATCH (src)-[e]->(dest)
@@ -293,7 +306,7 @@ class Graph():
 
         sub_graph = {'nodes': [], 'edges': [] }
 
-        result_set = self._query(q, {'limit': limit}).result_set
+        result_set = self._query(q, {'limit': l}).result_set
         for row in result_set:
             src  = row[0]
             e    = row[1]
@@ -579,7 +592,7 @@ class Graph():
 
         params = {'path': path, 'name': name, 'ext': ext, 'coverage': coverage}
 
-        self._query(q, params)
+        res = self._query(q, params)
 
     def connect_entities(self, relation: str, src_id: int, dest_id: int, properties: dict = {}) -> None:
         """
@@ -776,9 +789,14 @@ class Graph():
 # Async helpers and read-only async graph wrapper
 # ---------------------------------------------------------------------------
 
-def _async_db():
+def _async_db() -> AsyncFalkorDB:
     """Create an async FalkorDB connection using environment config."""
-    return create_async_falkordb()
+    return AsyncFalkorDB(
+        host=os.getenv('FALKORDB_HOST', 'localhost'),
+        port=int(os.getenv('FALKORDB_PORT', 6379)),
+        username=os.getenv('FALKORDB_USERNAME', None),
+        password=os.getenv('FALKORDB_PASSWORD', None),
+    )
 
 
 async def async_graph_exists(name: str) -> bool:
@@ -934,3 +952,4 @@ class AsyncGraphQuery:
 
     async def close(self) -> None:
         await self.db.aclose()
+
