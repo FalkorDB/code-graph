@@ -1,9 +1,8 @@
-import os
 import logging
-from falkordb import FalkorDB, Node
-from falkordb.asyncio import FalkorDB as AsyncFalkorDB
+from falkordb import Node
 from typing import List, Optional
 
+from api.db import create_async_falkordb, create_falkordb
 from pygit2 import Commit
 
 # Configure logging
@@ -19,10 +18,7 @@ class GitGraph():
 
     def __init__(self, name: str):
 
-        self.db = FalkorDB(host=os.getenv('FALKORDB_HOST', 'localhost'),
-                           port=os.getenv('FALKORDB_PORT', 6379),
-                           username=os.getenv('FALKORDB_USERNAME', None),
-                           password=os.getenv('FALKORDB_PASSWORD', None))
+        self.db = create_falkordb()
 
         self.g = self.db.select_graph(name)
 
@@ -182,12 +178,7 @@ class AsyncGitGraph:
     """Async read-only git graph for endpoint use."""
 
     def __init__(self, name: str):
-        self.db = AsyncFalkorDB(
-            host=os.getenv('FALKORDB_HOST', 'localhost'),
-            port=int(os.getenv('FALKORDB_PORT', 6379)),
-            username=os.getenv('FALKORDB_USERNAME', None),
-            password=os.getenv('FALKORDB_PASSWORD', None),
-        )
+        self.db = create_async_falkordb()
         self.g = self.db.select_graph(name)
 
     def _commit_from_node(self, node: Node) -> dict:
@@ -205,4 +196,3 @@ class AsyncGitGraph:
 
     async def close(self) -> None:
         await self.db.aclose()
-

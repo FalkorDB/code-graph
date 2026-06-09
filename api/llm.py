@@ -3,6 +3,7 @@ import asyncio
 import logging
 from typing import Optional
 
+from .db import graphrag_connection_kwargs
 from graphrag_sdk.models.litellm import LiteModel
 from graphrag_sdk import (
     Ontology,
@@ -255,10 +256,7 @@ def _create_kg_agent(repo_name: str, branch: Optional[str] = None):
         name=graph_name,
         ontology=ontology,
         model_config=KnowledgeGraphModelConfig.with_model(model),
-        host=os.getenv('FALKORDB_HOST', 'localhost'),
-        port=os.getenv('FALKORDB_PORT', 6379),
-        username=os.getenv('FALKORDB_USERNAME', None),
-        password=os.getenv('FALKORDB_PASSWORD', None),
+        **graphrag_connection_kwargs(),
         cypher_system_instruction=CYPHER_GEN_SYSTEM,
         qa_system_instruction=GRAPH_QA_SYSTEM,
         cypher_gen_prompt=CYPHER_GEN_PROMPT,
