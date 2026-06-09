@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from typing import Any
+from typing import Any, Optional
 
 from falkordb.asyncio import FalkorDB as AsyncFalkorDB
 from graphrag_sdk import ChatMessage, LiteLLM
@@ -97,8 +97,19 @@ async def _run_cypher(repo_name: str, cypher: str) -> list[list[Any]]:
         return []
 
 
-async def ask(repo_name: str, question: str) -> str:
-    """Answer a natural-language question against the code graph for repo_name."""
+async def ask(repo_name: str, question: str, branch: Optional[str] = None) -> str:
+    """Answer a natural-language question against the code graph for repo_name.
+
+    ``repo_name`` may be a bare project name (resolved against ``branch`` into a
+    ``code:{project}:{branch}`` graph key) or an already-composed ``code:`` key.
+    """
+    from .graph import DEFAULT_BRANCH, compose_graph_name
+
+    if repo_name.startswith("code:") and ":" in repo_name[5:]:
+        graph_name = repo_name
+    else:
+        graph_name = compose_graph_name(repo_name, branch or DEFAULT_BRANCH)
+
     llm = _build_llm()
 
     cypher_resp = await llm.ainvoke_messages(
@@ -110,7 +121,7 @@ async def ask(repo_name: str, question: str) -> str:
     cypher = _extract_cypher(cypher_resp.content)
     logger.debug("Generated Cypher: %s", cypher)
 
-    context = await _run_cypher(repo_name, cypher)
+    context = await _run_cypher(graph_name, cypher)
 
     answer_resp = await llm.ainvoke_messages(
         [

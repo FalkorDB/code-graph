@@ -9,29 +9,26 @@ need to understand how symbols connect.
 | Tool | Call this when… | Example |
 |---|---|---|
 | `index_repo(path_or_url, branch?)` | **First** thing in a new repo; or after large changes outside your edits. Project name is **derived from the folder or repo URL** — read it back from the response. | `index_repo(path_or_url=".")` |
-| `search_code(prefix, project)` | You know part of a symbol name and need its id. | `search_code(prefix="processPay", project="myrepo")` |
-| `get_callers(symbol_id, project)` | "Who calls this?" — refactoring a function, tracking down a regression. | `get_callers(symbol_id=42, project="myrepo")` |
-| `get_callees(symbol_id, project)` | "What does this call?" — understanding a function before editing it. | `get_callees(symbol_id=42, project="myrepo")` |
-| `get_dependencies(symbol_id, project)` | All edges out of a symbol (CALLS + IMPORTS + DEFINES). | `get_dependencies(symbol_id=42, project="myrepo")` |
+| `search_code(query, project)` | You know part of a symbol name and need its id (hybrid prefix + ranked match). | `search_code(query="processPay", project="myrepo")` |
+| `find_symbol(name, project, file?)` | You know the exact symbol name (optionally in a given file) and want its id directly. | `find_symbol(name="processPayment", project="myrepo")` |
+| `get_neighbors(symbol_id, project, relation?, direction?)` | "Who calls this?" (`direction="IN"`), "What does this call?" (`direction="OUT"`), or other edges via `relation` (CALLS/IMPORTS/DEFINES). Replaces the old get_callers/get_callees/get_dependencies. | `get_neighbors(symbol_id=42, project="myrepo", direction="IN")` |
+| `get_file_neighbors(file, project)` | Symbols a file defines / depends on — "what's in this file and what does it touch?" | `get_file_neighbors(file="api/graph.py", project="myrepo")` |
 | `impact_analysis(symbol_id, project, direction, depth)` | **"What breaks if I change this?"** Transitive upstream callers. | `impact_analysis(symbol_id=42, project="myrepo", direction="IN", depth=3)` |
 | `find_path(source_id, dest_id, project)` | Show the call chain between two known symbols. | `find_path(source_id=10, dest_id=42, project="myrepo")` |
-| `ask(question, project)` | Open-ended natural-language question. **More expensive — use last.** | `ask(question="why does login fail when MFA is on?", project="myrepo")` |
 
 ## Rules of thumb
 
-1. **Start with `search_code`** to turn names into ids. Most tools take a `symbol_id`.
-2. **Prefer structural tools over `ask`.** `get_callers` is one cheap Cypher
-   hop; `ask` is two LLM round-trips. Use `ask` for fuzzy/conceptual
-   questions, not for "who calls X".
+1. **Start with `search_code` or `find_symbol`** to turn names into ids. Most tools take a `symbol_id`.
+2. **Use `get_neighbors` with `direction`** for who-calls / what-calls: `IN` = callers, `OUT` = callees. Pass `relation` for IMPORTS/DEFINES edges.
 3. **`impact_analysis` before refactoring.** Even when you think you know
    the answer — the transitive closure often surprises you.
 4. **`branch` is optional** but pass it when working on a feature branch
    so you query the right per-branch index.
 5. **Response shape.** Tools that return collections (`search_code`,
-   `get_callers`, `get_callees`, `get_dependencies`, `find_path`,
+   `find_symbol`, `get_neighbors`, `get_file_neighbors`, `find_path`,
    `impact_analysis`) put the array in `structuredContent.result` per
    the MCP spec. The text content is the same JSON for convenience.
-   `index_repo` and `ask` return a single object.
+   `index_repo` returns a single object.
 
 ## Environment
 

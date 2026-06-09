@@ -76,6 +76,55 @@ def test_ensure_falkordb_handles_missing_cli(monkeypatch):
     assert "PATH" in status["message"]
 
 
+def test_ensure_falkordb_rejects_out_of_range_port(monkeypatch):
+    from api.mcp import auto_init
+
+    monkeypatch.setenv("FALKORDB_HOST", "localhost")
+    monkeypatch.setenv("FALKORDB_PORT", "70000")
+
+    with patch.object(auto_init, "_falkordb_reachable", return_value=True) as reach, \
+         patch("api.mcp.auto_init.subprocess.run") as mock_run:
+        status = auto_init.ensure_falkordb()
+
+    assert status["status"] == "error"
+    assert "between 1 and 65535" in status["message"]
+    # Bailed before probing or shelling out.
+    reach.assert_not_called()
+    mock_run.assert_not_called()
+
+
+def test_ensure_falkordb_rejects_non_integer_port(monkeypatch):
+    from api.mcp import auto_init
+
+    monkeypatch.setenv("FALKORDB_PORT", "not-a-port")
+    status = auto_init.ensure_falkordb()
+    assert status["status"] == "error"
+    assert "FALKORDB_PORT" in status["message"]
+
+
+# ---------------------------------------------------------------------------
+# _detect_branch
+# ---------------------------------------------------------------------------
+
+
+def test_detect_branch_detached_head_returns_default():
+    """A detached HEAD reports the literal "HEAD" — must map to _default, not
+    create a code:<project>:HEAD graph."""
+    from api.mcp import auto_init
+
+    fake = MagicMock(returncode=0, stdout="HEAD\n", stderr="")
+    with patch("api.mcp.auto_init.subprocess.run", return_value=fake):
+        assert auto_init._detect_branch(Path("/tmp")) == "_default"
+
+
+def test_detect_branch_returns_branch_name():
+    from api.mcp import auto_init
+
+    fake = MagicMock(returncode=0, stdout="feature-x\n", stderr="")
+    with patch("api.mcp.auto_init.subprocess.run", return_value=fake):
+        assert auto_init._detect_branch(Path("/tmp")) == "feature-x"
+
+
 # ---------------------------------------------------------------------------
 # maybe_auto_index
 # ---------------------------------------------------------------------------
@@ -111,6 +160,7 @@ def test_maybe_auto_index_indexes_when_opt_in(monkeypatch, tmp_path):
     fake_graph_instance = MagicMock()
     with patch("api.analyzers.source_analyzer.SourceAnalyzer", return_value=fake_analyzer_instance), \
          patch("api.graph.Graph", return_value=fake_graph_instance), \
+         patch("api.graph.graph_exists", return_value=False), \
          patch.object(auto_init, "_detect_branch", return_value="main"):
         status = auto_init.maybe_auto_index(cwd=tmp_path, project="myproj")
 
@@ -129,6 +179,7 @@ def test_maybe_auto_index_idempotent(monkeypatch, tmp_path):
     fake_analyzer = MagicMock()
     with patch("api.analyzers.source_analyzer.SourceAnalyzer", return_value=fake_analyzer), \
          patch("api.graph.Graph", return_value=MagicMock()), \
+         patch("api.graph.graph_exists", return_value=False), \
          patch.object(auto_init, "_detect_branch", return_value="main"):
         first = auto_init.maybe_auto_index(cwd=tmp_path, project="myproj")
         second = auto_init.maybe_auto_index(cwd=tmp_path, project="myproj")
@@ -148,7 +199,8 @@ def test_maybe_auto_index_per_branch(monkeypatch, tmp_path):
 
     fake_analyzer = MagicMock()
     with patch("api.analyzers.source_analyzer.SourceAnalyzer", return_value=fake_analyzer), \
-         patch("api.graph.Graph", return_value=MagicMock()):
+         patch("api.graph.Graph", return_value=MagicMock()), \
+         patch("api.graph.graph_exists", return_value=False):
         a = auto_init.maybe_auto_index(cwd=tmp_path, project="p", branch="main")
         b = auto_init.maybe_auto_index(cwd=tmp_path, project="p", branch="feature-x")
         c = auto_init.maybe_auto_index(cwd=tmp_path, project="p", branch="main")
@@ -166,3 +218,83 @@ def test_truthy_helper():
         assert _truthy(v)
     for v in ("", "0", "false", "no", "off", None):
         assert not _truthy(v)
+
+
+def test_maybe_auto_index_respects_allowed_dir(monkeypatch, tmp_path):
+    """When ALLOWED_ANALYSIS_DIR is set, a cwd outside it must not be indexed."""
+    from api.mcp import auto_init
+
+    monkeypatch.setenv("CODE_GRAPH_AUTO_INDEX", "true")
+    # Allow-list points at a sibling dir that does NOT contain cwd.
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.setenv("ALLOWED_ANALYSIS_DIR", str(allowed))
+
+    fake_analyzer = MagicMock()
+    with patch("api.analyzers.source_analyzer.SourceAnalyzer", return_value=fake_analyzer), \
+         patch("api.graph.Graph", return_value=MagicMock()), \
+         patch("api.graph.graph_exists", return_value=False):
+        status = auto_init.maybe_auto_index(cwd=outside, project="p", branch="main")
+
+    assert status["status"] == "skipped"
+    assert "ALLOWED_ANALYSIS_DIR" in status["reason"]
+    fake_analyzer.analyze_local_folder.assert_not_called()
+
+
+def test_maybe_auto_index_allows_path_within_allowed_dir(monkeypatch, tmp_path):
+    from api.mcp import auto_init
+
+    monkeypatch.setenv("CODE_GRAPH_AUTO_INDEX", "true")
+    allowed = tmp_path / "allowed"
+    inside = allowed / "repo"
+    inside.mkdir(parents=True)
+    monkeypatch.setenv("ALLOWED_ANALYSIS_DIR", str(allowed))
+
+    fake_analyzer = MagicMock()
+    with patch("api.analyzers.source_analyzer.SourceAnalyzer", return_value=fake_analyzer), \
+         patch("api.graph.Graph", return_value=MagicMock()), \
+         patch("api.graph.graph_exists", return_value=False):
+        status = auto_init.maybe_auto_index(cwd=inside, project="p", branch="main")
+
+    assert status["status"] == "indexed"
+    fake_analyzer.analyze_local_folder.assert_called_once()
+
+
+def test_maybe_auto_index_skips_when_graph_populated(monkeypatch, tmp_path):
+    """A graph that already holds data must not be re-indexed."""
+    from api.mcp import auto_init
+
+    monkeypatch.setenv("CODE_GRAPH_AUTO_INDEX", "true")
+
+    fake_analyzer = MagicMock()
+    populated_graph = MagicMock()
+    populated_graph.stats.return_value = {"node_count": 42, "edge_count": 9}
+    with patch("api.analyzers.source_analyzer.SourceAnalyzer", return_value=fake_analyzer), \
+         patch("api.graph.Graph", return_value=populated_graph), \
+         patch("api.graph.graph_exists", return_value=True):
+        status = auto_init.maybe_auto_index(cwd=tmp_path, project="p", branch="main")
+
+    assert status["status"] == "skipped"
+    assert "populated" in status["reason"]
+    # Crucial: no indexing happened.
+    fake_analyzer.analyze_local_folder.assert_not_called()
+
+
+def test_maybe_auto_index_indexes_when_graph_exists_but_empty(monkeypatch, tmp_path):
+    """An existing but empty graph (node_count 0) is still indexed."""
+    from api.mcp import auto_init
+
+    monkeypatch.setenv("CODE_GRAPH_AUTO_INDEX", "true")
+
+    fake_analyzer = MagicMock()
+    empty_graph = MagicMock()
+    empty_graph.stats.return_value = {"node_count": 0, "edge_count": 0}
+    with patch("api.analyzers.source_analyzer.SourceAnalyzer", return_value=fake_analyzer), \
+         patch("api.graph.Graph", return_value=empty_graph), \
+         patch("api.graph.graph_exists", return_value=True):
+        status = auto_init.maybe_auto_index(cwd=tmp_path, project="p", branch="main")
+
+    assert status["status"] == "indexed"
+    fake_analyzer.analyze_local_folder.assert_called_once()
