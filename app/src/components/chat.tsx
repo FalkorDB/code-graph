@@ -365,7 +365,10 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         setTimeout(() => {
             const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
-            canvas.zoomToFit(2, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));
+            // Cap zoom multiplier for links (1.3x) since links take less visual space than nodes (2x)
+            const hasLinks = formattedPaths.some(p => p.links.length > 0)
+            const multiplier = hasLinks ? 1.3 : 2
+            canvas.zoomToFit(multiplier, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));
         }, 0)
     }
 

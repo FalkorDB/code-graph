@@ -164,20 +164,6 @@ export default function GraphView({
         setSelectedPathId(link.id)
     }
 
-    // Zoom to fit selected path nodes when selectedPathId changes
-    useEffect(() => {
-        if (selectedPathId && canvasRef.current && isPathResponse) {
-            const graphData = canvasRef.current.getGraphData()
-            const selectedPathNodeIds = new Set(graphData?.nodes
-                .filter(n => n.data?.isPathSelected)
-                .map(n => n.id) ?? [])
-            
-            if (selectedPathNodeIds.size > 0) {
-                canvasRef.current.zoomToFit(2, (n: GraphNode) => selectedPathNodeIds.has(n.id))
-            }
-        }
-    }, [selectedPathId, isPathResponse, canvasRef])
-
     const handleNodeHover = useCallback((node: Node | null) => {
         setHoverElement(node)
     }, [])
