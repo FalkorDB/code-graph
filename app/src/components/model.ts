@@ -34,6 +34,7 @@ export interface Link {
   target: number,
   label: string,
   visible: boolean,
+  collapsed: boolean,
   isPathSelected: boolean,
   isPath: boolean,
   color: string,
@@ -246,6 +247,7 @@ export class Graph {
         target: edgeData.dest_node,
         label: edgeData.relation,
         visible: true,
+        collapsed,
         color: "#999999",
         isPathSelected: false,
         isPath: !!path,
@@ -260,12 +262,21 @@ export class Graph {
     return newElements
   }
 
-  public removeLinks() {
+  public removeLinks(ids: number[] = []) {
+    const connectedLinks = this.elements.links.filter(link => ids.includes(link.source) || ids.includes(link.target))
+
     this.elements = {
       nodes: this.elements.nodes,
       links: this.elements.links.map(link => {
-        if (this.nodesMap.get(link.source) && this.nodesMap.get(link.target)) {
-          return link
+        if (
+          (ids.length !== 0 && !connectedLinks.includes(link)) ||
+          (this.nodesMap.get(link.source) && this.nodesMap.get(link.target))
+        ) {
+          if (link.collapsed && connectedLinks.includes(link)) {
+            // Remove collapsed links connected to the given ids even if both endpoints exist
+          } else {
+            return link
+          }
         }
         this.linksMap.delete(link.id)
       }).filter(link => link !== undefined)

@@ -71,7 +71,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get selectGraphInComboBoxByName(): (graph: string) => Locator {
-        return (graph: string) => this.page.locator(`//div[@role='presentation']//div//span[contains(text(), '${graph}')]`);
+        return (graph: string) => this.page.locator(`//div[@role='presentation']//div//span[contains(text(), '${graph}')]`).first();
     }
 
     private get selectGraphInComboBoxById(): (graph: string) => Locator {

@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 const AUTH_HEADERS: HeadersInit = import.meta.env.VITE_SECRET_TOKEN
     ? { 'Authorization': `Bearer ${import.meta.env.VITE_SECRET_TOKEN}` }
     : {};
-import { dataToGraphData, graphDataToData, GraphLink, GraphNode } from "@falkordb/canvas";
+import { GraphNode } from "@falkordb/canvas";
+import { convertToCanvasData } from "./ForceGraph";
 
 interface Props {
     repo: string
@@ -114,7 +115,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         if (!canvas) return
 
-        // Sets for the new path
+        setIsPathResponse(true)
         const pNodeIds = new Set<number>(p.nodes.map((n: Node) => n.id))
         const pLinkIds = new Set<number>(p.links.map((l: any) => l.id))
         const pIds = new Set<number>([...pNodeIds, ...pLinkIds])
@@ -180,57 +181,9 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                 })
         }
 
-        const currentData = canvas.getGraphData();
-
-        // --- Unset canvas data for previous path elements no longer in the new path ---
-        if (selectedPath) {
-            currentData.nodes.forEach((n: any) => {
-                if (prevNodeIds.has(n.id) && !pNodeIds.has(n.id)) {
-                    if (isPathResponse) {
-                        // keep isPath + PATH_COLOR border, just deselect
-                        n.data.isPathSelected = false
-                    } else {
-                        n.data.isPath = false
-                        n.data.isPathSelected = false
-                    }
-                }
-            })
-            currentData.links.forEach((l: any) => {
-                if (prevLinkIds.has(l.id) && !pLinkIds.has(l.id)) {
-                    if (isPathResponse) {
-                        // keep color + dashed path line, just deselect
-                        l.data.isPathSelected = false
-                    } else {
-                        l.data.isPathSelected = false
-                        l.color = "#999999"
-                    }
-                }
-            })
-        }
-
-        // --- Set canvas data for new path elements ---
-        currentData.nodes.forEach((n: any) => {
-            if (pNodeIds.has(n.id)) {
-                if (n.id === firstNodeId || n.id === lastNodeId) {
-                    n.data.isPathSelected = true;
-                } else {
-                    n.data.isPath = true;
-                }
-            }
-        });
-        currentData.links.forEach((l: any) => {
-            if (pLinkIds.has(l.id)) {
-                l.data.isPathSelected = true;
-                l.color = PATH_COLOR;
-            }
-        });
-
-        canvas.setGraphData(graphDataToData(currentData))
+        canvas.setGraphData(convertToCanvasData(graph.Elements))
 
         setTimeout(() => {
-            const filteredNodes = currentData.nodes.filter((n: any) => pNodeIds.has(n.id));
-            console.log('[zoomToFit] filtered nodes:', filteredNodes.map((n: any) => ({ id: n.id, x: n.x, y: n.y })));
-            console.log('[zoomToFit] pNodeIds:', [...pNodeIds]);
             canvas.zoomToFit(2, (n: GraphNode) => pNodeIds.has(n.id));
         }, 300)
         setChatOpen && setChatOpen(false)
@@ -375,68 +328,29 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         ]);
         setIsPathResponse(true)
 
-        const currentData = canvas.getGraphData();
-
-        const nodesMap = new Map<number, GraphNode>(currentData.nodes.map(n => [n.id, n]))
-        const linksMap = new Map<number, GraphLink>(currentData.links.map(l => [l.id, l]))
-
+        // Mark path elements on the model
         formattedPaths.flatMap(p => p.nodes).forEach(n => {
-            const node = nodesMap.get(n.id);
+            const node = graph.Elements.nodes.find(gn => gn.id === n.id);
             if (node) {
-                node.data.isPath = true;
+                node.isPath = true;
             }
         });
         formattedPaths.flatMap(p => p.links).forEach(l => {
-            const link = linksMap.get(l.id);
-
+            const link = graph.Elements.links.find(gl => gl.id === l.id);
             if (link) {
-                link.data.isPath = true;
+                link.isPath = true;
                 link.color = PATH_COLOR;
             }
         });
 
-        // Filter for only new elements
-        const newDataElements = {
-            nodes: elements.nodes.filter(n => !nodesMap.has(n.id))
-                .map(({ category, color, data, id, isPath, isPathSelected, visible }) => ({
-                    color,
-                    id,
-                    labels: [category],
-                    data: {
-                        ...data,
-                        isPath,
-                        isPathSelected
-                    },
-                    visible,
-                })),
-            links: elements.links.filter(l => !linksMap.has(l.id))
-                .map(({ color, id, source, target, data, isPath, isPathSelected, visible, label }) => ({
-                    color: isPath ? PATH_COLOR : color,
-                    id,
-                    source,
-                    target,
-                    data: {
-                        ...data,
-                        isPath,
-                        isPathSelected
-                    },
-                    visible,
-                    relationship: label,
-                }))
+        // Update the canvas from the model
+        canvasRef.current?.setGraphData(convertToCanvasData(graph.Elements))
+        
+        // Zoom to fit all path nodes after coloring
+        const pathNodeIds = new Set(formattedPaths.flatMap(p => p.nodes).map(n => n.id))
+        if (pathNodeIds.size > 0 && canvasRef.current) {
+            canvasRef.current.zoomToFit(1, (n: any) => pathNodeIds.has(n.id))
         }
-
-        // Convert only new data to GraphData format
-        const newGraphData = dataToGraphData(
-            newDataElements,
-            undefined,
-            new Map(currentData.nodes.map(n => [n.id, n]))
-        )
-
-        // Merge with existing data
-        canvasRef.current?.setGraphData(graphDataToData({
-            nodes: [...currentData.nodes, ...newGraphData.nodes],
-            links: [...currentData.links, ...newGraphData.links]
-        }))
 
         setTimeout(() => {
             const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
@@ -468,18 +382,12 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
                             e.isPathSelected = false
                         })
 
-                        const currentData = canvas.getGraphData();
-
-                        [...currentData.nodes, ...currentData.links].forEach(element => {
-                            element.data.isPath = false
-                            element.data.isPathSelected = false
-
-                            if ("source" in element) {
-                                element.color = "#999999"
-                            }
+                        // Reset link colors on the model
+                        graph.Elements.links.forEach(link => {
+                            link.color = "#999999"
                         })
 
-                        canvas.setGraphData(graphDataToData(currentData))
+                        canvas.setGraphData(convertToCanvasData(graph.Elements))
                     }
 
                     setMessages(prev => [...prev, createMessage({

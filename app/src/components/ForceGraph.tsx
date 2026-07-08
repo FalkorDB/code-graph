@@ -16,31 +16,34 @@ interface Props {
     onLinkHover: (link: Link | null) => void
     onLinkRightClick: (link: Link, event: MouseEvent) => void
     isLinkSelected: (link: GraphLink) => boolean
+    isNodeDimmed: (node: GraphNode) => boolean
+    isLinkDimmed: (link: GraphLink) => boolean
+    dimmed: boolean
+    linkLineDash: (link: any) => number[]
     onBackgroundClick: (event: MouseEvent) => void
     onBackgroundRightClick: (event: MouseEvent) => void
-    nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void
-    nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void
-    linkLineDash: (link: any) => number[]
     onZoom: () => void
     onEngineStop: () => void
-    animation: boolean
+    onNodeDragEnd?: () => void
     backgroundColor?: string
     foregroundColor?: string
 }
 
 
-const convertToCanvasData = (graphData: GraphData): Data => ({
-    nodes: graphData.nodes.filter(n => n.visible).map(({ id, category, color, visible, isPath, isPathSelected, data }) => ({
+export const convertToCanvasData = (graphData: GraphData): Data => ({
+    nodes: graphData.nodes.map(({ id, category, color, visible, expand, isPath, isPathSelected, data }) => ({
         id,
         labels: [category],
         color,
+        borderColor: (isPath || isPathSelected) ? PATH_COLOR : undefined,
         visible,
+        expand,
         data: { ...data, isPath, isPathSelected }
     })),
-    links: graphData.links.filter(l => l.visible).map(({ id, label, color, visible, source, target, isPath, isPathSelected, data }) => ({
+    links: graphData.links.map(({ id, label, color, visible, source, target, isPath, isPathSelected, data }) => ({
         id,
         relationship: label,
-        color: isPath ? PATH_COLOR : color,
+        color: (isPath || isPathSelected) ? PATH_COLOR : color,
         visible,
         source,
         target,
@@ -60,14 +63,15 @@ export default function ForceGraph({
     onLinkHover,
     onLinkRightClick,
     isLinkSelected,
+    isNodeDimmed,
+    isLinkDimmed,
+    dimmed,
+    linkLineDash,
     onBackgroundClick,
     onBackgroundRightClick,
     onZoom,
     onEngineStop,
-    nodeCanvasObject,
-    nodePointerAreaPaint,
-    linkLineDash,
-    animation,
+    onNodeDragEnd,
     backgroundColor = "#FFFFFF",
     foregroundColor = "#000000"
 }: Props) {
@@ -83,10 +87,10 @@ export default function ForceGraph({
     useEffect(() => {
         const canvas = canvasRef.current
 
-        if (!canvas) return
+        if (!canvas || !canvasLoaded) return
 
         (window as any)[id === "desktop" ? "graphDesktop" : "graphMobile"] = () => canvas.getGraphData();
-    }, [canvasRef, id])
+    }, [canvasRef, id, canvasLoaded])
 
     // Update canvas colors
     useEffect(() => {
@@ -94,13 +98,6 @@ export default function ForceGraph({
         canvasRef.current.setBackgroundColor(backgroundColor)
         canvasRef.current.setForegroundColor(foregroundColor)
     }, [canvasRef, backgroundColor, foregroundColor, canvasLoaded])
-
-    // Update animation state on canvas
-    useEffect(() => {
-        if (!canvasRef.current || !canvasLoaded) return
-
-        canvasRef.current.setAnimation(animation)
-    }, [canvasRef, animation, canvasLoaded])
 
     // Map node click handler
     const handleNodeClick = useCallback((node: GraphNode, event: MouseEvent) => {
@@ -114,9 +111,9 @@ export default function ForceGraph({
             onNodeHover(null)
             return
         }
-        
+
         const originalNode = data.nodes.find(n => n.id === node.id)
-        
+
         if (originalNode) onNodeHover(originalNode)
     }, [onNodeHover, data.nodes])
 
@@ -138,9 +135,9 @@ export default function ForceGraph({
             onLinkHover(null)
             return
         }
-        
+
         const originalLink = data.links.find(l => l.id === link.id)
-        
+
         if (originalLink) onLinkHover(originalLink)
     }, [onLinkHover, data.links])
 
@@ -159,11 +156,11 @@ export default function ForceGraph({
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
         canvasRef.current.setConfig({
-            // nodes will display node.data.captionsKeys in the canvas
-            captionsKeys: ["name", "title"],
+            captionsKeys: [["name", true], ["title", true]],
             isNodeSelected: isNodeSelected,
             isLinkSelected: isLinkSelected,
-            node: { nodeCanvasObject, nodePointerAreaPaint },
+            isNodeDimmed: isNodeDimmed,
+            isLinkDimmed: isLinkDimmed,
             linkLineDash,
             eventHandlers: {
                 onNodeClick: handleNodeClick,
@@ -175,6 +172,7 @@ export default function ForceGraph({
                 onBackgroundClick,
                 onBackgroundRightClick,
                 onEngineStop: handleEngineStop,
+                onNodeDragEnd,
                 onZoom
             }
         })
@@ -187,16 +185,24 @@ export default function ForceGraph({
         handleLinkHover,
         isNodeSelected,
         isLinkSelected,
+        isNodeDimmed,
+        isLinkDimmed,
+        dimmed,
         onBackgroundClick,
         onBackgroundRightClick,
         handleEngineStop,
-        nodeCanvasObject,
-        nodePointerAreaPaint,
+        onNodeDragEnd,
         linkLineDash,
         onZoom,
         canvasRef,
         canvasLoaded
     ])
+
+    // Sync dimmed state to canvas (like browser: separate effect, not via setConfig)
+    useEffect(() => {
+        if (!canvasRef.current || !canvasLoaded) return
+        canvasRef.current.setDimmed(dimmed)
+    }, [dimmed, canvasRef, canvasLoaded])
 
     // Update canvas data
     useEffect(() => {

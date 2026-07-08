@@ -12,10 +12,10 @@ import { Carousel, CarouselApi, CarouselContent, CarouselItem, CarouselNext, Car
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import Input from './components/Input';
 import { Labels } from './components/labels';
-import { Toolbar } from './components/toolbar';
+import { Toolbar, ZoomControls } from './components/toolbar';
 import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
 import type { GraphNode } from '@falkordb/canvas';
-import { graphDataToData } from '@falkordb/canvas';
+import { convertToCanvasData } from './components/ForceGraph';
 import { Toaster } from '@/components/ui/toaster';
 import GTM from './GTM';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,7 @@ export default function App() {
   const [searchNode, setSearchNode] = useState<PathNode>({});
   const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(undefined)
   const [animation, setAnimation] = useState(false)
+  const [manualDimmed, setManualDimmed] = useState<boolean>(true)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([]);
   const [query, setQuery] = useState('');
@@ -228,29 +229,7 @@ export default function App() {
           setZoomedNodes([chartNode])
           graph.visibleLinks(true, [chartNode!.id])
 
-          const currentData = canvas.getGraphData()
-
-          const { dataToGraphData } = await import('@falkordb/canvas')
-          const graphNode = dataToGraphData({
-            nodes: [{
-              color: chartNode.color,
-              id: chartNode.id,
-              labels: [chartNode.category],
-              visible: chartNode.visible,
-              data: {
-                ...chartNode.data,
-                isPath: chartNode.isPath,
-                isPathSelected: chartNode.isPathSelected,
-              }
-            }], links: []
-          }).nodes[0]
-
-          if (graphNode) {
-            currentData.nodes.push(graphNode)
-          }
-
-          canvas.setGraphData(graphDataToData(currentData))
-
+          canvas.setGraphData(convertToCanvasData(graph.Elements))
 
           setTimeout(() => {
             canvas.zoomToFit(4, (n: GraphNode) => n.id === chartNode!.id)
@@ -263,22 +242,7 @@ export default function App() {
         chartNode.visible = true
         graph.visibleLinks(true, [chartNode!.id])
 
-        const currentData = canvas.getGraphData()
-
-        const graphNode = currentData.nodes.find(n => n.id === chartNode!.id)
-        if (graphNode) {
-          graphNode.visible = true
-        }
-
-        currentData.links.forEach(canvasLink => {
-          const appLink = graph.LinksMap.get(canvasLink.id)
-
-          if (appLink) {
-            canvasLink.visible = appLink.visible
-          }
-        })
-
-        canvas.setGraphData(graphDataToData(currentData))
+        canvas.setGraphData(convertToCanvasData(graph.Elements))
       }
 
       setTimeout(() => {
@@ -304,25 +268,17 @@ export default function App() {
 
     graph.visibleLinks(show)
 
-    const currentData = canvas.getGraphData();
-
-    currentData.nodes.forEach(canvasNode => {
-      const appNode = graph.NodesMap.get(canvasNode.id);
-
-      if (appNode) {
-        canvasNode.visible = appNode.visible;
-      }
-    });
-
-    currentData.links.forEach(canvasLink => {
-      const appLink = graph.LinksMap.get(canvasLink.id);
-
-      if (appLink) {
-        canvasLink.visible = appLink.visible;
-      }
-    });
-
-    canvas.setGraphData(graphDataToData(currentData));
+    // setGraphData doesn't update visible for existing nodes — mutate canvas nodes directly
+    const canvasData = canvas.getGraphData()
+    canvasData.nodes.forEach((canvasNode: { id: number, visible: boolean }) => {
+      const appNode = graph.NodesMap.get(canvasNode.id)
+      if (appNode) canvasNode.visible = appNode.visible
+    })
+    canvasData.links.forEach((canvasLink: { id: number, visible: boolean }) => {
+      const appLink = graph.LinksMap.get(canvasLink.id)
+      if (appLink) canvasLink.visible = appLink.visible
+    })
+    canvas.refresh()
 
     setHasHiddenElements(graph.getElements().some(element => !element.visible));
   }
@@ -539,6 +495,8 @@ export default function App() {
                   setCooldownTicks={setCooldownTicks}
                   animation={animation}
                   setAnimation={setAnimation}
+                  manualDimmed={manualDimmed}
+                  setManualDimmed={setManualDimmed}
                   onCategoryClick={(name, show) => onCategoryClick(name, show, desktopChartRef)}
                   handleDownloadImage={handleDownloadImage}
                   zoomedNodes={zoomedNodes}
@@ -667,6 +625,8 @@ export default function App() {
                 setCooldownTicks={setCooldownTicks}
                 animation={animation}
                 setAnimation={setAnimation}
+                manualDimmed={manualDimmed}
+                setManualDimmed={setManualDimmed}
                 onCategoryClick={(name, show) => onCategoryClick(name, show, mobileChartRef)}
                 handleDownloadImage={handleDownloadImage}
                 zoomedNodes={zoomedNodes}
@@ -719,11 +679,10 @@ export default function App() {
                         <DrawerTitle />
                         <DrawerDescription />
                       </VisuallyHidden>
-                      <Toolbar
-                        className='bg-transparent absolute -top-14 left-0 w-full justify-between px-6'
+                      {/* Zoom controls floating above the drawer handle */}
+                      <ZoomControls
+                        className='bg-transparent absolute -top-14 left-0 w-full justify-center px-6'
                         canvasRef={mobileChartRef}
-                        animation={animation}
-                        setAnimation={setAnimation}
                       />
                       <Input
                         className='border-2 border-border'
@@ -734,15 +693,16 @@ export default function App() {
                         node={searchNode}
                       />
                       <Labels categories={graph.Categories} onClick={(name, show) => onCategoryClick(name, show, mobileChartRef)} />
-                      <div className='flex flex-col gap-2 items-center'>
-                        <button
-                          className='control-button'
-                          onClick={handleDownloadImage}
-                        >
-                          <Download size={30} />
-                        </button>
-                        <p className=''>Take Screenshot</p>
-                      </div>
+                      {/* Options controls inside the drawer, below search */}
+                      <Toolbar
+                        hideZoom
+                        className='w-full justify-center'
+                        canvasRef={mobileChartRef}
+                        animation={animation}
+                        setAnimation={setAnimation}
+                        manualDimmed={manualDimmed}
+                        setManualDimmed={setManualDimmed}
+                      />
                     </DrawerContent>
                   </Drawer>
                 </div>

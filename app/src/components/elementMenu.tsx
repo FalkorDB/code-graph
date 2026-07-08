@@ -22,6 +22,7 @@ interface Props {
 export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handleExpand, parentRef }: Props) {
     const [currentObj, setCurrentObj] = useState<Node | Link>();
     const [containerWidth, setContainerWidth] = useState(0);
+    const [containerHeight, setContainerHeight] = useState(0);
 
     useEffect(() => {
         setCurrentObj(undefined)
@@ -33,19 +34,41 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
         ? `${url}/tree/master/${obj.data.path}/${obj.data.name}`
         : `${url}/tree/master/${obj.data.path}#L${obj.data.src_start}-L${obj.data.src_end + 1}`
 
+    const parentRect = parentRef?.current?.getBoundingClientRect()
+    const parentW = parentRef?.current?.clientWidth || 0
+    const parentH = parentRef?.current?.clientHeight || 0
+
+    const EDGE_MARGIN = 8  // fixed margin from container edges
+    const GAP = 12         // fixed gap between node edge and menu — constant at every zoom level
+
+    const zoom = position.zoom ?? 1
+    const nodeRadius = 9 * zoom  // node visual radius in screen px (NODE_SIZE=9 world units)
+
+    // Convert viewport coordinates to parent-relative coordinates
+    const relX = position.x - (parentRect?.left || 0)
+    const relY = position.y - (parentRect?.top || 0)
+
+    // X axis: center on click, clamp to container edges
+    const rawLeft = relX - containerWidth / 2
+    const left = Math.max(EDGE_MARGIN, Math.min(rawLeft, parentW - containerWidth - EDGE_MARGIN))
+
+    // Y axis: always place below at (node_center + node_radius + fixed_gap).
+    // Clamp to canvas edges — no flipping. If the node is larger than the canvas
+    // the menu stays at the bottom edge, which may overlap the node.
+    const rawTop = relY + nodeRadius + GAP
+    const top = Math.max(EDGE_MARGIN, Math.min(rawTop, parentH - containerHeight - EDGE_MARGIN))
+
     return (
         <>
             <div
                 ref={(ref) => {
                     if (!ref) return
                     setContainerWidth(ref.clientWidth)
+                    setContainerHeight(ref.clientHeight)
                 }}
                 className="absolute z-10 bg-popover text-popover-foreground rounded-lg shadow-lg flex divide-x divide-border"
                 id="elementMenu"
-                style={{
-                    left: Math.max(8, Math.min(position.x - containerWidth / 2, (parentRef?.current?.clientWidth || 0) - containerWidth - 8)),
-                    top: Math.max(8, Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - containerWidth - 8)),
-                }}
+                style={{ left, top }}
             >
                 {
                     objects.some(o => o.id === obj.id) && objects.length > 1 ?

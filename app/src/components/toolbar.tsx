@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ChevronDown, Circle, Download, Fullscreen, Pause, Pin, PinOff, Play, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, Circle, Download, Fullscreen, Pause, Pin, PinOff, Play, Telescope, ZoomIn, ZoomOut } from "lucide-react";
 import type { LayoutMode, HierarchyDirection, RadialDirection } from "@falkordb/canvas";
 import { cn } from "@/lib/utils"
 import { GraphRef } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
+import type { Node, Link } from "./model";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const LAYOUTS: { value: LayoutMode; label: string }[] = [
@@ -24,15 +25,66 @@ const RADIAL_DIRECTIONS: { value: RadialDirection; label: string }[] = [
     { value: 'in', label: 'Inward' },
 ];
 
+interface ZoomControlsProps {
+    canvasRef: GraphRef
+    className?: string
+    selectedObjects?: (Node | Link)[]
+}
+
+export function ZoomControls({ canvasRef, className, selectedObjects }: ZoomControlsProps) {
+    const handleZoomClick = (changefactor: number) => {
+        const canvas = canvasRef.current
+        if (!canvas) return
+        if (selectedObjects && selectedObjects.length > 0) {
+            const graphData = canvas.getGraphData()
+            const selectedNodeIds = new Set<number>()
+            for (const el of selectedObjects) {
+                if ('source' in el) {
+                    selectedNodeIds.add(el.source as number)
+                    selectedNodeIds.add(el.target as number)
+                } else {
+                    selectedNodeIds.add(el.id)
+                }
+            }
+            const focusedNodes = graphData?.nodes.filter(n => selectedNodeIds.has(n.id)) ?? []
+            if (focusedNodes.length > 0) {
+                const cx = focusedNodes.reduce((s, n) => s + (n.x ?? 0), 0) / focusedNodes.length
+                const cy = focusedNodes.reduce((s, n) => s + (n.y ?? 0), 0) / focusedNodes.length
+                canvas.centerAt(cx, cy, 300)
+            }
+        }
+        canvas.zoom(canvas.getZoom() * changefactor)
+    }
+
+    return (
+        <div className={cn("flex flex-row items-center gap-1", className)}>
+            <button className="control-button" onClick={() => handleZoomClick(0.9)} title="Zoom Out">
+                <ZoomOut size={16} />
+            </button>
+            <button className="control-button" onClick={() => canvasRef.current?.zoomToFit()} title="Center">
+                <Fullscreen size={16} />
+            </button>
+            <button className="control-button" onClick={() => handleZoomClick(1.1)} title="Zoom In">
+                <ZoomIn size={16} />
+            </button>
+        </div>
+    )
+}
+
 interface Props {
     canvasRef: GraphRef
     className?: string
     handleDownloadImage?: () => void
     animation: boolean
     setAnimation: (animation: boolean) => void
+    manualDimmed: boolean
+    setManualDimmed: (dimmed: boolean) => void
+    selectedObjects?: (Node | Link)[]
+    /** Hide the three zoom buttons and download, show everything else. */
+    hideZoom?: boolean
 }
 
-export function Toolbar({ canvasRef, className, handleDownloadImage, animation, setAnimation }: Props) {
+export function Toolbar({ canvasRef, className, handleDownloadImage, animation, setAnimation, manualDimmed, setManualDimmed, selectedObjects, hideZoom: hideZoom }: Props) {
 
     const [layout, setLayout] = useState<LayoutMode>('force');
     const [direction, setDirection] = useState<string>('');
@@ -41,9 +93,32 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
     const handleZoomClick = (changefactor: number) => {
         const canvas = canvasRef.current
 
-        if (canvas) {
-            canvas.zoom(canvas.getZoom() * changefactor)
+        if (!canvas) return
+
+        if (selectedObjects && selectedObjects.length > 0) {
+            const graphData = canvas.getGraphData()
+            const selectedNodeIds = new Set<number>()
+
+            for (const el of selectedObjects) {
+                if ('source' in el) {
+                    // It's a link - center on both endpoints
+                    selectedNodeIds.add(el.source as number)
+                    selectedNodeIds.add(el.target as number)
+                } else {
+                    // It's a node
+                    selectedNodeIds.add(el.id)
+                }
+            }
+
+            const focusedNodes = graphData?.nodes.filter(n => selectedNodeIds.has(n.id)) ?? []
+            if (focusedNodes.length > 0) {
+                const cx = focusedNodes.reduce((s, n) => s + (n.x ?? 0), 0) / focusedNodes.length
+                const cy = focusedNodes.reduce((s, n) => s + (n.y ?? 0), 0) / focusedNodes.length
+                canvas.centerAt(cx, cy, 300)
+            }
         }
+
+        canvas.zoom(canvas.getZoom() * changefactor)
     }
 
     const handleCenterClick = () => {
@@ -55,7 +130,14 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
     }
 
     const handleAnimationToggle = () => {
-        setAnimation(!animation)
+        const next = !animation;
+        setAnimation(next);
+        canvasRef.current?.setAnimation(next);
+    }
+
+    const handleDimToggle = (checked: boolean) => {
+        setManualDimmed(checked);
+        canvasRef.current?.setDimmed(checked);
     }
 
     const handlePinToggle = () => {
@@ -109,6 +191,12 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
                 checked={animation}
                 disabled={animationDisabled}
                 onCheckedChange={handleAnimationToggle}
+            />
+            <Telescope size={16} />
+            <Switch
+                className="pointer-events-auto data-[state=unchecked]:bg-border"
+                checked={manualDimmed}
+                onCheckedChange={handleDimToggle}
             />
             <button
                 className="control-button p-1"
@@ -193,29 +281,9 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
                 </DropdownMenuContent>
             </DropdownMenu>
             <div className="h-4 w-px bg-border rounded-full" />
+            {!hideZoom && <ZoomControls canvasRef={canvasRef} selectedObjects={selectedObjects} />}
             <button
                 className="control-button"
-                onClick={() => handleZoomClick(0.9)}
-                title="Zoom Out"
-            >
-                <ZoomOut size={16} />
-            </button>
-            <button
-                className="control-button"
-                onClick={() => handleCenterClick()}
-                title="Center"
-            >
-                <Fullscreen size={16} />
-            </button>
-            <button
-                className="control-button"
-                onClick={() => handleZoomClick(1.1)}
-                title="Zoom In"
-            >
-                <ZoomIn size={16} />
-            </button>
-            <button
-                className="hidden md:block control-button"
                 title="downloadImage"
                 onClick={handleDownloadImage}
             >

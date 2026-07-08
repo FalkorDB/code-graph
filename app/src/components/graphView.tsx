@@ -1,16 +1,17 @@
 
 import { Graph, GraphData, Link, Node } from './model';
 import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
-import { Path, PATH_COLOR } from '@/lib/utils';
+import { Path } from '@/lib/utils';
 import { Fullscreen } from 'lucide-react';
 import { GraphRef } from '@/lib/utils';
 import ForceGraph from './ForceGraph';
-import { GraphLink, GraphNode, NODE_SIZE, getContrastTextColor, wrapTextForCircularNode } from '@falkordb/canvas';
+import { GraphLink, GraphNode } from '@falkordb/canvas';
 import { useTheme } from './theme-provider';
 
 export interface Position {
     x: number,
     y: number,
+    zoom?: number,
 }
 
 interface Props {
@@ -19,8 +20,6 @@ interface Props {
     graph: Graph
     chartRef: GraphRef
     id: "desktop" | "mobile"
-    selectedObj: Node | Link | undefined
-    setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
     selectedObjects: Node[]
     setSelectedObjects: Dispatch<SetStateAction<Node[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
@@ -30,34 +29,22 @@ interface Props {
     isPathResponse: boolean | undefined
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
-    animation: boolean
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
     zoomedNodes: Node[]
+    manualDimmed: boolean
 }
 
-const PADDING = 2;
-const FONT_FAMILY = 'SofiaSans, Arial, sans-serif';
-const FONT_WEIGHT_NORMAL = 400;
-const FONT_WEIGHT_SELECTED = 700;
-const TEXT_FILL_RATIO = 0.85;
-const STROKE_WIDTH_SELECTED = 1.5;
-const STROKE_WIDTH_UNSELECTED = 0.5;
 const LIGHT_CANVAS_BACKGROUND = '#FFFFFF';
 const DARK_CANVAS_BACKGROUND = '#1A1A1A';
 const LIGHT_CANVAS_FOREGROUND = '#000000';
 const DARK_CANVAS_FOREGROUND = '#F5F5F5';
-const LIGHT_DIMMED_NODE_FILL = '#E5E5E5';
-const DARK_DIMMED_NODE_FILL = '#525252';
-const LIGHT_DIMMED_NODE_STROKE = 'gray';
-const DARK_DIMMED_NODE_STROKE = '#A3A3A3';
+
+const DOUBLE_CLICK_MS = 300;
 
 export default function GraphView({
     data,
-    graph,
     chartRef: canvasRef,
     id,
-    selectedObj,
-    setSelectedObj,
     selectedObjects,
     setSelectedObjects,
     setPosition,
@@ -67,20 +54,19 @@ export default function GraphView({
     isPathResponse,
     selectedPathId,
     setSelectedPathId,
-    animation,
     zoomedNodes,
-    setZoomedNodes
+    setZoomedNodes,
+    manualDimmed
 }: Props) {
 
-    const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
+    const lastClick = useRef<{ date: number, id: number }>({ date: 0, id: 0 })
+    const isCenteringRef = useRef(false)
     const [screenSize, setScreenSize] = useState<number>(0)
     const [hoverElement, setHoverElement] = useState<Node | Link | null>()
     const { resolvedTheme } = useTheme()
     const isDark = resolvedTheme === 'dark'
     const canvasBackgroundColor = isDark ? DARK_CANVAS_BACKGROUND : LIGHT_CANVAS_BACKGROUND
     const canvasForegroundColor = isDark ? DARK_CANVAS_FOREGROUND : LIGHT_CANVAS_FOREGROUND
-    const dimmedNodeFillColor = isDark ? DARK_DIMMED_NODE_FILL : LIGHT_DIMMED_NODE_FILL
-    const dimmedNodeStrokeColor = isDark ? DARK_DIMMED_NODE_STROKE : LIGHT_DIMMED_NODE_STROKE
 
     useEffect(() => {
         const handleResize = () => {
@@ -97,10 +83,9 @@ export default function GraphView({
     }, [])
 
     const unsetSelectedObjects = useCallback((evt?: MouseEvent) => {
-        if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
-        setSelectedObj(undefined)
+        if (evt?.ctrlKey || selectedObjects.length === 0) return
         setSelectedObjects([])
-    }, [selectedObj, selectedObjects, setSelectedObj, setSelectedObjects])
+    }, [selectedObjects, setSelectedObjects])
 
     const handleRightClick = useCallback((element: Node | Link, evt: MouseEvent) => {
         if (evt.ctrlKey && "category" in element) {
@@ -111,17 +96,84 @@ export default function GraphView({
                 setSelectedObjects([...selectedObjects, element as Node])
             }
         } else {
-            setSelectedObjects([])
+            setSelectedObjects([element as Node])
         }
 
-        setSelectedObj(element)
-        setPosition({ x: evt.clientX, y: evt.clientY })
-    }, [selectedObjects, setSelectedObjects, setSelectedObj, setPosition])
+        // Center on node or link midpoint when focus mode is ON, then show menu
+        if ((manualDimmed || isPathResponse) && canvasRef.current) {
+            // Clear any existing menu immediately so it doesn't flash at old position
+            setPosition(undefined)
+
+            const graphData = canvasRef.current.getGraphData()
+            let cx: number | undefined
+            let cy: number | undefined
+
+            if ("category" in element) {
+                const graphNode = graphData?.nodes.find(n => n.id === element.id)
+                cx = graphNode?.x
+                cy = graphNode?.y
+            } else {
+                const src = graphData?.nodes.find(n => n.id === (element as Link).source)
+                const tgt = graphData?.nodes.find(n => n.id === (element as Link).target)
+                if (src?.x !== undefined && tgt?.x !== undefined) {
+                    cx = ((src.x ?? 0) + (tgt.x ?? 0)) / 2
+                    cy = ((src.y ?? 0) + (tgt.y ?? 0)) / 2
+                }
+            }
+
+            if (cx !== undefined && cy !== undefined) {
+                isCenteringRef.current = true
+                canvasRef.current.centerAt(cx, cy, 300)
+                // Show menu after animation fully settles (400ms > 300ms animation)
+                setTimeout(() => {
+                    isCenteringRef.current = false
+                    const canvasBounds = canvasRef.current?.getBoundingClientRect()
+                    if (canvasBounds) {
+                        setPosition({
+                            x: canvasBounds.left + canvasBounds.width / 2,
+                            y: canvasBounds.top + canvasBounds.height / 2,
+                            zoom: canvasRef.current?.getZoom() ?? 1
+                        })
+                    }
+                }, 400)
+                return
+            }
+        }
+        // Focus mode OFF: use the node's actual screen-center so the gap in
+        // elementMenu is always the same fixed value regardless of where on the
+        // node the user clicked.
+        if ("category" in element && canvasRef.current) {
+            const gd = canvasRef.current.getGraphData()
+            const gn = gd?.nodes.find(n => n.id === element.id)
+            const vp = canvasRef.current.getViewport()
+            const cb = canvasRef.current.getBoundingClientRect()
+            if (gn?.x !== undefined && gn?.y !== undefined && vp && cb) {
+                const z = vp.zoom
+                const sx = (gn.x - vp.centerX) * z + cb.width / 2
+                const sy = (gn.y - vp.centerY) * z + cb.height / 2
+                setPosition({ x: cb.left + sx, y: cb.top + sy, zoom: z })
+                return
+            }
+        }
+        setPosition({ x: evt.clientX, y: evt.clientY, zoom: canvasRef.current?.getZoom() ?? 1 })
+    }, [selectedObjects, setSelectedObjects, setPosition, canvasRef, manualDimmed, isPathResponse])
 
     const handleLinkClick = (link: Link, evt: MouseEvent) => {
         unsetSelectedObjects(evt)
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
+        
+        // Zoom to fit selected path nodes with 2x multiplier
+        if (canvasRef.current) {
+            const graphData = canvasRef.current.getGraphData()
+            const selectedPathNodeIds = new Set(graphData?.nodes
+                .filter(n => n.data?.isPathSelected)
+                .map(n => n.id) ?? [])
+            
+            if (selectedPathNodeIds.size > 0) {
+                canvasRef.current.zoomToFit(2, (n: GraphNode) => selectedPathNodeIds.has(n.id))
+            }
+        }
     }
 
     const handleNodeHover = useCallback((node: Node | null) => {
@@ -135,31 +187,29 @@ export default function GraphView({
     const isNodeSelected = useCallback((node: GraphNode) => {
         if (isPathResponse) {
             return node.data.isPathSelected
-        } else {
-            return selectedObjects.some(obj => "category" in obj && obj.id === node.id) || (selectedObj && "category" in selectedObj && selectedObj?.id === node.id) || (hoverElement && ('category' in hoverElement) && hoverElement.id === node.id)
         }
-    }, [isPathResponse, selectedObjects, selectedObj, hoverElement])
+        // Highlight selected and hovered nodes - dimming handled separately by isNodeDimmed
+        return selectedObjects.some(obj => "category" in obj && obj.id === node.id) || (hoverElement && ('category' in hoverElement) && hoverElement.id === node.id)
+    }, [isPathResponse, selectedObjects, hoverElement])
 
     const isLinkSelected = useCallback((link: GraphLink) => {
         if (isPathResponse) {
             return link.data.isPathSelected
-        } else {
-            return selectedObjects.some(obj => "source" in obj && obj.id === link.id) || (selectedObj && "source" in selectedObj && selectedObj?.id === link.id) || (hoverElement && 'source' in hoverElement && hoverElement.id === link.id)
         }
-    }, [isPathResponse, selectedObjects, selectedObj, hoverElement])
+        // Highlight selected and hovered links - dimming handled separately by isLinkDimmed
+        return selectedObjects.some(obj => "source" in obj && obj.id === link.id) || (hoverElement && 'source' in hoverElement && hoverElement.id === link.id)
+    }, [isPathResponse, selectedObjects, hoverElement])
 
     const handleNodeClick = useCallback(async (node: Node) => {
-        const now = new Date()
-        const { date, name } = lastClick.current
+        const now = Date.now()
+        const { date, id } = lastClick.current
 
-        const isDoubleClick = now.getTime() - date.getTime() < 1000 && name === node.data.name
-        lastClick.current = { date: now, name: node.data.name }
+        const isDoubleClick = now - date < DOUBLE_CLICK_MS && id === node.id
+        lastClick.current = isDoubleClick ? { date: 0, id: 0 } : { date: now, id: node.id }
         
         if (isDoubleClick) {
-            lastClick.current = { date: now, name: "" }
             handleExpand([node], !node.expand)
         } else if (isShowPath) {
-            lastClick.current = { date: now, name: "" }
             setPath(prev => {
                 if (!prev?.start?.name || (prev.end?.name && prev.end?.name !== "")) {
                     return ({ start: { id: Number(node.id), name: node.data.name } })
@@ -178,145 +228,101 @@ export default function GraphView({
         }
     }, [zoomedNodes, canvasRef])
 
-    const nodeCanvasObject = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        if (node.x === undefined || node.y === undefined) {
-            node.x = 0;
-            node.y = 0;
-        }
-
-        const isHovered = !!hoverElement && !('source' in hoverElement) && hoverElement.id === node.id
-        const isSelected = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id
-        const nodeSelected = isSelected || isHovered
-
-        // --- Determine colors based on path state ---
+    const isNodeDimmed = useCallback((node: GraphNode) => {
         if (isPathResponse) {
-            if (node.data.isPathSelected) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = STROKE_WIDTH_SELECTED;
-            } else if (node.data.isPath) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = STROKE_WIDTH_UNSELECTED;
+            return !node.data.isPath && !node.data.isPathSelected
+        }
+        // Only apply dimming when focus mode is ON (manualDimmed=true)
+        // When manualDimmed=false, nothing should be dimmed regardless of selection
+        if (!manualDimmed) {
+            return false
+        }
+        
+        if (selectedObjects.length === 0 && !hoverElement) return false
+        
+        // Collect all active elements (selected + hovered)
+        const activeElements: (Node | Link)[] = [...selectedObjects]
+        if (hoverElement && !activeElements.includes(hoverElement)) {
+            activeElements.push(hoverElement)
+        }
+        
+        // Build selected node IDs and link endpoint IDs
+        const selectedNodeIds = new Set<number>()
+        const linkEndpointIds = new Set<number>()
+        
+        for (const el of activeElements) {
+            if (!('source' in el)) {
+                selectedNodeIds.add((el as any).id)
             } else {
-                ctx.fillStyle = dimmedNodeFillColor;
-                ctx.strokeStyle = dimmedNodeStrokeColor;
-                ctx.lineWidth = STROKE_WIDTH_UNSELECTED;
-            }
-        } else if (isPathResponse === undefined) {
-            if (node.data.isPathSelected) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = STROKE_WIDTH_SELECTED;
-            } else if (node.data.isPath) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = STROKE_WIDTH_UNSELECTED;
-            } else {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = canvasForegroundColor;
-                ctx.lineWidth = nodeSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH_UNSELECTED;
-            }
-        } else {
-            ctx.fillStyle = node.color;
-            ctx.strokeStyle = canvasForegroundColor;
-            ctx.lineWidth = nodeSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH_UNSELECTED;
-        }
-
-        const radius = NODE_SIZE + ctx.lineWidth / 2;
-
-        // Draw stroke circle
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
-        ctx.stroke();
-
-        // Draw fill circle
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, NODE_SIZE, 0, 2 * Math.PI, false);
-        ctx.fill();
-
-        // Skip labels when zoomed out (large graph optimisation)
-        const zoom = ctx.getTransform().a;
-        if (zoom < 1) return;
-
-        // --- Draw text (matching canvas logic) ---
-        const fillColor = ctx.fillStyle as string;
-        ctx.fillStyle = getContrastTextColor(fillColor);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        const textRadius = NODE_SIZE - PADDING / 2;
-        const name = node.data.name || node.data.title || String(node.id);
-        const nodeFontWeight = nodeSelected ? FONT_WEIGHT_SELECTED : FONT_WEIGHT_NORMAL;
-        const baseFontSize = 4;
-
-        // Measure at the base size for line-wrapping decisions
-        ctx.font = `${nodeFontWeight} ${baseFontSize}px ${FONT_FAMILY}`;
-        const [line1, line2] = wrapTextForCircularNode(ctx, name, textRadius);
-
-        let chosenSize = baseFontSize;
-
-        if (TEXT_FILL_RATIO > 0 && !line2) {
-            // Auto-size mode: scale text to fill textFillRatio × nodeRadius
-            const REF = 20;
-            ctx.font = `${nodeFontWeight} ${REF}px ${FONT_FAMILY}`;
-            const refMetrics = ctx.measureText(line1);
-            const visualWidth = (refMetrics.actualBoundingBoxLeft ?? 0)
-                + (refMetrics.actualBoundingBoxRight ?? 0);
-            const refWidth = Math.max(visualWidth, refMetrics.width);
-            const refHeight = (refMetrics.actualBoundingBoxAscent ?? 0)
-                + (refMetrics.actualBoundingBoxDescent ?? 0);
-
-            const r = TEXT_FILL_RATIO * textRadius;
-            if (refWidth > 0 && refHeight > 0) {
-                const diagonal = Math.sqrt(refWidth * refWidth + refHeight * refHeight);
-                chosenSize = REF * (2 * r / diagonal);
-            } else if (refWidth > 0) {
-                chosenSize = REF * (2 * r / refWidth);
+                linkEndpointIds.add((el as any).source as number)
+                linkEndpointIds.add((el as any).target as number)
             }
         }
-
-        ctx.font = `${nodeFontWeight} ${chosenSize}px ${FONT_FAMILY}`;
-
-        const textMetrics = ctx.measureText(line1);
-        const textHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
-        const halfTextHeight = (textHeight / 2) * 1.5;
-
-        if (line1) {
-            const yCorrection = line2
-                ? 0
-                : (textMetrics.actualBoundingBoxAscent - textMetrics.actualBoundingBoxDescent) / 2;
-            ctx.fillText(line1, node.x, line2 ? node.y - halfTextHeight : node.y + yCorrection);
+        
+        const allActiveIds = new Set([...selectedNodeIds, ...linkEndpointIds])
+        if (allActiveIds.size === 0) return false
+        if (allActiveIds.has(node.id)) return false
+        
+        // Expand neighbourhood only for directly selected nodes
+        for (const link of data.links) {
+            if ((selectedNodeIds.has(link.source) && link.target === node.id) ||
+                (selectedNodeIds.has(link.target) && link.source === node.id)) {
+                return false
+            }
         }
-        if (line2) {
-            ctx.fillText(line2, node.x, node.y + halfTextHeight);
-        }
-    }, [
-        selectedObj,
-        selectedObjects,
-        isPathResponse,
-        hoverElement,
-        dimmedNodeFillColor,
-        dimmedNodeStrokeColor,
-        canvasForegroundColor,
-    ])
+        
+        return true
+    }, [isPathResponse, manualDimmed, selectedObjects, hoverElement, data.links])
 
-    const nodePointerAreaPaint = useCallback((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        if (node.x === undefined || node.y === undefined) {
-            node.x = 0;
-            node.y = 0;
+    const isLinkDimmed = useCallback((link: GraphLink) => {
+        if (isPathResponse) {
+            return !link.data.isPath && !link.data.isPathSelected
         }
+        // Only apply dimming when focus mode is ON (manualDimmed=true)
+        // When manualDimmed=false, nothing should be dimmed regardless of selection
+        if (!manualDimmed) {
+            return false
+        }
+        
+        if (selectedObjects.length === 0 && !hoverElement) return false
+        
+        // Don't dim the link itself if it's selected/hovered
+        if (hoverElement && 'source' in hoverElement && hoverElement.id === link.id) return false
+        if (selectedObjects.some(obj => 'source' in obj && obj.id === link.id)) return false
+        
+        // Collect all active elements (selected + hovered)
+        const activeElements: (Node | Link)[] = [...selectedObjects]
+        if (hoverElement && !activeElements.includes(hoverElement)) {
+            activeElements.push(hoverElement)
+        }
+        
+        // Build selected node IDs only (not link endpoints)
+        const selectedNodeIds = new Set<number>()
+        for (const el of activeElements) {
+            if (!('source' in el)) {
+                selectedNodeIds.add((el as any).id)
+            }
+        }
+        
+        if (selectedNodeIds.size === 0) return true
+        
+        // Link is undimmed if one endpoint is a directly selected node
+        const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source
+        const tgtId = typeof link.target === 'object' ? (link.target as any).id : link.target
+        
+        if (selectedNodeIds.has(srcId) || selectedNodeIds.has(tgtId)) return false
 
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, NODE_SIZE + 2 + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
-        ctx.fill();
-    }, [])
+        return true
+    }, [isPathResponse, manualDimmed, selectedObjects, hoverElement, data.links])
 
     const linkLineDash = useCallback((link: GraphLink) => {
         if (link.data.isPath && !link.data.isPathSelected) return [5, 5]
         return []
     }, [])
+
+    const handleNodeDragEnd = useCallback(() => {
+        setPosition(undefined)
+    }, [setPosition])
 
     const mobileBreakpointRaw = Number(import.meta.env.VITE_MOBILE_BREAKPOINT)
     const mobileBreakpoint = Number.isFinite(mobileBreakpointRaw) ? mobileBreakpointRaw : 0
@@ -341,14 +347,15 @@ export default function GraphView({
                 onLinkHover={handleLinkHover}
                 onLinkRightClick={handleRightClick}
                 isLinkSelected={isLinkSelected}
+                isNodeDimmed={isNodeDimmed}
+                isLinkDimmed={isLinkDimmed}
+                dimmed={isPathResponse === true || manualDimmed}
+                linkLineDash={linkLineDash}
                 onBackgroundClick={unsetSelectedObjects}
                 onBackgroundRightClick={unsetSelectedObjects}
-                onZoom={() => unsetSelectedObjects()}
+                onZoom={() => { if (!isCenteringRef.current) unsetSelectedObjects() }}
                 onEngineStop={handleEngineStop}
-                nodeCanvasObject={nodeCanvasObject}
-                nodePointerAreaPaint={nodePointerAreaPaint}
-                linkLineDash={linkLineDash}
-                animation={animation}
+                onNodeDragEnd={handleNodeDragEnd}
                 backgroundColor={canvasBackgroundColor}
                 foregroundColor={canvasForegroundColor}
             />

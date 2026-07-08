@@ -37,7 +37,7 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
         }
 
         const json = await result.json()
-        setOptions(json.repositories)
+        setOptions(json.repositories as string[])
     }
 
     useEffect(() => {
