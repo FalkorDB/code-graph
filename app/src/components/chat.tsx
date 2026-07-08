@@ -110,6 +110,44 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         setPaths([])
     }, [isPathResponse])
 
+    // Update selected path highlighting when selectedPathId changes
+    useEffect(() => {
+        if (!selectedPathId || !isPathResponse || paths.length === 0) return
+
+        const canvas = canvasRef.current
+        if (!canvas) return
+
+        // Find which path contains the selected link
+        const selectedPath = paths.find(p => p.links.some(l => l.id === selectedPathId))
+        if (!selectedPath) return
+
+        // Clear all path selections first
+        graph.Elements.nodes.forEach((node: any) => {
+            if (node.isPathSelected) node.isPathSelected = false
+        })
+        graph.Elements.links.forEach((link: any) => {
+            if (link.isPathSelected) link.isPathSelected = false
+        })
+
+        // Mark selected path elements
+        selectedPath.nodes.forEach(n => {
+            const node = graph.Elements.nodes.find(gn => gn.id === n.id)
+            if (node) node.isPathSelected = true
+        })
+        selectedPath.links.forEach(l => {
+            const link = graph.Elements.links.find(gl => gl.id === l.id)
+            if (link) link.isPathSelected = true
+        })
+
+        canvas.setGraphData(convertToCanvasData(graph.Elements))
+
+        // Zoom to fit selected path nodes
+        const selectedNodeIds = new Set(selectedPath.nodes.map((n: Node) => n.id))
+        setTimeout(() => {
+            canvas.zoomToFit(1.5, (n: GraphNode) => selectedNodeIds.has(n.id))
+        }, 100)
+    }, [selectedPathId, isPathResponse, paths])
+
     const handleSetSelectedPath = (p: PathData) => {
         const canvas = canvasRef.current
 
@@ -355,7 +393,13 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         });
 
         // Update the canvas from the model
-        canvasRef.current?.setGraphData(convertToCanvasData(graph.Elements))
+        const pathCanvas = canvasRef.current
+        pathCanvas?.setGraphData(convertToCanvasData(graph.Elements))
+
+        // Zoom to fit all paths
+        setTimeout(() => {
+            pathCanvas?.zoomToFit(1.2)
+        }, 100)
     }
 
     const getTip = (className?: string) =>
