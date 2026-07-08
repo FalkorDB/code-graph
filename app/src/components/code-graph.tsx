@@ -243,6 +243,7 @@ export function CodeGraph({
             // Update the model with new elements (graph.Elements is already updated by onFetchNode)
             // Convert the full model to canvas data and update
             canvasRef.current?.setGraphData(convertToCanvasData(graph.Elements))
+            setData({ ...graph.Elements })
         } else {
             const deleteNodes = nodes.filter(n => n.expand)
             if (deleteNodes.length > 0) {
@@ -256,6 +257,7 @@ export function CodeGraph({
 
             // Convert the updated model to canvas data
             canvasRef.current?.setGraphData(convertToCanvasData(graph.Elements))
+            setData({ ...graph.Elements })
         }
 
         setSelectedObjects([])
@@ -288,6 +290,8 @@ export function CodeGraph({
         canvas.refresh()
 
         setHasHiddenElements(true)
+
+        setData({ ...graph.Elements })
 
         setSelectedObjects([])
     }

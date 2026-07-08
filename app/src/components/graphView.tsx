@@ -176,7 +176,7 @@ export default function GraphView({
                 canvasRef.current.zoomToFit(2, (n: GraphNode) => selectedPathNodeIds.has(n.id))
             }
         }
-    }, [selectedPathId, isPathResponse])
+    }, [selectedPathId, isPathResponse, canvasRef])
 
     const handleNodeHover = useCallback((node: Node | null) => {
         setHoverElement(node)
@@ -345,7 +345,7 @@ export default function GraphView({
                 onNodeHover={handleNodeHover}
                 onNodeRightClick={handleRightClick}
                 isNodeSelected={isNodeSelected}
-                onLinkClick={isDesktop && isPathResponse ? handleLinkClick : handleRightClick}
+                onLinkClick={isDesktop ? handleLinkClick : handleRightClick}
                 onLinkHover={handleLinkHover}
                 onLinkRightClick={handleRightClick}
                 isLinkSelected={isLinkSelected}

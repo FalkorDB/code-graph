@@ -199,17 +199,20 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
                 checked={animation}
                 disabled={animationDisabled}
                 onCheckedChange={handleAnimationToggle}
+                aria-label={animation ? "Pause animation" : "Play animation"}
             />
             <Telescope size={16} />
             <Switch
                 className="pointer-events-auto data-[state=unchecked]:bg-border"
                 checked={manualDimmed}
                 onCheckedChange={handleDimToggle}
+                aria-label="Toggle dimming"
             />
             <button
                 className="control-button p-1"
                 onClick={handlePinToggle}
                 title={pinned ? "Unpin nodes" : "Pin nodes on drag"}
+                aria-label={pinned ? "Unpin nodes" : "Pin nodes on drag"}
             >
                 {pinned ? <Pin size={16} /> : <PinOff size={16} />}
             </button>

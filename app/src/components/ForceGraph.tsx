@@ -187,7 +187,6 @@ export default function ForceGraph({
         isLinkSelected,
         isNodeDimmed,
         isLinkDimmed,
-        dimmed,
         onBackgroundClick,
         onBackgroundRightClick,
         handleEngineStop,
