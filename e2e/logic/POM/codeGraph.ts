@@ -714,7 +714,7 @@ export default class CodeGraph extends BasePage {
 
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
         await this.waitForCanvasAnimationToEnd();
-        const zoom = await this.canvasHost.evaluate((canvas: { getZoom?: () => number }) => {
+        const zoom = await this.canvasHost.evaluate((canvas: any) => {
             return typeof canvas.getZoom === "function" ? canvas.getZoom() : 1;
         });
         return { scaleX: zoom, scaleY: zoom };
@@ -804,10 +804,7 @@ export default class CodeGraph extends BasePage {
         const startTime = Date.now();
 
         while (Date.now() - startTime < timeout) {
-            const { cooldown, zoom } = await this.canvasHost.evaluate((canvas: {
-                getGraph?: () => { cooldownTicks?: () => number } | undefined;
-                getZoom?: () => number;
-            }) => {
+            const { cooldown, zoom } = await this.canvasHost.evaluate((canvas: any) => {
                 const graph = typeof canvas.getGraph === "function" ? canvas.getGraph() : undefined;
                 return {
                     cooldown: typeof graph?.cooldownTicks === "function" ? graph.cooldownTicks() : null,
@@ -856,5 +853,45 @@ export default class CodeGraph extends BasePage {
                 nodeIds: Array.isArray(nodes) ? nodes.map((node: { id: string | number }) => String(node.id)).sort() : [],
             };
         }, this.activeGraphGetterName);
+    }
+
+    /* Element Menu specific tests */
+    async isElementMenuVisible(): Promise<boolean> {
+        await this.page.waitForTimeout(500);
+        return await this.elementMenu.isVisible();
+    }
+
+    async getElementMenuBoundingBox(): Promise<any> {
+        const isVisible = await this.isElementMenuVisible();
+        if (!isVisible) throw new Error("Element menu is not visible!");
+        return await this.elementMenu.boundingBox();
+    }
+
+    async hasElementMenuButton(buttonTitle: string): Promise<boolean> {
+        const isVisible = await this.isElementMenuVisible();
+        if (!isVisible) throw new Error("Element menu is not visible!");
+        const button = this.elementMenuButton(buttonTitle);
+        return await button.isVisible();
+    }
+
+    async rightClickAtNode(x: number, y: number): Promise<void> {
+        await this.waitForCanvasAnimationToEnd();
+        const boundingBox = await this.canvasElement.boundingBox();
+        if (!boundingBox) throw new Error("Canvas bounding box not found");
+
+        // Move to node position and right-click
+        await this.page.mouse.move(x, y);
+        await this.page.waitForTimeout(300);
+        await this.page.mouse.click(x, y, { button: 'right' });
+        
+        // Wait for element menu to appear
+        const isMenuVisible = await this.elementMenu.isVisible({ timeout: 3000 }).catch(() => false);
+        if (!isMenuVisible) {
+            throw new Error(`Element menu not visible after right-clicking at (${x}, ${y})`);
+        }
+    }
+
+    async getCanvasBoundingBox(): Promise<any> {
+        return await this.canvasElement.boundingBox();
     }
 }
