@@ -50,7 +50,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
 
     // X axis: center on click, clamp to container edges
     const rawLeft = relX - containerWidth / 2
-    const left = Math.max(EDGE_MARGIN, Math.min(rawLeft, parentW - containerWidth - EDGE_MARGIN))
+    const left = Math.max(edgeMargin, Math.min(rawLeft, parentW - containerWidth - edgeMargin))
 
     // Y axis: always place below at (node_center + node_radius + fixed_gap).
     // Clamp to canvas edges — no flipping. If the node is larger than the canvas

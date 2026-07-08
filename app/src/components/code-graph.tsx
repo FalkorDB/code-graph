@@ -40,8 +40,6 @@ interface Props {
     handleSearchSubmit: (node: any) => void
     searchNode: any
     setSearchNode: Dispatch<SetStateAction<any>>
-    cooldownTicks: number | undefined
-    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     animation: boolean
     setAnimation: (animation: boolean) => void
     manualDimmed: boolean
@@ -74,8 +72,6 @@ export function CodeGraph({
     handleSearchSubmit,
     searchNode,
     setSearchNode,
-    cooldownTicks,
-    setCooldownTicks,
     animation,
     setAnimation,
     manualDimmed,

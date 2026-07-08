@@ -125,7 +125,7 @@ export default function GraphView({
                 isCenteringRef.current = true
                 canvasRef.current.centerAt(cx, cy, 300)
                 // Show menu after animation fully settles (400ms > 300ms animation)
-                const timeoutId = setTimeout(() => {
+                setTimeout(() => {
                     isCenteringRef.current = false
                     const canvasBounds = canvasRef.current?.getBoundingClientRect()
                     if (canvasBounds) {
@@ -137,6 +137,7 @@ export default function GraphView({
                     }
                 }, 400)
                 return
+            }
         }
         // Focus mode OFF: use the node's actual screen-center so the gap in
         // elementMenu is always the same fixed value regardless of where on the

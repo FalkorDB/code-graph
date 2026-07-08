@@ -490,8 +490,6 @@ export default function App() {
                   handleSearchSubmit={(node) => handleSearchSubmit(node, desktopChartRef)}
                   searchNode={searchNode}
                   setSearchNode={setSearchNode}
-                  cooldownTicks={cooldownTicks}
-                  setCooldownTicks={setCooldownTicks}
                   animation={animation}
                   setAnimation={setAnimation}
                   manualDimmed={manualDimmed}
@@ -620,8 +618,6 @@ export default function App() {
                 handleSearchSubmit={(node) => handleSearchSubmit(node, mobileChartRef)}
                 setSearchNode={setSearchNode}
                 searchNode={searchNode}
-                cooldownTicks={cooldownTicks}
-                setCooldownTicks={setCooldownTicks}
                 animation={animation}
                 setAnimation={setAnimation}
                 manualDimmed={manualDimmed}

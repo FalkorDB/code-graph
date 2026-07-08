@@ -329,12 +329,14 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         setIsPathResponse(true)
 
         // Clear previous path markings before applying new ones
-        graph.Elements.forEach((element: any) => {
-            element.isPath = false;
-            element.isPathSelected = false;
-            if ("source" in element) {
-                element.color = "#999999";
-            }
+        graph.Elements.nodes.forEach((node: any) => {
+            node.isPath = false;
+            node.isPathSelected = false;
+        });
+        graph.Elements.links.forEach((link: any) => {
+            link.isPath = false;
+            link.isPathSelected = false;
+            link.color = "#999999";
         });
 
         // Mark path elements on the model
