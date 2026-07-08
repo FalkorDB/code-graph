@@ -356,20 +356,6 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         // Update the canvas from the model
         canvasRef.current?.setGraphData(convertToCanvasData(graph.Elements))
-        
-        // Zoom to fit all path nodes after coloring
-        const pathNodeIds = new Set(formattedPaths.flatMap(p => p.nodes).map(n => n.id))
-        if (pathNodeIds.size > 0 && canvasRef.current) {
-            canvasRef.current.zoomToFit(1, (n: any) => pathNodeIds.has(n.id))
-        }
-
-        setTimeout(() => {
-            const nodesMap = new Map<number, Node>(formattedPaths.flatMap(p => p.nodes.map((n: Node) => [n.id, n])))
-            // Cap zoom multiplier for links (1.1x) since links take very little visual space
-            const hasLinks = formattedPaths.some(p => p.links.length > 0)
-            const multiplier = hasLinks ? 1.1 : 2
-            canvas.zoomToFit(multiplier, (n: GraphNode) => formattedPaths.some(p => nodesMap.has(n.id)));
-        }, 0)
     }
 
     const getTip = (className?: string) =>
