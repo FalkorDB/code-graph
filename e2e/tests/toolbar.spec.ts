@@ -46,7 +46,7 @@ test.describe("Toolbar and Zoom Controls tests", () => {
     // Zoom in first
     await codeGraph.clickZoomIn();
     await codeGraph.clickZoomIn();
-    const zoomedScale = await codeGraph.getCanvasScaling();
+    await codeGraph.getCanvasScaling();
     
     // Click center to reset
     await codeGraph.clickCenter();

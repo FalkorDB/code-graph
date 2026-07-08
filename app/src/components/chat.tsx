@@ -328,6 +328,15 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         ]);
         setIsPathResponse(true)
 
+        // Clear previous path markings before applying new ones
+        graph.Elements.forEach((element: any) => {
+            element.isPath = false;
+            element.isPathSelected = false;
+            if ("source" in element) {
+                element.color = "#999999";
+            }
+        });
+
         // Mark path elements on the model
         formattedPaths.flatMap(p => p.nodes).forEach(n => {
             const node = graph.Elements.nodes.find(gn => gn.id === n.id);

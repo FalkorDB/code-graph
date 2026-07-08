@@ -80,7 +80,6 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [searchNode, setSearchNode] = useState<PathNode>({});
-  const [cooldownTicks, setCooldownTicks] = useState<number | undefined>(undefined)
   const [animation, setAnimation] = useState(false)
   const [manualDimmed, setManualDimmed] = useState<boolean>(true)
   const [optionsOpen, setOptionsOpen] = useState(false)

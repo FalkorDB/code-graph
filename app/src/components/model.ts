@@ -265,22 +265,22 @@ export class Graph {
   public removeLinks(ids: number[] = []) {
     const connectedLinks = this.elements.links.filter(link => ids.includes(link.source) || ids.includes(link.target))
 
-    this.elements = {
-      nodes: this.elements.nodes,
-      links: this.elements.links.map(link => {
-        if (
-          (ids.length !== 0 && !connectedLinks.includes(link)) ||
-          (this.nodesMap.get(link.source) && this.nodesMap.get(link.target))
-        ) {
-          if (link.collapsed && connectedLinks.includes(link)) {
-            // Remove collapsed links connected to the given ids even if both endpoints exist
-          } else {
-            return link
-          }
+    this.elements.links = this.elements.links.filter(link => {
+      if (
+        (ids.length !== 0 && !connectedLinks.includes(link)) ||
+        (this.nodesMap.get(link.source) && this.nodesMap.get(link.target))
+      ) {
+        if (link.collapsed && connectedLinks.includes(link)) {
+          // Remove collapsed links connected to the given ids even if both endpoints exist
+          this.linksMap.delete(link.id)
+          return false
+        } else {
+          return true
         }
-        this.linksMap.delete(link.id)
-      }).filter(link => link !== undefined)
-    }
+      }
+      this.linksMap.delete(link.id)
+      return false
+    })
   }
 
   public visibleLinks(visible: boolean, ids?: number[]) {

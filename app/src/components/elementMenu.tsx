@@ -38,8 +38,8 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
     const parentW = parentRef?.current?.clientWidth || 0
     const parentH = parentRef?.current?.clientHeight || 0
 
-    const EDGE_MARGIN = 8  // fixed margin from container edges
-    const GAP = 12         // fixed gap between node edge and menu — constant at every zoom level
+    const edgeMargin = 8  // fixed margin from container edges
+    const gap = 12        // fixed gap between node edge and menu — constant at every zoom level
 
     const zoom = position.zoom ?? 1
     const nodeRadius = 9 * zoom  // node visual radius in screen px (NODE_SIZE=9 world units)
@@ -55,8 +55,8 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
     // Y axis: always place below at (node_center + node_radius + fixed_gap).
     // Clamp to canvas edges — no flipping. If the node is larger than the canvas
     // the menu stays at the bottom edge, which may overlap the node.
-    const rawTop = relY + nodeRadius + GAP
-    const top = Math.max(EDGE_MARGIN, Math.min(rawTop, parentH - containerHeight - EDGE_MARGIN))
+    const rawTop = relY + nodeRadius + gap
+    const top = Math.max(edgeMargin, Math.min(rawTop, parentH - containerHeight - edgeMargin))
 
     return (
         <>

@@ -58,13 +58,13 @@ export function ZoomControls({ canvasRef, className, selectedObjects }: ZoomCont
 
     return (
         <div className={cn("flex flex-row items-center gap-1", className)}>
-            <button className="control-button" onClick={() => handleZoomClick(0.9)} title="Zoom Out">
+            <button className="control-button" onClick={() => handleZoomClick(0.9)} title="Zoom Out" aria-label="Zoom Out">
                 <ZoomOut size={16} />
             </button>
-            <button className="control-button" onClick={() => canvasRef.current?.zoomToFit()} title="Center">
+            <button className="control-button" onClick={() => canvasRef.current?.zoomToFit()} title="Center" aria-label="Center">
                 <Fullscreen size={16} />
             </button>
-            <button className="control-button" onClick={() => handleZoomClick(1.1)} title="Zoom In">
+            <button className="control-button" onClick={() => handleZoomClick(1.1)} title="Zoom In" aria-label="Zoom In">
                 <ZoomIn size={16} />
             </button>
         </div>
@@ -146,6 +146,8 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
         canvasRef.current?.setPinOnDragEnd(next);
     }
 
+    const isAnimationDisabled = layout !== 'force' || pinned
+
     const handleLayoutChange = (value: string) => {
         const mode = value as LayoutMode;
         setLayout(mode);
@@ -164,10 +166,16 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
 
         canvasRef.current?.setLayout(mode);
 
-        // Non-force layouts auto-pin
+        // Non-force layouts auto-pin and auto-disable animation
         const nextPinned = mode !== 'force';
         setPinned(nextPinned);
         canvasRef.current?.setPinOnDragEnd(nextPinned);
+        
+        // If switching to non-force layout, disable animation
+        if (mode !== 'force' && animation) {
+            setAnimation(false);
+            canvasRef.current?.setAnimation(false);
+        }
     }
 
     const handleDirectionChange = (value: string, targetLayout?: string) => {

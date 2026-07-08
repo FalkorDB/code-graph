@@ -125,7 +125,7 @@ export default function GraphView({
                 isCenteringRef.current = true
                 canvasRef.current.centerAt(cx, cy, 300)
                 // Show menu after animation fully settles (400ms > 300ms animation)
-                setTimeout(() => {
+                const timeoutId = setTimeout(() => {
                     isCenteringRef.current = false
                     const canvasBounds = canvasRef.current?.getBoundingClientRect()
                     if (canvasBounds) {
@@ -137,7 +137,6 @@ export default function GraphView({
                     }
                 }, 400)
                 return
-            }
         }
         // Focus mode OFF: use the node's actual screen-center so the gap in
         // elementMenu is always the same fixed value regardless of where on the
@@ -162,9 +161,11 @@ export default function GraphView({
         unsetSelectedObjects(evt)
         if (!isPathResponse || link.id === selectedPathId) return
         setSelectedPathId(link.id)
-        
-        // Zoom to fit selected path nodes with 2x multiplier
-        if (canvasRef.current) {
+    }
+
+    // Zoom to fit selected path nodes when selectedPathId changes
+    useEffect(() => {
+        if (selectedPathId && canvasRef.current && isPathResponse) {
             const graphData = canvasRef.current.getGraphData()
             const selectedPathNodeIds = new Set(graphData?.nodes
                 .filter(n => n.data?.isPathSelected)
@@ -174,7 +175,7 @@ export default function GraphView({
                 canvasRef.current.zoomToFit(2, (n: GraphNode) => selectedPathNodeIds.has(n.id))
             }
         }
-    }
+    }, [selectedPathId, isPathResponse])
 
     const handleNodeHover = useCallback((node: Node | null) => {
         setHoverElement(node)

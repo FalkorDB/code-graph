@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Graph, GraphData, Node, Link, getCategoryColorValue } from "./model";
+import { Graph, GraphData, Node } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
 import { Download, GitFork, Search, X } from "lucide-react";
@@ -203,7 +203,11 @@ export function CodeGraph({
             nodes: graph.Elements.nodes.filter(node => {
                 if (!node.collapsed) return true
 
-                const isConnected = graph.Elements.links.some(link => (link.target === node.id || nodes.some(n => n.id === link.target)) && (link.source === node.id || nodes.some(n => n.id === link.source)));
+                // Check if this collapsed node is directly part of any link from deleted nodes
+                const isConnected = graph.Elements.links.some(link => 
+                    (link.target === node.id && nodes.some(n => n.id === link.source)) ||
+                    (link.source === node.id && nodes.some(n => n.id === link.target))
+                );
 
                 if (!isConnected) return true
 

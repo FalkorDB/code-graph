@@ -27,13 +27,12 @@ export enum MessageTypes {
   Text,
 }
 
-let messageIdCounter = 0;
 export function createMessage(msg: Omit<Message, 'id'>): Message {
-  return { ...msg, id: ++messageIdCounter };
+  return { ...msg, id: crypto.randomUUID() };
 }
 
 export interface Message {
-  id: number;
+  id: string;
   type: MessageTypes;
   text?: string;
   paths?: { nodes: any[], links: any[] }[];
