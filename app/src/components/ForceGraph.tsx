@@ -1,11 +1,12 @@
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { Data, GraphLink, GraphNode } from "@falkordb/canvas"
 import { GraphRef, PATH_COLOR } from "@/lib/utils"
 import { GraphData, Link, Node } from "./model"
 
 interface Props {
     id: "desktop" | "mobile"
+    graphId: string
     data: GraphData
     canvasRef: GraphRef
     onNodeClick: (node: Node, event: MouseEvent) => void
@@ -53,6 +54,7 @@ export const convertToCanvasData = (graphData: GraphData): Data => ({
 
 export default function ForceGraph({
     id,
+    graphId,
     data,
     canvasRef,
     onNodeClick,
@@ -203,14 +205,25 @@ export default function ForceGraph({
         canvasRef.current.setDimmed(dimmed)
     }, [dimmed, canvasRef, canvasLoaded])
 
+    // Track the last graphId that triggered a full setData
+    const lastGraphIdRef = useRef<string | undefined>(undefined)
+
     // Update canvas data
     useEffect(() => {
         const canvas = canvasRef.current
         if (!canvas || !canvasLoaded) return
 
         const canvasData = convertToCanvasData(data)
-        canvas.setData(canvasData)
-    }, [canvasRef, data, canvasLoaded])
+
+        if (graphId !== lastGraphIdRef.current) {
+            // New graph identity: full replacement (resets positions, runs simulation)
+            lastGraphIdRef.current = graphId
+            canvas.setData(canvasData)
+        } else {
+            // Same graph: incremental update (preserves node positions)
+            canvas.setGraphData(canvasData)
+        }
+    }, [canvasRef, graphId, data, canvasLoaded])
 
     return (
         <falkordb-canvas ref={canvasRef} node-mode="replace" />

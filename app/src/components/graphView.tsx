@@ -43,6 +43,7 @@ const DOUBLE_CLICK_MS = 300;
 
 export default function GraphView({
     data,
+    graph,
     chartRef: canvasRef,
     id,
     selectedObjects,
@@ -325,6 +326,7 @@ export default function GraphView({
             </div>
             <ForceGraph
                 id={id}
+                graphId={data.nodes.length === 0 ? '' : graph.Id}
                 data={data}
                 canvasRef={canvasRef}
                 onNodeClick={isDesktop || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}

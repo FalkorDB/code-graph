@@ -144,7 +144,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         // Zoom to fit selected path nodes
         const selectedNodeIds = new Set(selectedPath.nodes.map((n: Node) => n.id))
         setTimeout(() => {
-            canvas.zoomToFit(1.5, (n: GraphNode) => selectedNodeIds.has(n.id))
+            canvas.zoomToFit(1, (n: GraphNode) => selectedNodeIds.has(n.id))
         }, 100)
     }, [selectedPathId, isPathResponse, paths])
 
@@ -222,7 +222,7 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         canvas.setGraphData(convertToCanvasData(graph.Elements))
 
         setTimeout(() => {
-            canvas.zoomToFit(2, (n: GraphNode) => pNodeIds.has(n.id));
+            canvas.zoomToFit(1, (n: GraphNode) => pNodeIds.has(n.id));
         }, 300)
         setChatOpen && setChatOpen(false)
     }
@@ -396,9 +396,10 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
         const pathCanvas = canvasRef.current
         pathCanvas?.setGraphData(convertToCanvasData(graph.Elements))
 
-        // Zoom to fit all paths
+        // Zoom to fit all path nodes (same as selected path zoom but for all paths)
+        const allPathNodeIds = new Set(formattedPaths.flatMap(p => p.nodes).map((n: Node) => n.id))
         setTimeout(() => {
-            pathCanvas?.zoomToFit(1.2)
+            pathCanvas?.zoomToFit(1, (n: GraphNode) => allPathNodeIds.has(n.id))
         }, 100)
     }
 
