@@ -15,6 +15,7 @@ export default class BrowserWrapper {
         }
         this.context = await this.browser.newContext({
             permissions: ['clipboard-read', 'clipboard-write'],
+            viewport: { width: 1920, height: 1080 },
         });
         if (!this.page) {
             this.page = await this.context.newPage();
