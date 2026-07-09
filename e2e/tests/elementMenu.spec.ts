@@ -78,19 +78,21 @@ test.describe("Element Menu and Right-click Menu tests", () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await browser.setPageToFullScreen();
     await codeGraph.selectGraph(GRAPHRAG_SDK);
-    
-    // Get initial node count
+
+    // Remove a specific node to keep the assertion deterministic.
     const initialGraphData = await codeGraph.getGraphNodes();
-    const initialNodeCount = initialGraphData.length;
-    
-    // Right-click at canvas center and remove
-    await codeGraph.rightClickAtCanvasCenter();
+    const targetNode = findNodeByName(initialGraphData, nodes[0].nodeName);
+    expect(targetNode).toBeDefined();
+
+    await codeGraph.rightClickAtNode(targetNode.screenX, targetNode.screenY);
     await codeGraph.clickOnRemoveNodeViaElementMenu();
-    
-    // Wait for animation and verify node count decreased
+
+    // Hidden nodes remain in graph data; verify visibility rather than length.
     await codeGraph.waitForCanvasAnimationToEnd();
     const updatedGraphData = await codeGraph.getGraphNodes();
-    expect(updatedGraphData.length).toBeLessThan(initialNodeCount);
+    const updatedTargetNode = findNodeByName(updatedGraphData, nodes[0].nodeName);
+    expect(updatedTargetNode).toBeDefined();
+    expect(updatedTargetNode.visible).toBe(false);
   });
 
   test("Verify element menu positioning respects canvas boundaries", async () => {
