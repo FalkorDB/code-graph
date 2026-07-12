@@ -82,6 +82,18 @@ def _falkordb_reachable() -> bool:
         return False
 
 
+@pytest.fixture
+def require_falkordb() -> None:
+    """Skip the depending test when FalkorDB isn't reachable.
+
+    Tests that drive the real indexing path (creating a ``Graph`` and
+    writing nodes/edges) depend on this so the MCP suite stays runnable in
+    environments that only exercise the pure-Python unit tests.
+    """
+    if not _falkordb_reachable():
+        pytest.skip("FalkorDB not reachable on $FALKORDB_HOST:$FALKORDB_PORT")
+
+
 @pytest.fixture(scope="session")
 def indexed_fixture(sample_project_path: Path):
     """Index the sample project into a unique per-session graph.

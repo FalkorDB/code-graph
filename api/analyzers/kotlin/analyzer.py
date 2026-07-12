@@ -2,7 +2,7 @@ from pathlib import Path
 from ...entities.entity import Entity
 from ...entities.file import File
 from typing import Optional
-from ..analyzer import AbstractAnalyzer
+from ..tree_sitter_base import TreeSitterAnalyzer
 
 from multilspy import SyncLanguageServer
 
@@ -12,7 +12,27 @@ from tree_sitter import Language, Node
 import logging
 logger = logging.getLogger('code_graph')
 
-class KotlinAnalyzer(AbstractAnalyzer):
+class KotlinAnalyzer(TreeSitterAnalyzer):
+    entity_node_types = {
+        'class_declaration': "Class",
+        'object_declaration': "Object",
+        'function_declaration': "Function",
+    }
+    type_definition_node_types = ('class_declaration', 'object_declaration')
+    callable_definition_node_types = (
+        'function_declaration',
+        'class_declaration',
+        'object_declaration',
+    )
+    callable_exclude_node_types = ('class_declaration', 'object_declaration')
+    type_resolution_keys = (
+        "implement_interface",
+        "base_class",
+        "parameters",
+        "return_type",
+    )
+    method_resolution_keys = ("call",)
+
     def __init__(self) -> None:
         super().__init__(Language(tskotlin.language()))
 
@@ -44,7 +64,7 @@ class KotlinAnalyzer(AbstractAnalyzer):
                 if child.type == 'identifier':
                     return child.text.decode('utf-8')
         raise ValueError(f"Cannot extract name from entity type: {node.type}")
-    
+
     def get_entity_docstring(self, node: Node) -> Optional[str]:
         if node.type in ['class_declaration', 'object_declaration', 'function_declaration']:
             # Check for KDoc comment (/** ... */) before the node
@@ -54,14 +74,11 @@ class KotlinAnalyzer(AbstractAnalyzer):
                 if comment_text.startswith('/**'):
                     return comment_text
             return None
-        raise ValueError(f"Unknown entity type: {node.type}")        
+        raise ValueError(f"Unknown entity type: {node.type}")
 
-    def get_entity_types(self) -> list[str]:
-        return ['class_declaration', 'object_declaration', 'function_declaration']
-    
     def _get_delegation_types(self, entity: Entity) -> list[tuple]:
         """Extract type identifiers from delegation specifiers in order.
-        
+
         Returns list of (node, is_constructor_invocation) tuples.
         constructor_invocation indicates a superclass; plain user_type indicates an interface.
         """
@@ -91,25 +108,25 @@ class KotlinAnalyzer(AbstractAnalyzer):
                     entity.add_symbol("base_class", node)
                 else:
                     entity.add_symbol("implement_interface", node)
-                    
+
         elif entity.node.type == 'object_declaration':
             types = self._get_delegation_types(entity)
             for node, _ in types:
                 entity.add_symbol("implement_interface", node)
-                    
+
         elif entity.node.type == 'function_declaration':
             # Find function calls
             captures = self._captures("(call_expression) @reference.call", entity.node)
             if 'reference.call' in captures:
                 for caller in captures['reference.call']:
                     entity.add_symbol("call", caller)
-            
+
             # Find parameters with types
             captures = self._captures("(parameter (user_type (identifier) @parameter))", entity.node)
             if 'parameter' in captures:
                 for parameter in captures['parameter']:
                     entity.add_symbol("parameters", parameter)
-            
+
             # Find return type
             captures = self._captures("(function_declaration (user_type (identifier) @return_type))", entity.node)
             if 'return_type' in captures:
@@ -119,18 +136,6 @@ class KotlinAnalyzer(AbstractAnalyzer):
     def is_dependency(self, file_path: str) -> bool:
         # Check if file is in a dependency directory (e.g., build, .gradle cache)
         return "build/" in file_path or ".gradle/" in file_path or "/cache/" in file_path
-
-    def resolve_path(self, file_path: str, path: Path) -> str:
-        # For Kotlin, just return the file path as-is for now
-        return file_path
-
-    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
-        res = []
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, node):
-            type_dec = self.find_parent(resolved_node, ['class_declaration', 'object_declaration'])
-            if type_dec in file.entities:
-                res.append(file.entities[type_dec])
-        return res
 
     def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
         res = []
@@ -147,11 +152,3 @@ class KotlinAnalyzer(AbstractAnalyzer):
                             res.append(file.entities[method_dec])
                     break
         return res
-    
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
-        if key in ["implement_interface", "base_class", "parameters", "return_type"]:
-            return self.resolve_type(files, lsp, file_path, path, symbol)
-        elif key in ["call"]:
-            return self.resolve_method(files, lsp, file_path, path, symbol)
-        else:
-            raise ValueError(f"Unknown key {key}")

@@ -23,3 +23,20 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - SECRET_TOKEN=${SECRET_TOKEN:-}
       - CODE_GRAPH_PUBLIC=1
+
+  # MCP stdio server — opt-in. Bring up with:
+  #   docker compose run --rm -i code-graph-mcp
+  # then point Claude Code / Cursor at the running container's stdio.
+  code-graph-mcp:
+    build: .
+    depends_on:
+      - falkordb
+    profiles: ["mcp"]
+    stdin_open: true
+    tty: false
+    environment:
+      - CGRAPH_MODE=mcp
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - MODEL_NAME=${MODEL_NAME:-gemini/gemini-flash-lite-latest}
+      - CODE_GRAPH_AUTO_INDEX=${CODE_GRAPH_AUTO_INDEX:-}

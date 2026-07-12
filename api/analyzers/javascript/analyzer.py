@@ -3,10 +3,8 @@
 from pathlib import Path
 from typing import Optional
 
-from multilspy import SyncLanguageServer
 from ...entities.entity import Entity
-from ...entities.file import File
-from ..analyzer import AbstractAnalyzer
+from ..tree_sitter_base import TreeSitterAnalyzer
 
 import tree_sitter_javascript as tsjs
 from tree_sitter import Language, Node
@@ -15,12 +13,27 @@ import logging
 logger = logging.getLogger('code_graph')
 
 
-class JavaScriptAnalyzer(AbstractAnalyzer):
+class JavaScriptAnalyzer(TreeSitterAnalyzer):
     """Analyzer for JavaScript source files using tree-sitter.
 
     Extracts functions, classes, and methods from JavaScript code.
     Resolves class inheritance (extends) and function/method call references.
     """
+
+    entity_node_types = {
+        'function_declaration': "Function",
+        'class_declaration': "Class",
+        'method_definition': "Method",
+    }
+    type_definition_node_types = ('class_declaration',)
+    callable_definition_node_types = (
+        'function_declaration',
+        'method_definition',
+        'class_declaration',
+    )
+    callable_exclude_node_types = ('class_declaration',)
+    type_resolution_keys = ("base_class",)
+    method_resolution_keys = ("call",)
 
     def __init__(self) -> None:
         """Initialize the JavaScript analyzer with the tree-sitter JS grammar."""
@@ -32,26 +45,6 @@ class JavaScriptAnalyzer(AbstractAnalyzer):
         Currently a no-op; npm dependency resolution is not yet implemented.
         """
         pass
-
-    def get_entity_label(self, node: Node) -> str:
-        """Return the graph label for a given AST node type.
-
-        Args:
-            node: A tree-sitter AST node representing a JavaScript entity.
-
-        Returns:
-            One of 'Function', 'Class', or 'Method'.
-
-        Raises:
-            ValueError: If the node type is not a recognised entity.
-        """
-        if node.type == 'function_declaration':
-            return "Function"
-        elif node.type == 'class_declaration':
-            return "Class"
-        elif node.type == 'method_definition':
-            return "Method"
-        raise ValueError(f"Unknown entity type: {node.type}")
 
     def get_entity_name(self, node: Node) -> str:
         """Extract the declared name from a JavaScript entity node.
@@ -92,10 +85,6 @@ class JavaScriptAnalyzer(AbstractAnalyzer):
             return None
         raise ValueError(f"Unknown entity type: {node.type}")
 
-    def get_entity_types(self) -> list[str]:
-        """Return the tree-sitter node types recognised as JavaScript entities."""
-        return ['function_declaration', 'class_declaration', 'method_definition']
-
     def add_symbols(self, entity: Entity) -> None:
         """Extract symbols (references) from a JavaScript entity.
 
@@ -128,45 +117,12 @@ class JavaScriptAnalyzer(AbstractAnalyzer):
         """
         return "node_modules" in Path(file_path).parts
 
-    def resolve_path(self, file_path: str, path: Path) -> str:
-        """Resolve an import path relative to the project root."""
-        return file_path
-
-    def resolve_type(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
-        """Resolve a type reference to its class declaration entity."""
-        res = []
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, node):
-            type_dec = self.find_parent(resolved_node, ['class_declaration'])
-            if type_dec in file.entities:
-                res.append(file.entities[type_dec])
-        return res
-
-    def resolve_method(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, node: Node) -> list[Entity]:
-        """Resolve a call expression to the target function or method entity."""
-        res = []
+    def _extract_call_target(self, node: Node) -> Optional[Node]:
+        """Extract the callable target from a JavaScript call expression."""
         if node.type == 'call_expression':
             func_node = node.child_by_field_name('function')
             if func_node and func_node.type == 'member_expression':
                 func_node = func_node.child_by_field_name('property')
             if func_node:
                 node = func_node
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, node):
-            method_dec = self.find_parent(resolved_node, ['function_declaration', 'method_definition', 'class_declaration'])
-            if method_dec and method_dec.type == 'class_declaration':
-                continue
-            if method_dec in file.entities:
-                res.append(file.entities[method_dec])
-        return res
-
-    def resolve_symbol(self, files: dict[Path, File], lsp: SyncLanguageServer, file_path: Path, path: Path, key: str, symbol: Node) -> list[Entity]:
-        """Dispatch symbol resolution based on the symbol category.
-
-        Routes ``base_class`` symbols to type resolution and ``call`` symbols
-        to method resolution.
-        """
-        if key == "base_class":
-            return self.resolve_type(files, lsp, file_path, path, symbol)
-        elif key == "call":
-            return self.resolve_method(files, lsp, file_path, path, symbol)
-        else:
-            raise ValueError(f"Unknown key {key}")
+        return node
