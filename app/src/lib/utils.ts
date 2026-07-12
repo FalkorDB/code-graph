@@ -8,6 +8,20 @@ export type PathData = {
   links: any[]
 }
 
+export const DEFAULT_BRANCH = "_default"
+
+// A single entry returned by /api/list_repos: `graph` is the underlying
+// FalkorDB graph name to query, `project`/`branch` are used for display.
+export type RepoOption = {
+  project: string
+  branch: string
+  graph: string
+}
+
+export function repoLabel(repo: RepoOption): string {
+  return repo.branch === DEFAULT_BRANCH ? repo.project : `${repo.project} (${repo.branch})`
+}
+
 export type PathNode = {
   id?: number
   name?: string

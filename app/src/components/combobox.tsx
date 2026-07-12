@@ -1,14 +1,15 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
+import { RepoOption, repoLabel } from "@/lib/utils";
 
 const AUTH_HEADERS: HeadersInit = import.meta.env.VITE_SECRET_TOKEN
   ? { 'Authorization': `Bearer ${import.meta.env.VITE_SECRET_TOKEN}` }
   : {};
 
 interface Props {
-    options: string[]
-    setOptions: (options: string[]) => void
+    options: RepoOption[]
+    setOptions: (options: RepoOption[]) => void
     selectedValue: string
     onSelectedValue: (value: string) => Promise<void>
 
@@ -37,7 +38,7 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
         }
 
         const json = await result.json()
-        setOptions(json.repositories as string[])
+        setOptions(json.repositories as RepoOption[])
     }
 
     useEffect(() => {
@@ -65,8 +66,8 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
                 {
                     options.length !== 0 &&
                     options.map((option) => (
-                        <SelectItem key={option} value={option}>
-                            {option}
+                        <SelectItem key={option.graph} value={option.graph}>
+                            {repoLabel(option)}
                         </SelectItem>
                     ))
                 }

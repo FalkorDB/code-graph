@@ -36,7 +36,6 @@ test.describe("Element Menu and Right-click Menu tests", () => {
     expect(targetNode).toBeDefined();
     
     // Right-click on the node to trigger element menu
-    await codeGraph.nodeClick(targetNode.screenX, targetNode.screenY);
     await codeGraph.rightClickAtNode(targetNode.screenX, targetNode.screenY);
     
     // Verify menu is visible

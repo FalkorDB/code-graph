@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
 import { toast } from '@/components/ui/use-toast';
-import { Path } from "@/lib/utils";
+import { Path, RepoOption } from "@/lib/utils";
 import Input from './Input';
 // import CommitList from './commitList';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,8 +27,8 @@ interface Props {
     setData: Dispatch<SetStateAction<GraphData>>,
     onFetchGraph: (graphName: string) => Promise<void>,
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
-    options: string[]
-    setOptions: Dispatch<SetStateAction<string[]>>
+    options: RepoOption[]
+    setOptions: Dispatch<SetStateAction<RepoOption[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     canvasRef: GraphRef
@@ -243,6 +243,7 @@ export function CodeGraph({
             // Update the model with new elements (graph.Elements is already updated by onFetchNode)
             // Convert the full model to canvas data and update
             canvasRef.current?.setGraphData(convertToCanvasData(graph.Elements))
+            setData({ ...graph.Elements })
         } else {
             const deleteNodes = nodes.filter(n => n.expand)
             if (deleteNodes.length > 0) {
@@ -256,6 +257,7 @@ export function CodeGraph({
 
             // Convert the updated model to canvas data
             canvasRef.current?.setGraphData(convertToCanvasData(graph.Elements))
+            setData({ ...graph.Elements })
         }
 
         setSelectedObjects([])
@@ -287,6 +289,7 @@ export function CodeGraph({
         })
         canvas.refresh()
 
+        setData({ ...graph.Elements })
         setHasHiddenElements(true)
 
         setSelectedObjects([])
@@ -378,6 +381,7 @@ export function CodeGraph({
                                                     canvasData.nodes.forEach((n: { visible: boolean }) => { n.visible = true; });
                                                     canvasData.links.forEach((l: { visible: boolean }) => { l.visible = true; });
                                                     canvas.refresh();
+                                                    setData({ ...graph.Elements });
                                                     setHasHiddenElements(false);
                                                 }}
                                             >

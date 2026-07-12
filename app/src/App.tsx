@@ -13,7 +13,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } 
 import Input from './components/Input';
 import { Labels } from './components/labels';
 import { Toolbar, ZoomControls } from './components/toolbar';
-import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
+import { cn, DEFAULT_BRANCH, GraphRef, Message, Path, PathData, PathNode, RepoOption } from '@/lib/utils';
 import type { GraphNode } from '@falkordb/canvas';
 import { convertToCanvasData } from './components/ForceGraph';
 import { Toaster } from '@/components/ui/toaster';
@@ -72,7 +72,7 @@ export default function App() {
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [tipOpen, setTipOpen] = useState(false)
-  const [options, setOptions] = useState<string[]>([]);
+  const [options, setOptions] = useState<RepoOption[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const desktopChartRef = useRef<GraphRef["current"]>(null)
@@ -142,7 +142,7 @@ export default function App() {
 
     const graphName = createURL.split('/').pop()!
 
-    setOptions(prev => [...prev, graphName])
+    setOptions(prev => [...prev, { project: graphName, branch: DEFAULT_BRANCH, graph: graphName }])
     setSelectedValue(graphName)
     setCreateURL("")
     setCreateOpen(false)
