@@ -1,7 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
-import { RepoOption, repoLabel } from "@/lib/utils";
+import { RepoOption, repoLabel, toRepoOption } from "@/lib/utils";
 
 const AUTH_HEADERS: HeadersInit = import.meta.env.VITE_SECRET_TOKEN
   ? { 'Authorization': `Bearer ${import.meta.env.VITE_SECRET_TOKEN}` }
@@ -38,7 +38,8 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
         }
 
         const json = await result.json()
-        setOptions(json.repositories as RepoOption[])
+        const repositories: unknown[] = Array.isArray(json.repositories) ? json.repositories : []
+        setOptions(repositories.map(toRepoOption))
     }
 
     useEffect(() => {

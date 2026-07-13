@@ -18,6 +18,23 @@ export type RepoOption = {
   graph: string
 }
 
+// Normalizes a /api/list_repos entry into a RepoOption. Older/production
+// backends may still return plain repo name strings instead of
+// {project, branch, graph} objects — handle both so the UI never renders
+// "undefined (undefined)" or crashes when pointed at a mismatched backend.
+export function toRepoOption(entry: unknown): RepoOption {
+  if (typeof entry === "string") {
+    return { project: entry, branch: DEFAULT_BRANCH, graph: entry }
+  }
+  const repo = entry as Partial<RepoOption> | null | undefined
+  const graph = repo?.graph ?? repo?.project ?? ""
+  return {
+    project: repo?.project ?? graph,
+    branch: repo?.branch ?? DEFAULT_BRANCH,
+    graph,
+  }
+}
+
 export function repoLabel(repo: RepoOption): string {
   return repo.branch === DEFAULT_BRANCH ? repo.project : `${repo.project} (${repo.branch})`
 }
