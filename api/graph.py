@@ -837,15 +837,22 @@ class AsyncGraphQuery:
         if parsed is not None:
             self.project, self.branch = parsed
             self.name = name
+            self._needs_resolution = False
         else:
             self.project = name
             self.branch = branch or DEFAULT_BRANCH
-            # Composition is deferred until ``graph_exists``/first query so
-            # we can prefer an existing legacy (pre-T17) bare graph over
-            # composing a new, empty ``code:{project}:{branch}`` key; see
-            # ``_resolve_name``.
-            self.name = name
-            self._needs_resolution = branch in (None, "", DEFAULT_BRANCH)
+            if branch in (None, "", DEFAULT_BRANCH):
+                # Composition is deferred until ``graph_exists``/first query
+                # so we can prefer an existing legacy (pre-T17) bare graph
+                # over composing a new, empty ``code:{project}:_default``
+                # key; see ``_resolve_name``.
+                self.name = name
+                self._needs_resolution = True
+            else:
+                # A specific branch was requested: compose immediately,
+                # same as before this bare-name fallback existed.
+                self.name = compose_graph_name(self.project, self.branch)
+                self._needs_resolution = False
         self.db = _async_db()
         self.g = self.db.select_graph(self.name)
 
