@@ -613,8 +613,18 @@ export default class CodeGraph extends BasePage {
     }
 
     async getMetricsPanelInfo(): Promise<{ nodes: string, edges: string }> {
-        const nodes = await this.canvasMetricsPanel("1").innerHTML();
-        const edges = await this.canvasMetricsPanel("3").innerHTML();
+        // The metrics panel is populated by an async /api/repo_info fetch
+        // that fires after graph selection resolves, so it can briefly read
+        // "0" right after selectGraph(). Poll until it settles on a
+        // non-zero value (or give up and return whatever is last read).
+        let nodes = "0";
+        let edges = "0";
+        for (let attempt = 0; attempt < 10; attempt++) {
+            nodes = await this.canvasMetricsPanel("1").innerHTML();
+            edges = await this.canvasMetricsPanel("3").innerHTML();
+            if (nodes !== "0" || edges !== "0") break;
+            await this.page.waitForTimeout(500);
+        }
         return { nodes, edges }
     }
 
