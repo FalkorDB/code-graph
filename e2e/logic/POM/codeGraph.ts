@@ -218,6 +218,10 @@ export default class CodeGraph extends BasePage {
         return (checkbox: string) => this.scopedLocator(`(//button[@role='checkbox'])[${checkbox}]`);
     }
 
+    private get categoryCheckbox(): (category: string) => Locator {
+        return (category: string) => this.scopedLocator(`//p[text()='${category}']/preceding-sibling::button[@role='checkbox']`);
+    }
+
     private get clearGraphBtn(): Locator {
         return this.container.getByRole('button', { name: 'Reset Graph' });
     }
@@ -548,6 +552,10 @@ export default class CodeGraph extends BasePage {
 
     async selectCodeGraphCheckbox(checkbox: string): Promise<void> {
         await interactWhenVisible(this.codeGraphCheckbox(checkbox), (el) => el.click(), `Checkbox ${checkbox}`);
+    }
+
+    async selectCategoryCheckbox(category: string): Promise<void> {
+        await interactWhenVisible(this.categoryCheckbox(category), (el) => el.click(), `Category checkbox ${category}`);
     }
 
     async clickOnClearGraphBtn(): Promise<void> {

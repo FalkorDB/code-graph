@@ -91,12 +91,11 @@ test.describe("Canvas tests", () => {
     expect(targetNodeForUpdateGraph.visible).toBe(true);
   });
 
-  categories.forEach((category, index) => {
-    const checkboxIndex = index + 1;
+  categories.forEach((category) => {
     test(`Verify that unchecking the ${category} checkbox hides ${category} nodes on the canvas`, async () => {
       const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
       await codeGraph.selectGraph(GRAPHRAG_SDK);
-      await codeGraph.selectCodeGraphCheckbox(checkboxIndex.toString());
+      await codeGraph.selectCategoryCheckbox(category);
       const result = await codeGraph.getGraphNodes();
       const findItem = result.find((item: { category: string; }) => item.category === category);
       expect(findItem.visible).toBeFalsy();
@@ -321,11 +320,11 @@ test.describe("Canvas tests", () => {
     const sampleNode = categoryNodesBefore[0];
     const { x: xBefore, y: yBefore } = sampleNode;
 
-    // Hide the category (checkbox 1 = categories[0])
-    await codeGraph.selectCodeGraphCheckbox("1");
+    // Hide the category
+    await codeGraph.selectCategoryCheckbox(categories[0]);
 
     // Show the category again — canvas must not re-simulate; positions are kept
-    await codeGraph.selectCodeGraphCheckbox("1");
+    await codeGraph.selectCategoryCheckbox(categories[0]);
 
     const updatedGraph = await codeGraph.getGraphNodes();
     const restoredNode = updatedGraph.find((n: any) => n.id === sampleNode.id);
