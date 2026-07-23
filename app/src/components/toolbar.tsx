@@ -91,45 +91,6 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
     const [radialDirection, setRadialDirection] = useState<RadialDirection>('out');
     const [pinned, setPinned] = useState(false);
 
-    const handleZoomClick = (changefactor: number) => {
-        const canvas = canvasRef.current
-
-        if (!canvas) return
-
-        if (selectedObjects && selectedObjects.length > 0) {
-            const graphData = canvas.getGraphData()
-            const selectedNodeIds = new Set<number>()
-
-            for (const el of selectedObjects) {
-                if ('source' in el) {
-                    // It's a link - center on both endpoints
-                    selectedNodeIds.add(el.source as number)
-                    selectedNodeIds.add(el.target as number)
-                } else {
-                    // It's a node
-                    selectedNodeIds.add(el.id)
-                }
-            }
-
-            const focusedNodes = graphData?.nodes.filter(n => selectedNodeIds.has(n.id)) ?? []
-            if (focusedNodes.length > 0) {
-                const cx = focusedNodes.reduce((s, n) => s + (n.x ?? 0), 0) / focusedNodes.length
-                const cy = focusedNodes.reduce((s, n) => s + (n.y ?? 0), 0) / focusedNodes.length
-                canvas.centerAt(cx, cy, 300)
-            }
-        }
-
-        canvas.zoom(canvas.getZoom() * changefactor)
-    }
-
-    const handleCenterClick = () => {
-        const canvas = canvasRef.current
-
-        if (canvas) {
-            canvas.zoomToFit()
-        }
-    }
-
     const handleAnimationToggle = (checked: boolean) => {
         setAnimation(checked);
         canvasRef.current?.setAnimation(checked);

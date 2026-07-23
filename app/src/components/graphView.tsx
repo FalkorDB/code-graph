@@ -1,6 +1,6 @@
 
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
+import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Path } from '@/lib/utils';
 import { Fullscreen } from 'lucide-react';
 import { GraphRef } from '@/lib/utils';
@@ -217,6 +217,51 @@ export default function GraphView({
         }
     }, [zoomedNodes, canvasRef])
 
+    const activeElements = useMemo(() => {
+        const elements: (Node | Link)[] = [...selectedObjects]
+        if (hoverElement && !elements.includes(hoverElement)) {
+            elements.push(hoverElement)
+        }
+        return elements
+    }, [selectedObjects, hoverElement])
+
+    const selectedNodeIds = useMemo(() => {
+        const ids = new Set<number>()
+        for (const el of activeElements) {
+            if (!('source' in el)) {
+                ids.add(el.id)
+            }
+        }
+        return ids
+    }, [activeElements])
+
+    const activeEndpointIds = useMemo(() => {
+        const ids = new Set<number>()
+        for (const el of activeElements) {
+            if ('source' in el) {
+                ids.add(el.source as number)
+                ids.add(el.target as number)
+            }
+        }
+        return ids
+    }, [activeElements])
+
+    const adjacentToSelectedNodeIds = useMemo(() => {
+        const ids = new Set<number>()
+        if (selectedNodeIds.size === 0) return ids
+
+        for (const link of data.links) {
+            if (selectedNodeIds.has(link.source)) {
+                ids.add(link.target)
+            }
+            if (selectedNodeIds.has(link.target)) {
+                ids.add(link.source)
+            }
+        }
+
+        return ids
+    }, [selectedNodeIds, data.links])
+
     const isNodeDimmed = useCallback((node: GraphNode) => {
         if (isPathResponse) {
             return !node.data.isPath && !node.data.isPathSelected
@@ -227,41 +272,21 @@ export default function GraphView({
             return false
         }
         
-        if (selectedObjects.length === 0 && !hoverElement) return false
-        
-        // Collect all active elements (selected + hovered)
-        const activeElements: (Node | Link)[] = [...selectedObjects]
-        if (hoverElement && !activeElements.includes(hoverElement)) {
-            activeElements.push(hoverElement)
-        }
-        
-        // Build selected node IDs and link endpoint IDs
-        const selectedNodeIds = new Set<number>()
-        const linkEndpointIds = new Set<number>()
-        
-        for (const el of activeElements) {
-            if (!('source' in el)) {
-                selectedNodeIds.add((el as any).id)
-            } else {
-                linkEndpointIds.add((el as any).source as number)
-                linkEndpointIds.add((el as any).target as number)
-            }
-        }
-        
-        const allActiveIds = new Set([...selectedNodeIds, ...linkEndpointIds])
+        if (activeElements.length === 0) return false
+
+        const allActiveIds = new Set([...selectedNodeIds, ...activeEndpointIds])
         if (allActiveIds.size === 0) return false
         if (allActiveIds.has(node.id)) return false
-        
-        // Expand neighbourhood only for directly selected nodes
-        for (const link of data.links) {
-            if ((selectedNodeIds.has(link.source) && link.target === node.id) ||
-                (selectedNodeIds.has(link.target) && link.source === node.id)) {
-                return false
-            }
-        }
-        
-        return true
-    }, [isPathResponse, manualDimmed, selectedObjects, hoverElement, data.links])
+
+        return !adjacentToSelectedNodeIds.has(node.id)
+    }, [
+        isPathResponse,
+        manualDimmed,
+        activeElements,
+        selectedNodeIds,
+        activeEndpointIds,
+        adjacentToSelectedNodeIds,
+    ])
 
     const isLinkDimmed = useCallback((link: GraphLink) => {
         if (isPathResponse) {
@@ -273,25 +298,11 @@ export default function GraphView({
             return false
         }
         
-        if (selectedObjects.length === 0 && !hoverElement) return false
+        if (activeElements.length === 0) return false
         
         // Don't dim the link itself if it's selected/hovered
         if (hoverElement && 'source' in hoverElement && hoverElement.id === link.id) return false
         if (selectedObjects.some(obj => 'source' in obj && obj.id === link.id)) return false
-        
-        // Collect all active elements (selected + hovered)
-        const activeElements: (Node | Link)[] = [...selectedObjects]
-        if (hoverElement && !activeElements.includes(hoverElement)) {
-            activeElements.push(hoverElement)
-        }
-        
-        // Build selected node IDs only (not link endpoints)
-        const selectedNodeIds = new Set<number>()
-        for (const el of activeElements) {
-            if (!('source' in el)) {
-                selectedNodeIds.add((el as any).id)
-            }
-        }
         
         if (selectedNodeIds.size === 0) return true
         
@@ -302,7 +313,7 @@ export default function GraphView({
         if (selectedNodeIds.has(srcId) || selectedNodeIds.has(tgtId)) return false
 
         return true
-    }, [isPathResponse, manualDimmed, selectedObjects, hoverElement, data.links])
+    }, [isPathResponse, manualDimmed, selectedObjects, hoverElement, activeElements, selectedNodeIds])
 
     const linkLineDash = useCallback((link: GraphLink) => {
         if (link.data.isPath && !link.data.isPathSelected) return [5, 5]
