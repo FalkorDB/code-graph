@@ -68,7 +68,7 @@ const RemoveLastPath = (messages: Message[], includeQuery = false): RemoveLastPa
 
     const cleaned = [...messages.slice(0, groupStart), ...messages.slice(index + 1)]
 
-    return { messages: cleaned, insertIndex: cleaned.length }
+    return { messages: cleaned, insertIndex: groupStart }
 }
 
 export function Chat({ messages, setMessages, query, setQuery, selectedPath, setSelectedPath, setChatOpen, repo, path, setPath, graph, selectedPathId, isPathResponse, setIsPathResponse, canvasRef, paths, setPaths }: Props) {
