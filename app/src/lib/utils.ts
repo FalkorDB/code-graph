@@ -59,7 +59,8 @@ export enum MessageTypes {
 }
 
 export function createMessage(msg: Omit<Message, 'id'>): Message {
-  return { ...msg, id: crypto.randomUUID() };
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return { ...msg, id }
 }
 
 export interface Message {

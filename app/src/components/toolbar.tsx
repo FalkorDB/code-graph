@@ -87,7 +87,8 @@ interface Props {
 export function Toolbar({ canvasRef, className, handleDownloadImage, animation, setAnimation, manualDimmed, setManualDimmed, selectedObjects, hideZoom: hideZoom }: Props) {
 
     const [layout, setLayout] = useState<LayoutMode>('force');
-    const [direction, setDirection] = useState<string>('');
+    const [treeDirection, setTreeDirection] = useState<HierarchyDirection>('td');
+    const [radialDirection, setRadialDirection] = useState<RadialDirection>('out');
     const [pinned, setPinned] = useState(false);
 
     const handleZoomClick = (changefactor: number) => {
@@ -153,15 +154,9 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
         setLayout(mode);
 
         if (mode === 'tree') {
-            const dir = direction || 'td';
-            setDirection(dir);
-            canvasRef.current?.setLayoutOptions({ tree: { direction: dir as HierarchyDirection } });
+            canvasRef.current?.setLayoutOptions({ tree: { direction: treeDirection } });
         } else if (mode === 'radial') {
-            const dir = direction || 'out';
-            setDirection(dir);
-            canvasRef.current?.setLayoutOptions({ radial: { direction: dir as RadialDirection } });
-        } else {
-            setDirection('');
+            canvasRef.current?.setLayoutOptions({ radial: { direction: radialDirection } });
         }
 
         canvasRef.current?.setLayout(mode);
@@ -180,12 +175,15 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
 
     const handleDirectionChange = (value: string, targetLayout?: string) => {
         const effectiveLayout = targetLayout || layout;
-        setDirection(value);
 
         if (effectiveLayout === 'tree') {
-            canvasRef.current?.setLayoutOptions({ tree: { direction: value as HierarchyDirection } });
+            const direction = value as HierarchyDirection;
+            setTreeDirection(direction);
+            canvasRef.current?.setLayoutOptions({ tree: { direction } });
         } else if (effectiveLayout === 'radial') {
-            canvasRef.current?.setLayoutOptions({ radial: { direction: value as RadialDirection } });
+            const direction = value as RadialDirection;
+            setRadialDirection(direction);
+            canvasRef.current?.setLayoutOptions({ radial: { direction } });
         }
     }
 
@@ -244,13 +242,13 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
                             {HIERARCHY_DIRECTIONS.map(d => (
                                 <DropdownMenuItem
                                     key={d.value}
-                                    className={cn("pl-8 relative", layout === 'tree' && direction === d.value ? 'bg-accent' : '')}
+                                    className={cn("pl-8 relative", layout === 'tree' && treeDirection === d.value ? 'bg-accent' : '')}
                                     onSelect={() => {
                                         if (layout !== 'tree') handleLayoutChange('tree');
                                         handleDirectionChange(d.value, 'tree');
                                     }}
                                 >
-                                    {layout === 'tree' && direction === d.value && (
+                                    {layout === 'tree' && treeDirection === d.value && (
                                         <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                                             <Circle className="h-2 w-2 fill-current" />
                                         </span>
@@ -273,13 +271,13 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
                             {RADIAL_DIRECTIONS.map(d => (
                                 <DropdownMenuItem
                                     key={d.value}
-                                    className={cn("pl-8 relative", layout === 'radial' && direction === d.value ? 'bg-accent' : '')}
+                                    className={cn("pl-8 relative", layout === 'radial' && radialDirection === d.value ? 'bg-accent' : '')}
                                     onSelect={() => {
                                         if (layout !== 'radial') handleLayoutChange('radial');
                                         handleDirectionChange(d.value, 'radial');
                                     }}
                                 >
-                                    {layout === 'radial' && direction === d.value && (
+                                    {layout === 'radial' && radialDirection === d.value && (
                                         <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                                             <Circle className="h-2 w-2 fill-current" />
                                         </span>

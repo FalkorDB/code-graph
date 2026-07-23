@@ -113,7 +113,13 @@ export function CodeGraph({
             if (event.key === 'Delete') {
                 if (selectedObjects.length === 0) return
 
-                handleRemove(selectedObjects.map(obj => obj.id), "nodes");
+                const selectedNodeIds = selectedObjects
+                    .filter((obj): obj is Node => 'category' in obj)
+                    .map((obj) => obj.id)
+
+                if (selectedNodeIds.length === 0) return
+
+                handleRemove(selectedNodeIds, "nodes");
             }
         };
 

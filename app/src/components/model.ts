@@ -263,23 +263,16 @@ export class Graph {
   }
 
   public removeLinks(ids: number[] = []) {
-    const connectedLinks = this.elements.links.filter(link => ids.includes(link.source) || ids.includes(link.target))
-
     this.elements.links = this.elements.links.filter(link => {
-      if (
-        (ids.length !== 0 && !connectedLinks.includes(link)) ||
-        (this.nodesMap.get(link.source) && this.nodesMap.get(link.target))
-      ) {
-        if (link.collapsed && connectedLinks.includes(link)) {
-          // Remove collapsed links connected to the given ids even if both endpoints exist
-          this.linksMap.delete(link.id)
-          return false
-        } else {
-          return true
-        }
+      const isConnectedToIds = ids.length !== 0 && (ids.includes(link.source) || ids.includes(link.target))
+      const hasEndpoints = this.nodesMap.get(link.source) && this.nodesMap.get(link.target)
+      const shouldKeep = Boolean(hasEndpoints) && !(link.collapsed && isConnectedToIds)
+
+      if (!shouldKeep) {
+        this.linksMap.delete(link.id)
       }
-      this.linksMap.delete(link.id)
-      return false
+
+      return shouldKeep
     })
   }
 
