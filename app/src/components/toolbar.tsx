@@ -130,10 +130,9 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
         }
     }
 
-    const handleAnimationToggle = () => {
-        const next = !animation;
-        setAnimation(next);
-        canvasRef.current?.setAnimation(next);
+    const handleAnimationToggle = (checked: boolean) => {
+        setAnimation(checked);
+        canvasRef.current?.setAnimation(checked);
     }
 
     const handleDimToggle = (checked: boolean) => {

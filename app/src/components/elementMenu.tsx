@@ -64,8 +64,13 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
             <div
                 ref={(ref) => {
                     if (!ref) return
-                    setContainerWidth(ref.clientWidth)
-                    setContainerHeight(ref.clientHeight)
+                    const { clientWidth, clientHeight } = ref
+                    if (clientWidth !== containerWidth) {
+                        setContainerWidth(clientWidth)
+                    }
+                    if (clientHeight !== containerHeight) {
+                        setContainerHeight(clientHeight)
+                    }
                 }}
                 className="absolute z-[15] bg-popover text-popover-foreground rounded-lg shadow-lg flex divide-x divide-border"
                 id="elementMenu"

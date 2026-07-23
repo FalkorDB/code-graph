@@ -631,7 +631,7 @@ export default class CodeGraph extends BasePage {
             nodes = await this.canvasMetricsPanel("1").innerHTML();
             edges = await this.canvasMetricsPanel("3").innerHTML();
             // innerHTML is e.g. "495 Nodes" / "806 Edges" — parse the number
-            if (parseInt(nodes) > 0 || parseInt(edges) > 0) break;
+            if (parseInt(nodes, 10) > 0 || parseInt(edges, 10) > 0) break;
             await this.page.waitForTimeout(500);
         }
         return { nodes, edges }
