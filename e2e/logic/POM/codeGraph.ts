@@ -630,7 +630,8 @@ export default class CodeGraph extends BasePage {
         for (let attempt = 0; attempt < 10; attempt++) {
             nodes = await this.canvasMetricsPanel("1").innerHTML();
             edges = await this.canvasMetricsPanel("3").innerHTML();
-            if (nodes !== "0" || edges !== "0") break;
+            // innerHTML is e.g. "495 Nodes" / "806 Edges" — parse the number
+            if (parseInt(nodes) > 0 || parseInt(edges) > 0) break;
             await this.page.waitForTimeout(500);
         }
         return { nodes, edges }
