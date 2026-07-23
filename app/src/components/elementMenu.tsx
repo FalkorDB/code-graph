@@ -31,9 +31,11 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
 
     if (!obj || !position) return null
 
-    const objURL = "category" in obj && obj.category === "File"
-        ? `${url}/tree/master/${obj.data.path}/${obj.data.name}`
-        : `${url}/tree/master/${obj.data.path}#L${obj.data.src_start}-L${obj.data.src_end + 1}`
+    const nodeURL = "category" in obj
+        ? obj.category === "File"
+            ? `${url}/tree/master/${obj.data.path}/${obj.data.name}`
+            : `${url}/tree/master/${obj.data.path}#L${obj.data.src_start}-L${obj.data.src_end + 1}`
+        : undefined
 
     const parentRect = parentRef?.current?.getBoundingClientRect()
     const parentW = parentRef?.current?.clientWidth || 0
@@ -152,11 +154,11 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                 <>
                                     <a
                                         className="p-2"
-                                        href={objURL}
+                                        href={nodeURL}
                                         target="_blank"
                                         title="Go to repo"
                                         onClick={() => {
-                                            window.open(objURL, '_blank');
+                                            if (nodeURL) window.open(nodeURL, '_blank');
                                         }}
                                     >
                                         <Globe />
@@ -193,7 +195,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
             <DataPanel
                 obj={currentObj}
                 setObj={setCurrentObj}
-                url={objURL}
+                url={nodeURL ?? url}
             />
         </>
     )
