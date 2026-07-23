@@ -877,6 +877,7 @@ class AsyncGraphQuery:
         return self.name in graphs
 
     async def _query(self, q: str, params: Optional[dict] = None):
+        await self._resolve_name()
         return await self.g.query(q, params)
 
     async def get_sub_graph(self, limit: int) -> dict:
