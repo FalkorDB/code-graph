@@ -750,7 +750,13 @@ export default class CodeGraph extends BasePage {
             await this.page.mouse.move(centerX, centerY);
             await this.page.waitForTimeout(500);
             await this.page.mouse.click(centerX, centerY, { button: 'right' });
-            if (await this.elementMenu.isVisible()) {
+            // In focus mode the app centers the clicked element first and only
+            // shows the menu ~400ms after the pan animation, so wait for it.
+            const menuAppeared = await this.elementMenu
+                .waitFor({ state: 'visible', timeout: 3000 })
+                .then(() => true)
+                .catch(() => false);
+            if (menuAppeared) {
                 return;
             }
             await this.page.waitForTimeout(1000);
@@ -894,8 +900,13 @@ export default class CodeGraph extends BasePage {
         await this.page.waitForTimeout(300);
         await this.page.mouse.click(x, y, { button: 'right' });
         
-        // Wait for element menu to appear
-        const isMenuVisible = await this.elementMenu.isVisible({ timeout: 3000 }).catch(() => false);
+        // Wait for element menu to appear. In focus mode the app first centers
+        // the clicked node (300ms pan) and shows the menu ~400ms later, so we
+        // must actually wait for visibility rather than checking immediately.
+        const isMenuVisible = await this.elementMenu
+            .waitFor({ state: 'visible', timeout: 5000 })
+            .then(() => true)
+            .catch(() => false);
         if (!isMenuVisible) {
             throw new Error(`Element menu not visible after right-clicking at (${x}, ${y})`);
         }
