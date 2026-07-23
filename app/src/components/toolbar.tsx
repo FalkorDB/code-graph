@@ -32,7 +32,7 @@ interface ZoomControlsProps {
 }
 
 export function ZoomControls({ canvasRef, className, selectedObjects }: ZoomControlsProps) {
-    const handleZoomClick = (changefactor: number) => {
+    const handleZoomClick = (changeFactor: number) => {
         const canvas = canvasRef.current
         if (!canvas) return
         if (selectedObjects && selectedObjects.length > 0) {
@@ -53,7 +53,7 @@ export function ZoomControls({ canvasRef, className, selectedObjects }: ZoomCont
                 canvas.centerAt(cx, cy, 300)
             }
         }
-        canvas.zoom(canvas.getZoom() * changefactor)
+        canvas.zoom(canvas.getZoom() * changeFactor)
     }
 
     return (

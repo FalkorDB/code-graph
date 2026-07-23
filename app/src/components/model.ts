@@ -263,8 +263,10 @@ export class Graph {
   }
 
   public removeLinks(ids: number[] = []) {
+    const idsSet = ids.length !== 0 ? new Set(ids) : null
+
     this.elements.links = this.elements.links.filter(link => {
-      const isConnectedToIds = ids.length !== 0 && (ids.includes(link.source) || ids.includes(link.target))
+      const isConnectedToIds = idsSet !== null && (idsSet.has(link.source) || idsSet.has(link.target))
       const hasEndpoints = this.nodesMap.get(link.source) && this.nodesMap.get(link.target)
       const shouldKeep = Boolean(hasEndpoints) && !(link.collapsed && isConnectedToIds)
 
