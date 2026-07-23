@@ -1,5 +1,4 @@
-import { Dispatch, SetStateAction } from "react";
-import { JSONTree } from 'react-json-tree';
+import { Dispatch, SetStateAction, type ReactNode } from "react";
 import { Link, Node } from "./model";
 import { Copy, SquareArrowOutUpRight, X } from "lucide-react";
 import SyntaxHighlighter from 'react-syntax-highlighter';
@@ -32,6 +31,77 @@ const excludedProperties = [
     "fy",
 ]
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function renderSourceBlock(value: string) {
+    return (
+        <SyntaxHighlighter
+            language="python"
+            style={{
+                ...dark,
+                hljs: {
+                    ...dark.hljs,
+                    maxHeight: `9rem`,
+                    background: 'transparent',
+                    padding: 2,
+                }
+            }}
+        >
+            {value}
+        </SyntaxHighlighter>
+    )
+}
+
+function renderJsonValue(value: unknown, path: string[]): ReactNode {
+    const key = path[path.length - 1]
+
+    if (key === "src" && typeof value === "string") {
+        return renderSourceBlock(value)
+    }
+
+    if (Array.isArray(value)) {
+        return (
+            <details className="ml-2 border-l border-border pl-3">
+                <summary className="cursor-pointer text-card-foreground">Array({value.length})</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                    {value.map((item, index) => (
+                        <div key={index} className="flex gap-2">
+                            <span className="text-primary">[{index}]</span>
+                            <div className="min-w-0 flex-1 break-words text-card-foreground">
+                                {renderJsonValue(item, [...path, String(index)])}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </details>
+        )
+    }
+
+    if (isPlainObject(value)) {
+        const entries = Object.entries(value).filter(([nestedKey]) => !excludedProperties.includes(nestedKey))
+
+        return (
+            <details className="ml-2 border-l border-border pl-3">
+                <summary className="cursor-pointer text-card-foreground">Object({entries.length})</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                    {entries.map(([nestedKey, nestedValue]) => (
+                        <div key={nestedKey} className="flex gap-2">
+                            <span className="text-primary">{nestedKey}:</span>
+                            <div className="min-w-0 flex-1 break-words text-card-foreground">
+                                {renderJsonValue(nestedValue, [...path, nestedKey])}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </details>
+        )
+    }
+
+    return <span className="text-card-foreground">{String(value)}</span>
+}
+
 export default function DataPanel({ obj, setObj, url }: Props) {
     if (!obj) return null;
 
@@ -50,76 +120,17 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                     </button>
                 </header>
                 <main className="bg-card flex flex-col grow overflow-y-auto p-4">
-                    {
-                        object.map(([key, value]) => (
-                            <div key={key} className="flex gap-2">
-                                <p className="text-primary">{key}:</p>
-                                {
-                                    key === "src" ?
-                                        <SyntaxHighlighter
-                                            language="python"
-                                            style={{
-                                                ...dark,
-                                                hljs: {
-                                                    ...dark.hljs,
-                                                    maxHeight: `9rem`,
-                                                    background: 'transparent',
-                                                    padding: 2,
-                                                }
-                                            }}
-                                        >
-                                            {value}
-                                        </SyntaxHighlighter>
-                                        : typeof value === "object" && value !== null ?
-                                            <JSONTree
-                                                data={Object.fromEntries(Object.entries(value).filter(([k]) => !excludedProperties.includes(k)))}
-                                                theme={{
-                                                    base00: 'transparent', // background
-                                                    base01: '#000000',
-                                                    base02: '#CE9178',
-                                                    base03: '#CE9178', // open values
-                                                    base04: '#CE9178',
-                                                    base05: '#CE9178',
-                                                    base06: '#CE9178',
-                                                    base07: '#CE9178',
-                                                    base08: '#CE9178',
-                                                    base09: '#b5cea8', // numbers
-                                                    base0A: '#CE9178',
-                                                    base0B: '#CE9178', // close values
-                                                    base0C: '#CE9178',
-                                                    base0D: '#99E4E5', // * keys
-                                                    base0E: '#ae81ff',
-                                                    base0F: '#cc6633'
-                                                }}
-                                                valueRenderer={(_valueAsString, value, keyPath) => {
-                                                    if (keyPath === "src") {
-                                                        return <SyntaxHighlighter
-                                                            language="python"
-                                                            style={{
-                                                                ...dark,
-                                                                hljs: {
-                                                                    ...dark.hljs,
-                                                                    maxHeight: `9rem`,
-                                                                    background: 'transparent',
-                                                                    padding: 2,
-                                                                }
-                                                            }}
-                                                        >
-                                                            {value as string}
-                                                        </SyntaxHighlighter>
-                                                    }
-                                                    return <span className="text-card-foreground">{value as string}</span>
-                                                }}
-                                            />
-                                            : <span className="text-card-foreground">{value}</span>
-                                }
+                    {object.map(([key, value]) => (
+                        <div key={key} className="flex gap-2">
+                            <p className="text-primary">{key}:</p>
+                            <div className="min-w-0 flex-1 break-words">
+                                {renderJsonValue(value, [key])}
                             </div>
-                        ))
-                    }
+                        </div>
+                    ))}
                 </main>
                 <footer className="bg-muted flex items-center justify-between p-4">
-                    {
-                        "category" in obj &&
+                    {"category" in obj && (
                         <>
                             <button
                                 className="flex items-center gap-2 p-2"
@@ -140,7 +151,7 @@ export default function DataPanel({ obj, setObj, url }: Props) {
                                 Go to repo
                             </a>
                         </>
-                    }
+                    )}
                 </footer>
             </div>
         </>
