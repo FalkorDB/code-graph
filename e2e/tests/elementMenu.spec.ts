@@ -20,6 +20,11 @@ test.describe("Element Menu and Right-click Menu tests", () => {
   test("Verify element menu appears on right-click at canvas center", async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await codeGraph.selectGraph(GRAPHRAG_SDK);
+    // Focus a known node first so it is centered on the canvas — the layout
+    // is not deterministic, so a blind center click may hit empty background.
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
     await codeGraph.rightClickAtCanvasCenter();
     const isMenuVisible = await codeGraph.isElementMenuVisible();
     expect(isMenuVisible).toBe(true);
@@ -51,6 +56,10 @@ test.describe("Element Menu and Right-click Menu tests", () => {
   test("Verify element menu contains 'View Node' button", async () => {
     const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
     await codeGraph.selectGraph(GRAPHRAG_SDK);
+    // Focus a known node so the canvas-center right-click hits it reliably.
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
     await codeGraph.rightClickAtCanvasCenter();
     
     const hasViewNodeBtn = await codeGraph.hasElementMenuButton("View Node");
@@ -99,6 +108,10 @@ test.describe("Element Menu and Right-click Menu tests", () => {
     await browser.setPageToFullScreen();
     await codeGraph.selectGraph(GRAPHRAG_SDK);
     
+    // Focus a known node so the canvas-center right-click hits it reliably.
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
     // Right-click at canvas center
     await codeGraph.rightClickAtCanvasCenter();
     
