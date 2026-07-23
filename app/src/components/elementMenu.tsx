@@ -9,7 +9,7 @@ import { GraphNode } from "@falkordb/canvas";
 
 interface Props {
     obj: Node | Link | undefined;
-    objects: Node[];
+    objects: (Node | Link)[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
     handleRemove: (ids: number[], type: "nodes" | "links") => void;
     position: Position | undefined;
@@ -23,6 +23,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
     const [currentObj, setCurrentObj] = useState<Node | Link>();
     const [containerWidth, setContainerWidth] = useState(0);
     const [containerHeight, setContainerHeight] = useState(0);
+    const nodeObjects = objects.filter((o): o is Node => "category" in o)
 
     useEffect(() => {
         setCurrentObj(undefined)
@@ -71,14 +72,14 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                 style={{ left, top }}
             >
                 {
-                    objects.some(o => o.id === obj.id) && objects.length > 1 ?
+                    "category" in obj && nodeObjects.some(o => o.id === obj.id) && nodeObjects.length > 1 ?
                         <>
                             {
-                                objects.length === 2 &&
+                                nodeObjects.length === 2 &&
                                 <button
                                     className="p-2"
                                     title="Create a path"
-                                    onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].data.name }, end: { id: Number(objects[1].id), name: objects[1].data.name } })}
+                                    onClick={() => setPath({ start: { id: Number(nodeObjects[0].id), name: nodeObjects[0].data.name }, end: { id: Number(nodeObjects[1].id), name: nodeObjects[1].data.name } })}
                                 >
                                     <Waypoints />
                                 </button>
@@ -86,19 +87,19 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove(objects.map(o => o.id), "nodes")}
+                                onClick={() => handleRemove(nodeObjects.map(o => o.id), "nodes")}
                             >
                                 <EyeOff />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand(objects, true)}
+                                onClick={() => handleExpand(nodeObjects, true)}
                             >
                                 <Maximize2 />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand(objects, false)}
+                                onClick={() => handleExpand(nodeObjects, false)}
                             >
                                 <Minimize2 />
                             </button>

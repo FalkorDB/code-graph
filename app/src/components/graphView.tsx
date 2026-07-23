@@ -20,8 +20,8 @@ interface Props {
     graph: Graph
     chartRef: GraphRef
     id: "desktop" | "mobile"
-    selectedObjects: Node[]
-    setSelectedObjects: Dispatch<SetStateAction<Node[]>>
+    selectedObjects: (Node | Link)[]
+    setSelectedObjects: Dispatch<SetStateAction<(Node | Link)[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
     handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
@@ -94,10 +94,10 @@ export default function GraphView({
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== element.id))
                 return
             } else {
-                setSelectedObjects([...selectedObjects, element as Node])
+                setSelectedObjects([...selectedObjects, element])
             }
         } else {
-            setSelectedObjects([element as Node])
+            setSelectedObjects([element])
         }
 
         // Center on node or link midpoint when focus mode is ON, then show menu

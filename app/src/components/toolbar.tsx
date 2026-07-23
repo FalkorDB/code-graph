@@ -147,8 +147,6 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
         canvasRef.current?.setPinOnDragEnd(next);
     }
 
-    const isAnimationDisabled = layout !== 'force' || pinned
-
     const handleLayoutChange = (value: string) => {
         const mode = value as LayoutMode;
         setLayout(mode);

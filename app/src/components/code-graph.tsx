@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Graph, GraphData, Node } from "./model";
+import { Graph, GraphData, Link, Node } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
 import { Download, GitFork, Search, X } from "lucide-react";
@@ -85,7 +85,7 @@ export function CodeGraph({
 }: Props) {
 
     const [url, setURL] = useState("");
-    const [selectedObjects, setSelectedObjects] = useState<Node[]>([]);
+    const [selectedObjects, setSelectedObjects] = useState<(Node | Link)[]>([]);
     const [position, setPosition] = useState<Position>();
     const [graphName, setGraphName] = useState<string>("");
     const [commits, setCommits] = useState<any[]>([]);
