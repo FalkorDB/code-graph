@@ -693,6 +693,7 @@ export default function App() {
                         hideZoom
                         className='w-full justify-center'
                         canvasRef={mobileChartRef}
+                        handleDownloadImage={handleDownloadImage}
                         animation={animation}
                         setAnimation={setAnimation}
                         manualDimmed={manualDimmed}

@@ -80,7 +80,7 @@ interface Props {
     manualDimmed: boolean
     setManualDimmed: (dimmed: boolean) => void
     selectedObjects?: (Node | Link)[]
-    /** Hide the three zoom buttons and download, show everything else. */
+    /** Hide the three zoom buttons, show everything else. */
     hideZoom?: boolean
 }
 
@@ -249,13 +249,15 @@ export function Toolbar({ canvasRef, className, handleDownloadImage, animation, 
             </DropdownMenu>
             <div className="h-4 w-px bg-border rounded-full" />
             {!hideZoom && <ZoomControls canvasRef={canvasRef} selectedObjects={selectedObjects} />}
-            <button
-                className="control-button"
-                title="downloadImage"
-                onClick={handleDownloadImage}
-            >
-                <Download size={16} />
-            </button>
+            {handleDownloadImage && (
+                <button
+                    className="control-button"
+                    title="downloadImage"
+                    onClick={handleDownloadImage}
+                >
+                    <Download size={16} />
+                </button>
+            )}
         </div>
     )
 }

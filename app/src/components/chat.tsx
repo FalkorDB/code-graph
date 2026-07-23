@@ -143,10 +143,14 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
 
         // Zoom to fit selected path nodes
         const selectedNodeIds = new Set(selectedPath.nodes.map((n: Node) => n.id))
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
             canvas.zoomToFit(1, (n: GraphNode) => selectedNodeIds.has(n.id))
         }, 100)
-    }, [selectedPathId, isPathResponse, paths])
+
+        return () => {
+            clearTimeout(timeout)
+        }
+    }, [selectedPathId, isPathResponse, paths, graph, canvasRef])
 
     const handleSetSelectedPath = (p: PathData) => {
         const canvas = canvasRef.current
