@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { createElement, useCallback, useEffect, useRef, useState } from "react"
 import type { Data, GraphLink, GraphNode } from "@falkordb/canvas"
 import { GraphRef, PATH_COLOR } from "@/lib/utils"
 import { GraphData, Link, Node } from "./model"
@@ -225,7 +225,5 @@ export default function ForceGraph({
         }
     }, [canvasRef, graphId, data, canvasLoaded])
 
-    return (
-        <falkordb-canvas ref={canvasRef} node-mode="replace" />
-    )
+    return createElement("falkordb-canvas", { ref: canvasRef, "node-mode": "replace" })
 }

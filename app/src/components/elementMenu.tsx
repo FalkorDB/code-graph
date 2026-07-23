@@ -15,7 +15,7 @@ interface Props {
     position: Position | undefined;
     url: string;
     handleExpand: (nodes: Node[],  expand: boolean) => void;
-    parentRef: RefObject<HTMLDivElement>;
+    parentRef: RefObject<HTMLDivElement | null>;
 }
 
 
