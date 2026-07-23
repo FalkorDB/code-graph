@@ -856,7 +856,7 @@ class AsyncGraphQuery:
         self.db = _async_db()
         self.g = self.db.select_graph(self.name)
 
-    async def _resolve_name(self) -> None:
+    async def _resolve_name(self, graphs: Optional[list[str]] = None) -> None:
         """Resolve a bare project name to its actual FalkorDB graph key.
 
         Prefers an existing legacy graph (stored under the bare project
@@ -865,15 +865,16 @@ class AsyncGraphQuery:
         if not getattr(self, "_needs_resolution", False):
             return
         self._needs_resolution = False
-        graphs = await self.db.list_graphs()
+        if graphs is None:
+            graphs = await self.db.list_graphs()
         if self.name not in graphs:
             self.name = compose_graph_name(self.project, self.branch)
             self.g = self.db.select_graph(self.name)
 
     async def graph_exists(self) -> bool:
         """Check if this graph exists, reusing the current connection."""
-        await self._resolve_name()
         graphs = await self.db.list_graphs()
+        await self._resolve_name(graphs)
         return self.name in graphs
 
     async def _query(self, q: str, params: Optional[dict] = None):
