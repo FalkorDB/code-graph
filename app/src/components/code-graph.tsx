@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { Graph, GraphData, Node, Link } from "./model";
 import { Toolbar } from "./toolbar";
 import { Labels } from "./labels";
-import { Download, GitFork, Search, X } from "lucide-react";
+import { GitFork, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ElementMenu from "./elementMenu";
 import Combobox from "./combobox";
@@ -28,9 +28,8 @@ interface Props {
     data: GraphData,
     setData: Dispatch<SetStateAction<GraphData>>,
     onFetchGraph: (graphName: string) => Promise<void>,
+    isFetchingGraph: boolean,
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
-    options: string[]
-    setOptions: Dispatch<SetStateAction<string[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     canvasRef: GraphRef
@@ -58,9 +57,8 @@ export function CodeGraph({
     data,
     setData,
     onFetchGraph,
+    isFetchingGraph,
     onFetchNode,
-    options,
-    setOptions,
     isShowPath,
     setPath,
     canvasRef,
@@ -93,6 +91,7 @@ export function CodeGraph({
     const [commitIndex, setCommitIndex] = useState<number>(0);
     const [currentCommit, setCurrentCommit] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [options, setOptions] = useState<string[]>([]);
 
     useEffect(() => {
         setData({ ...graph.Elements })
@@ -516,10 +515,18 @@ export function CodeGraph({
                                     </div>
                                 </div>
                             </div>
-                            : <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                                <GitFork className="md:w-24 md:h-24 w-16 h-16" />
-                                <h1 className="md:text-4xl text-2xl text-center">Select a repo to show its graph here</h1>
-                            </div>
+                            : (
+                                isFetchingGraph ?
+                                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                                        <Loader2 className="md:w-24 md:h-24 w-16 h-16 animate-spin" />
+                                        <h1 className="md:text-4xl text-2xl text-center">Fetching graph...</h1>
+                                    </div>
+                                    :
+                                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                                        <GitFork className="md:w-24 md:h-24 w-16 h-16" />
+                                        <h1 className="md:text-4xl text-2xl text-center">Select a repo to show its graph here</h1>
+                                    </div>
+                            )
                     }
                 </main>
                 {/* {

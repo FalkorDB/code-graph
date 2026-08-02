@@ -71,7 +71,6 @@ export default function App() {
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [tipOpen, setTipOpen] = useState(false)
-  const [options, setOptions] = useState<string[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const desktopChartRef = useRef<GraphRef["current"]>(null)
@@ -90,6 +89,7 @@ export default function App() {
   const [carouselApi, setCarouselApi] = useState<CarouselApi>()
   const [zoomedNodes, setZoomedNodes] = useState<Node[]>([])
   const [hasHiddenElements, setHasHiddenElements] = useState(false);
+  const [isFetchingGraph, setIsFetchingGraph] = useState(false)
 
   useEffect(() => {
     if (path?.start?.id && path?.end?.id) {
@@ -140,7 +140,6 @@ export default function App() {
 
     const graphName = createURL.split('/').pop()!
 
-    setOptions(prev => [...prev, graphName])
     setSelectedValue(graphName)
     setCreateURL("")
     setCreateOpen(false)
@@ -153,6 +152,7 @@ export default function App() {
   }
 
   async function onFetchGraph(graphName: string) {
+    setIsFetchingGraph(true)
     try {
       const result = await fetch(`/api/graph_entities?repo=${prepareArg(graphName)}`, {
         method: 'GET',
@@ -186,6 +186,8 @@ export default function App() {
         title: "Uh oh! Something went wrong.",
         description: "Failed to load repository graph. Please try again.",
       })
+    } finally {
+      setIsFetchingGraph(false)
     }
   }
 
@@ -524,9 +526,8 @@ export default function App() {
                   data={data}
                   setData={setData}
                   canvasRef={desktopChartRef}
-                  options={options}
-                  setOptions={setOptions}
                   onFetchGraph={onFetchGraph}
+                  isFetchingGraph={isFetchingGraph}
                   onFetchNode={onFetchNode}
                   setPath={setPath}
                   isShowPath={!!path}
@@ -651,9 +652,8 @@ export default function App() {
                 data={data}
                 setData={setData}
                 canvasRef={mobileChartRef}
-                options={options}
-                setOptions={setOptions}
                 onFetchGraph={onFetchGraph}
+                isFetchingGraph={isFetchingGraph}
                 onFetchNode={onFetchNode}
                 setPath={setPath}
                 isShowPath={!!path}
