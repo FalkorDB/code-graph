@@ -193,7 +193,9 @@ async def repo_info(data: RepoRequest, _=Depends(public_or_auth)):
         stats = await g.stats()
     finally:
         await g.close()
-    info = await async_get_repo_info(data.repo, data.branch)
+    # Use the parsed project/branch so full graph keys
+    # (``code:{project}:{branch}``) resolve the same as plain repo names.
+    info = await async_get_repo_info(g.project, g.branch)
 
     if info is None:
         return JSONResponse({"status": f'Missing repository "{data.repo}"'}, status_code=400)

@@ -131,9 +131,17 @@ class Graph():
             # Normalize empty / None to DEFAULT_BRANCH so the stored
             # branch matches the key actually used by compose_graph_name.
             self.branch = branch or DEFAULT_BRANCH
-            self.name = compose_graph_name(self.project, self.branch)
+            self.db = create_falkordb()
+            # Legacy (pre-T17) graphs are stored under the bare project
+            # name. Prefer that existing graph over composing a new,
+            # empty ``code:{project}:{branch}`` key out from under it.
+            if branch in (None, "", DEFAULT_BRANCH) and name in self.db.list_graphs():
+                self.name = name
+            else:
+                self.name = compose_graph_name(self.project, self.branch)
 
-        self.db = create_falkordb()
+        if not hasattr(self, "db"):
+            self.db = create_falkordb()
         self.g = self.db.select_graph(self.name)
 
         # Initialize the backlog as disabled by default
@@ -829,19 +837,48 @@ class AsyncGraphQuery:
         if parsed is not None:
             self.project, self.branch = parsed
             self.name = name
+            self._needs_resolution = False
         else:
             self.project = name
             self.branch = branch or DEFAULT_BRANCH
-            self.name = compose_graph_name(self.project, self.branch)
+            if branch in (None, "", DEFAULT_BRANCH):
+                # Composition is deferred until ``graph_exists``/first query
+                # so we can prefer an existing legacy (pre-T17) bare graph
+                # over composing a new, empty ``code:{project}:_default``
+                # key; see ``_resolve_name``.
+                self.name = name
+                self._needs_resolution = True
+            else:
+                # A specific branch was requested: compose immediately,
+                # same as before this bare-name fallback existed.
+                self.name = compose_graph_name(self.project, self.branch)
+                self._needs_resolution = False
         self.db = _async_db()
         self.g = self.db.select_graph(self.name)
+
+    async def _resolve_name(self, graphs: Optional[list[str]] = None) -> None:
+        """Resolve a bare project name to its actual FalkorDB graph key.
+
+        Prefers an existing legacy graph (stored under the bare project
+        name) over composing a new ``code:{project}:{branch}`` key.
+        """
+        if not getattr(self, "_needs_resolution", False):
+            return
+        self._needs_resolution = False
+        if graphs is None:
+            graphs = await self.db.list_graphs()
+        if self.name not in graphs:
+            self.name = compose_graph_name(self.project, self.branch)
+            self.g = self.db.select_graph(self.name)
 
     async def graph_exists(self) -> bool:
         """Check if this graph exists, reusing the current connection."""
         graphs = await self.db.list_graphs()
+        await self._resolve_name(graphs)
         return self.name in graphs
 
     async def _query(self, q: str, params: Optional[dict] = None):
+        await self._resolve_name()
         return await self.g.query(q, params)
 
     async def get_sub_graph(self, limit: int) -> dict:

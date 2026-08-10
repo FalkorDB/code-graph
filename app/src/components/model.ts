@@ -34,6 +34,7 @@ export interface Link {
   target: number,
   label: string,
   visible: boolean,
+  collapsed: boolean,
   isPathSelected: boolean,
   isPath: boolean,
   color: string,
@@ -246,6 +247,7 @@ export class Graph {
         target: edgeData.dest_node,
         label: edgeData.relation,
         visible: true,
+        collapsed,
         color: "#999999",
         isPathSelected: false,
         isPath: !!path,
@@ -260,16 +262,20 @@ export class Graph {
     return newElements
   }
 
-  public removeLinks() {
-    this.elements = {
-      nodes: this.elements.nodes,
-      links: this.elements.links.map(link => {
-        if (this.nodesMap.get(link.source) && this.nodesMap.get(link.target)) {
-          return link
-        }
+  public removeLinks(ids: number[] = []) {
+    const idsSet = ids.length !== 0 ? new Set(ids) : null
+
+    this.elements.links = this.elements.links.filter(link => {
+      const isConnectedToIds = idsSet !== null && (idsSet.has(link.source) || idsSet.has(link.target))
+      const hasEndpoints = this.nodesMap.get(link.source) && this.nodesMap.get(link.target)
+      const shouldKeep = Boolean(hasEndpoints) && !(link.collapsed && isConnectedToIds)
+
+      if (!shouldKeep) {
         this.linksMap.delete(link.id)
-      }).filter(link => link !== undefined)
-    }
+      }
+
+      return shouldKeep
+    })
   }
 
   public visibleLinks(visible: boolean, ids?: number[]) {

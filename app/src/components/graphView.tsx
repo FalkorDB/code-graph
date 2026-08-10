@@ -1,7 +1,7 @@
 
 import { Graph, GraphData, Link, Node } from './model';
-import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
-import { Path, PATH_COLOR } from '@/lib/utils';
+import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Path } from '@/lib/utils';
 import { Fullscreen } from 'lucide-react';
 import { GraphRef } from '@/lib/utils';
 import ForceGraph from './ForceGraph';
@@ -11,6 +11,7 @@ import { useTheme } from './theme-provider';
 export interface Position {
     x: number,
     y: number,
+    zoom?: number,
 }
 
 interface Props {
@@ -19,10 +20,8 @@ interface Props {
     graph: Graph
     chartRef: GraphRef
     id: "desktop" | "mobile"
-    selectedObj: Node | Link | undefined
-    setSelectedObj: Dispatch<SetStateAction<Node | Link | undefined>>
-    selectedObjects: Node[]
-    setSelectedObjects: Dispatch<SetStateAction<Node[]>>
+    selectedObjects: (Node | Link)[]
+    setSelectedObjects: Dispatch<SetStateAction<(Node | Link)[]>>
     setPosition: Dispatch<SetStateAction<Position | undefined>>
     handleExpand: (nodes: Node[], expand: boolean) => void
     isShowPath: boolean
@@ -30,30 +29,23 @@ interface Props {
     isPathResponse: boolean | undefined
     selectedPathId: number | undefined
     setSelectedPathId: (selectedPathId: number) => void
-    cooldownTicks: number | undefined
-    setCooldownTicks: Dispatch<SetStateAction<number | undefined>>
     setZoomedNodes: Dispatch<SetStateAction<Node[]>>
     zoomedNodes: Node[]
+    manualDimmed: boolean
 }
 
-const NODE_SIZE = 6;
-const PADDING = 2;
 const LIGHT_CANVAS_BACKGROUND = '#FFFFFF';
 const DARK_CANVAS_BACKGROUND = '#1A1A1A';
 const LIGHT_CANVAS_FOREGROUND = '#000000';
 const DARK_CANVAS_FOREGROUND = '#F5F5F5';
-const LIGHT_DIMMED_NODE_FILL = '#E5E5E5';
-const DARK_DIMMED_NODE_FILL = '#525252';
-const LIGHT_DIMMED_NODE_STROKE = 'gray';
-const DARK_DIMMED_NODE_STROKE = '#A3A3A3';
+
+const DOUBLE_CLICK_MS = 300;
 
 export default function GraphView({
     data,
     graph,
     chartRef: canvasRef,
     id,
-    selectedObj,
-    setSelectedObj,
     selectedObjects,
     setSelectedObjects,
     setPosition,
@@ -63,21 +55,19 @@ export default function GraphView({
     isPathResponse,
     selectedPathId,
     setSelectedPathId,
-    cooldownTicks,
-    setCooldownTicks,
     zoomedNodes,
-    setZoomedNodes
+    setZoomedNodes,
+    manualDimmed
 }: Props) {
 
-    const lastClick = useRef<{ date: Date, name: string }>({ date: new Date(), name: "" })
+    const lastClick = useRef<{ date: number, id: number }>({ date: 0, id: 0 })
+    const isCenteringRef = useRef(false)
     const [screenSize, setScreenSize] = useState<number>(0)
     const [hoverElement, setHoverElement] = useState<Node | Link | null>()
     const { resolvedTheme } = useTheme()
     const isDark = resolvedTheme === 'dark'
     const canvasBackgroundColor = isDark ? DARK_CANVAS_BACKGROUND : LIGHT_CANVAS_BACKGROUND
     const canvasForegroundColor = isDark ? DARK_CANVAS_FOREGROUND : LIGHT_CANVAS_FOREGROUND
-    const dimmedNodeFillColor = isDark ? DARK_DIMMED_NODE_FILL : LIGHT_DIMMED_NODE_FILL
-    const dimmedNodeStrokeColor = isDark ? DARK_DIMMED_NODE_STROKE : LIGHT_DIMMED_NODE_STROKE
 
     useEffect(() => {
         const handleResize = () => {
@@ -94,10 +84,9 @@ export default function GraphView({
     }, [])
 
     const unsetSelectedObjects = useCallback((evt?: MouseEvent) => {
-        if (evt?.ctrlKey || (!selectedObj && selectedObjects.length === 0)) return
-        setSelectedObj(undefined)
+        if (evt?.ctrlKey || selectedObjects.length === 0) return
         setSelectedObjects([])
-    }, [selectedObj, selectedObjects, setSelectedObj, setSelectedObjects])
+    }, [selectedObjects, setSelectedObjects])
 
     const handleRightClick = useCallback((element: Node | Link, evt: MouseEvent) => {
         if (evt.ctrlKey && "category" in element) {
@@ -105,15 +94,70 @@ export default function GraphView({
                 setSelectedObjects(selectedObjects.filter(obj => obj.id !== element.id))
                 return
             } else {
-                setSelectedObjects([...selectedObjects, element as Node])
+                setSelectedObjects([...selectedObjects, element])
             }
         } else {
-            setSelectedObjects([])
+            setSelectedObjects([element])
         }
 
-        setSelectedObj(element)
-        setPosition({ x: evt.clientX, y: evt.clientY })
-    }, [selectedObjects, setSelectedObjects, setSelectedObj, setPosition])
+        // Center on node or link midpoint when focus mode is ON, then show menu
+        if ((manualDimmed || isPathResponse) && canvasRef.current) {
+            // Clear any existing menu immediately so it doesn't flash at old position
+            setPosition(undefined)
+
+            const graphData = canvasRef.current.getGraphData()
+            let cx: number | undefined
+            let cy: number | undefined
+
+            if ("category" in element) {
+                const graphNode = graphData?.nodes.find(n => n.id === element.id)
+                cx = graphNode?.x
+                cy = graphNode?.y
+            } else {
+                const src = graphData?.nodes.find(n => n.id === (element as Link).source)
+                const tgt = graphData?.nodes.find(n => n.id === (element as Link).target)
+                if (src?.x !== undefined && tgt?.x !== undefined) {
+                    cx = ((src.x ?? 0) + (tgt.x ?? 0)) / 2
+                    cy = ((src.y ?? 0) + (tgt.y ?? 0)) / 2
+                }
+            }
+
+            if (cx !== undefined && cy !== undefined) {
+                isCenteringRef.current = true
+                canvasRef.current.centerAt(cx, cy, 300)
+                // Show menu after animation fully settles (400ms > 300ms animation)
+                setTimeout(() => {
+                    isCenteringRef.current = false
+                    const canvasBounds = canvasRef.current?.getBoundingClientRect()
+                    if (canvasBounds) {
+                        setPosition({
+                            x: canvasBounds.left + canvasBounds.width / 2,
+                            y: canvasBounds.top + canvasBounds.height / 2,
+                            zoom: canvasRef.current?.getZoom() ?? 1
+                        })
+                    }
+                }, 400)
+                return
+            }
+        }
+        // Focus mode OFF: use the node's actual screen-center so the gap in
+        // elementMenu is always the same fixed value regardless of where on the
+        // node the user clicked.
+        if ("category" in element && canvasRef.current) {
+            const gd = canvasRef.current.getGraphData()
+            const gn = gd?.nodes.find(n => n.id === element.id)
+            const vp = canvasRef.current.getViewport()
+            const cb = canvasRef.current.getBoundingClientRect()
+            if (gn?.x !== undefined && gn?.y !== undefined && vp && cb) {
+                const z = vp.zoom
+                const sx = (gn.x - vp.centerX) * z + cb.width / 2
+                const sy = (gn.y - vp.centerY) * z + cb.height / 2
+                setPosition({ x: cb.left + sx, y: cb.top + sy, zoom: z })
+                return
+            }
+        }
+        setPosition({ x: evt.clientX, y: evt.clientY, zoom: canvasRef.current?.getZoom() ?? 1 })
+    }, [selectedObjects, setSelectedObjects, setPosition, canvasRef, manualDimmed, isPathResponse])
 
     const handleLinkClick = (link: Link, evt: MouseEvent) => {
         unsetSelectedObjects(evt)
@@ -132,26 +176,26 @@ export default function GraphView({
     const isNodeSelected = useCallback((node: GraphNode) => {
         if (isPathResponse) {
             return node.data.isPathSelected
-        } else {
-            return selectedObjects.some(obj => "category" in obj && obj.id === node.id) || (selectedObj && "category" in selectedObj && selectedObj?.id === node.id) || (hoverElement && ('category' in hoverElement) && hoverElement.id === node.id)
         }
-    }, [isPathResponse, selectedObjects, selectedObj, hoverElement])
+        // Highlight selected and hovered nodes - dimming handled separately by isNodeDimmed
+        return selectedObjects.some(obj => "category" in obj && obj.id === node.id) || (hoverElement && ('category' in hoverElement) && hoverElement.id === node.id)
+    }, [isPathResponse, selectedObjects, hoverElement])
 
     const isLinkSelected = useCallback((link: GraphLink) => {
         if (isPathResponse) {
             return link.data.isPathSelected
-        } else {
-            return selectedObjects.some(obj => "source" in obj && obj.id === link.id) || (selectedObj && "source" in selectedObj && selectedObj?.id === link.id) || (hoverElement && 'source' in hoverElement && hoverElement.id === link.id)
         }
-    }, [isPathResponse, selectedObjects, selectedObj, hoverElement])
+        // Highlight selected and hovered links - dimming handled separately by isLinkDimmed
+        return selectedObjects.some(obj => "source" in obj && obj.id === link.id) || (hoverElement && 'source' in hoverElement && hoverElement.id === link.id)
+    }, [isPathResponse, selectedObjects, hoverElement])
 
     const handleNodeClick = useCallback(async (node: Node) => {
-        const now = new Date()
-        const { date, name } = lastClick.current
+        const now = Date.now()
+        const { date, id } = lastClick.current
 
-        const isDoubleClick = now.getTime() - date.getTime() < 1000 && name === node.data.name
-        lastClick.current = { date: now, name: node.data.name }
-
+        const isDoubleClick = now - date < DOUBLE_CLICK_MS && id === node.id
+        lastClick.current = isDoubleClick ? { date: 0, id: 0 } : { date: now, id: node.id }
+        
         if (isDoubleClick) {
             handleExpand([node], !node.expand)
         } else if (isShowPath) {
@@ -171,106 +215,114 @@ export default function GraphView({
             canvasRef.current?.zoomToFit(zoomedNodes.length === 1 ? 4 : 1, (n: GraphNode) => zoomedNodes.some(node => node.id === n.id))
             setZoomedNodes([])
         }
+    }, [zoomedNodes, canvasRef])
 
-        if (cooldownTicks !== -1) return
+    const activeElements = useMemo(() => {
+        const elements: (Node | Link)[] = [...selectedObjects]
+        if (hoverElement && !elements.includes(hoverElement)) {
+            elements.push(hoverElement)
+        }
+        return elements
+    }, [selectedObjects, hoverElement])
 
-        setCooldownTicks(0)
-    }, [zoomedNodes, cooldownTicks, canvasRef])
+    const selectedNodeIds = useMemo(() => {
+        const ids = new Set<number>()
+        for (const el of activeElements) {
+            if (!('source' in el)) {
+                ids.add(el.id)
+            }
+        }
+        return ids
+    }, [activeElements])
 
-    const nodeCanvasObject = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D) => {
-        if (node.x === undefined || node.y === undefined) {
-            node.x = 0;
-            node.y = 0;
+    const activeEndpointIds = useMemo(() => {
+        const ids = new Set<number>()
+        for (const el of activeElements) {
+            if ('source' in el) {
+                ids.add(el.source as number)
+                ids.add(el.target as number)
+            }
+        }
+        return ids
+    }, [activeElements])
+
+    const adjacentToSelectedNodeIds = useMemo(() => {
+        const ids = new Set<number>()
+        if (selectedNodeIds.size === 0) return ids
+
+        for (const link of data.links) {
+            if (selectedNodeIds.has(link.source)) {
+                ids.add(link.target)
+            }
+            if (selectedNodeIds.has(link.target)) {
+                ids.add(link.source)
+            }
         }
 
-        const isHovered = !!hoverElement && !('source' in hoverElement) && hoverElement.id === node.id
-        const isSelected = selectedObjects.some(obj => obj.id === node.id) || selectedObj?.id === node.id
+        return ids
+    }, [selectedNodeIds, data.links])
 
+    const isNodeDimmed = useCallback((node: GraphNode) => {
         if (isPathResponse) {
-            if (node.data.isPathSelected) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1.5
-            } else if (node.data.isPath) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1
-            } else {
-                ctx.fillStyle = dimmedNodeFillColor;
-                ctx.strokeStyle = dimmedNodeStrokeColor;
-                ctx.lineWidth = 1
-            }
-        } else if (isPathResponse === undefined) {
-            if (node.data.isPathSelected) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1.5
-            } else if (node.data.isPath) {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = PATH_COLOR;
-                ctx.lineWidth = 1
-            } else {
-                ctx.fillStyle = node.color;
-                ctx.strokeStyle = canvasForegroundColor;
-                ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
-            }
-        } else {
-            ctx.fillStyle = node.color;
-            ctx.strokeStyle = canvasForegroundColor;
-            ctx.lineWidth = isSelected || isHovered ? 1.5 : 1
+            return !node.data.isPath && !node.data.isPathSelected
         }
-
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, NODE_SIZE + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
-        ctx.stroke();
-        ctx.fill();
-
-        ctx.fillStyle = canvasForegroundColor;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = '2px Arial';
-        let name = node.data.name || "";
-        const textWidth = ctx.measureText(name).width;
-        const ellipsis = '...';
-        const ellipsisWidth = ctx.measureText(ellipsis).width;
-        const nodeSize = (NODE_SIZE + ctx.lineWidth / 2) * 2 - PADDING;
-
-        // truncate text if it's too long
-        if (textWidth > nodeSize) {
-            while (name.length > 0 && ctx.measureText(name).width + ellipsisWidth > nodeSize) {
-                name = name.slice(0, -1);
-            }
-            name += ellipsis;
+        // Only apply dimming when focus mode is ON (manualDimmed=true)
+        // When manualDimmed=false, nothing should be dimmed regardless of selection
+        if (!manualDimmed) {
+            return false
         }
+        
+        if (activeElements.length === 0) return false
 
-        // add label
-        ctx.fillText(name, node.x, node.y);
+        const allActiveIds = new Set([...selectedNodeIds, ...activeEndpointIds])
+        if (allActiveIds.size === 0) return false
+        if (allActiveIds.has(node.id)) return false
+
+        return !adjacentToSelectedNodeIds.has(node.id)
     }, [
-        selectedObj,
-        selectedObjects,
         isPathResponse,
-        hoverElement,
-        dimmedNodeFillColor,
-        dimmedNodeStrokeColor,
-        canvasForegroundColor,
+        manualDimmed,
+        activeElements,
+        selectedNodeIds,
+        activeEndpointIds,
+        adjacentToSelectedNodeIds,
     ])
 
-    const nodePointerAreaPaint = useCallback((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-        if (node.x === undefined || node.y === undefined) {
-            node.x = 0;
-            node.y = 0;
+    const isLinkDimmed = useCallback((link: GraphLink) => {
+        if (isPathResponse) {
+            return !link.data.isPath && !link.data.isPathSelected
         }
+        // Only apply dimming when focus mode is ON (manualDimmed=true)
+        // When manualDimmed=false, nothing should be dimmed regardless of selection
+        if (!manualDimmed) {
+            return false
+        }
+        
+        if (activeElements.length === 0) return false
+        
+        // Don't dim the link itself if it's selected/hovered
+        if (hoverElement && 'source' in hoverElement && hoverElement.id === link.id) return false
+        if (selectedObjects.some(obj => 'source' in obj && obj.id === link.id)) return false
+        
+        if (selectedNodeIds.size === 0) return true
+        
+        // Link is undimmed if one endpoint is a directly selected node
+        const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source
+        const tgtId = typeof link.target === 'object' ? (link.target as any).id : link.target
+        
+        if (selectedNodeIds.has(srcId) || selectedNodeIds.has(tgtId)) return false
 
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, NODE_SIZE + 2 + ctx.lineWidth / 2, 0, 2 * Math.PI, false);
-        ctx.fill();
-    }, [])
+        return true
+    }, [isPathResponse, manualDimmed, selectedObjects, hoverElement, activeElements, selectedNodeIds])
 
     const linkLineDash = useCallback((link: GraphLink) => {
         if (link.data.isPath && !link.data.isPathSelected) return [5, 5]
         return []
     }, [])
+
+    const handleNodeDragEnd = useCallback(() => {
+        setPosition(undefined)
+    }, [setPosition])
 
     const mobileBreakpointRaw = Number(import.meta.env.VITE_MOBILE_BREAKPOINT)
     const mobileBreakpoint = Number.isFinite(mobileBreakpointRaw) ? mobileBreakpointRaw : 0
@@ -285,24 +337,26 @@ export default function GraphView({
             </div>
             <ForceGraph
                 id={id}
+                graphId={data.nodes.length === 0 ? '' : graph.Id}
                 data={data}
                 canvasRef={canvasRef}
                 onNodeClick={isDesktop || isShowPath ? (node: Node, _evt: MouseEvent) => handleNodeClick(node) : (node: Node, evt: MouseEvent) => handleRightClick(node, evt)}
                 onNodeHover={handleNodeHover}
                 onNodeRightClick={handleRightClick}
                 isNodeSelected={isNodeSelected}
-                onLinkClick={isDesktop && isPathResponse ? handleLinkClick : handleRightClick}
+                onLinkClick={isDesktop ? handleLinkClick : handleRightClick}
                 onLinkHover={handleLinkHover}
                 onLinkRightClick={handleRightClick}
                 isLinkSelected={isLinkSelected}
+                isNodeDimmed={isNodeDimmed}
+                isLinkDimmed={isLinkDimmed}
+                dimmed={isPathResponse === true || manualDimmed}
+                linkLineDash={linkLineDash}
                 onBackgroundClick={unsetSelectedObjects}
                 onBackgroundRightClick={unsetSelectedObjects}
-                onZoom={() => unsetSelectedObjects()}
+                onZoom={() => { if (!isCenteringRef.current) unsetSelectedObjects() }}
                 onEngineStop={handleEngineStop}
-                nodeCanvasObject={nodeCanvasObject}
-                nodePointerAreaPaint={nodePointerAreaPaint}
-                linkLineDash={linkLineDash}
-                cooldownTicks={cooldownTicks}
+                onNodeDragEnd={handleNodeDragEnd}
                 backgroundColor={canvasBackgroundColor}
                 foregroundColor={canvasForegroundColor}
             />

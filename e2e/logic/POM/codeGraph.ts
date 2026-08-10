@@ -71,7 +71,7 @@ export default class CodeGraph extends BasePage {
     }
 
     private get selectGraphInComboBoxByName(): (graph: string) => Locator {
-        return (graph: string) => this.page.locator(`//div[@role='presentation']//div//span[contains(text(), '${graph}')]`);
+        return (graph: string) => this.page.locator(`//div[@role='presentation']//div//span[contains(text(), '${graph}')]`).first();
     }
 
     private get selectGraphInComboBoxById(): (graph: string) => Locator {
@@ -216,6 +216,10 @@ export default class CodeGraph extends BasePage {
 
     private get codeGraphCheckbox(): (checkbox: string) => Locator {
         return (checkbox: string) => this.scopedLocator(`(//button[@role='checkbox'])[${checkbox}]`);
+    }
+
+    private get categoryCheckbox(): (category: string) => Locator {
+        return (category: string) => this.scopedLocator(`//p[text()='${category}']/preceding-sibling::button[@role='checkbox']`);
     }
 
     private get clearGraphBtn(): Locator {
@@ -550,6 +554,10 @@ export default class CodeGraph extends BasePage {
         await interactWhenVisible(this.codeGraphCheckbox(checkbox), (el) => el.click(), `Checkbox ${checkbox}`);
     }
 
+    async selectCategoryCheckbox(category: string): Promise<void> {
+        await interactWhenVisible(this.categoryCheckbox(category), (el) => el.click(), `Category checkbox ${category}`);
+    }
+
     async clickOnClearGraphBtn(): Promise<void> {
         await this.page.mouse.click(10, 10);
         await interactWhenVisible(this.clearGraphBtn, (el) => el.click(), 'Clear Graph button');
@@ -613,8 +621,19 @@ export default class CodeGraph extends BasePage {
     }
 
     async getMetricsPanelInfo(): Promise<{ nodes: string, edges: string }> {
-        const nodes = await this.canvasMetricsPanel("1").innerHTML();
-        const edges = await this.canvasMetricsPanel("3").innerHTML();
+        // The metrics panel is populated by an async /api/repo_info fetch
+        // that fires after graph selection resolves, so it can briefly read
+        // "0" right after selectGraph(). Poll until it settles on a
+        // non-zero value (or give up and return whatever is last read).
+        let nodes = "0";
+        let edges = "0";
+        for (let attempt = 0; attempt < 10; attempt++) {
+            nodes = await this.canvasMetricsPanel("1").innerHTML();
+            edges = await this.canvasMetricsPanel("3").innerHTML();
+            // innerHTML is e.g. "495 Nodes" / "806 Edges" — parse the number
+            if (parseInt(nodes, 10) > 0 && parseInt(edges, 10) > 0) break;
+            await this.page.waitForTimeout(500);
+        }
         return { nodes, edges }
     }
 
@@ -714,7 +733,7 @@ export default class CodeGraph extends BasePage {
 
     async getCanvasScaling(): Promise<{ scaleX: number; scaleY: number }> {
         await this.waitForCanvasAnimationToEnd();
-        const zoom = await this.canvasHost.evaluate((canvas: { getZoom?: () => number }) => {
+        const zoom = await this.canvasHost.evaluate((canvas: any) => {
             return typeof canvas.getZoom === "function" ? canvas.getZoom() : 1;
         });
         return { scaleX: zoom, scaleY: zoom };
@@ -740,7 +759,13 @@ export default class CodeGraph extends BasePage {
             await this.page.mouse.move(centerX, centerY);
             await this.page.waitForTimeout(500);
             await this.page.mouse.click(centerX, centerY, { button: 'right' });
-            if (await this.elementMenu.isVisible()) {
+            // In focus mode the app centers the clicked element first and only
+            // shows the menu ~400ms after the pan animation, so wait for it.
+            const menuAppeared = await this.elementMenu
+                .waitFor({ state: 'visible', timeout: 3000 })
+                .then(() => true)
+                .catch(() => false);
+            if (menuAppeared) {
                 return;
             }
             await this.page.waitForTimeout(1000);
@@ -804,10 +829,7 @@ export default class CodeGraph extends BasePage {
         const startTime = Date.now();
 
         while (Date.now() - startTime < timeout) {
-            const { cooldown, zoom } = await this.canvasHost.evaluate((canvas: {
-                getGraph?: () => { cooldownTicks?: () => number } | undefined;
-                getZoom?: () => number;
-            }) => {
+            const { cooldown, zoom } = await this.canvasHost.evaluate((canvas: any) => {
                 const graph = typeof canvas.getGraph === "function" ? canvas.getGraph() : undefined;
                 return {
                     cooldown: typeof graph?.cooldownTicks === "function" ? graph.cooldownTicks() : null,
@@ -856,5 +878,50 @@ export default class CodeGraph extends BasePage {
                 nodeIds: Array.isArray(nodes) ? nodes.map((node: { id: string | number }) => String(node.id)).sort() : [],
             };
         }, this.activeGraphGetterName);
+    }
+
+    /* Element Menu specific tests */
+    async isElementMenuVisible(): Promise<boolean> {
+        await this.page.waitForTimeout(500);
+        return await this.elementMenu.isVisible();
+    }
+
+    async getElementMenuBoundingBox(): Promise<any> {
+        const isVisible = await this.isElementMenuVisible();
+        if (!isVisible) throw new Error("Element menu is not visible!");
+        return await this.elementMenu.boundingBox();
+    }
+
+    async hasElementMenuButton(buttonTitle: string): Promise<boolean> {
+        const isVisible = await this.isElementMenuVisible();
+        if (!isVisible) throw new Error("Element menu is not visible!");
+        const button = this.elementMenuButton(buttonTitle);
+        return await button.isVisible();
+    }
+
+    async rightClickAtNode(x: number, y: number): Promise<void> {
+        await this.waitForCanvasAnimationToEnd();
+        const boundingBox = await this.canvasElement.boundingBox();
+        if (!boundingBox) throw new Error("Canvas bounding box not found");
+
+        // Move to node position and right-click
+        await this.page.mouse.move(x, y);
+        await this.page.waitForTimeout(300);
+        await this.page.mouse.click(x, y, { button: 'right' });
+        
+        // Wait for element menu to appear. In focus mode the app first centers
+        // the clicked node (300ms pan) and shows the menu ~400ms later, so we
+        // must actually wait for visibility rather than checking immediately.
+        const isMenuVisible = await this.elementMenu
+            .waitFor({ state: 'visible', timeout: 5000 })
+            .then(() => true)
+            .catch(() => false);
+        if (!isMenuVisible) {
+            throw new Error(`Element menu not visible after right-clicking at (${x}, ${y})`);
+        }
+    }
+
+    async getCanvasBoundingBox(): Promise<any> {
+        return await this.canvasElement.boundingBox();
     }
 }

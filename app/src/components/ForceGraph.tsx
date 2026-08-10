@@ -1,11 +1,12 @@
 
-import { useCallback, useEffect, useState } from "react"
+import { createElement, useCallback, useEffect, useRef, useState } from "react"
 import type { Data, GraphLink, GraphNode } from "@falkordb/canvas"
 import { GraphRef, PATH_COLOR } from "@/lib/utils"
 import { GraphData, Link, Node } from "./model"
 
 interface Props {
     id: "desktop" | "mobile"
+    graphId: string
     data: GraphData
     canvasRef: GraphRef
     onNodeClick: (node: Node, event: MouseEvent) => void
@@ -16,30 +17,34 @@ interface Props {
     onLinkHover: (link: Link | null) => void
     onLinkRightClick: (link: Link, event: MouseEvent) => void
     isLinkSelected: (link: GraphLink) => boolean
+    isNodeDimmed: (node: GraphNode) => boolean
+    isLinkDimmed: (link: GraphLink) => boolean
+    dimmed: boolean
+    linkLineDash: (link: any) => number[]
     onBackgroundClick: (event: MouseEvent) => void
     onBackgroundRightClick: (event: MouseEvent) => void
-    nodeCanvasObject: (node: GraphNode, ctx: CanvasRenderingContext2D) => void
-    nodePointerAreaPaint: (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => void
-    linkLineDash: (link: any) => number[]
     onZoom: () => void
     onEngineStop: () => void
-    cooldownTicks: number | undefined
+    onNodeDragEnd?: () => void
     backgroundColor?: string
     foregroundColor?: string
 }
 
-const convertToCanvasData = (graphData: GraphData): Data => ({
-    nodes: graphData.nodes.filter(n => n.visible).map(({ id, category, color, visible, isPath, isPathSelected, data }) => ({
+
+export const convertToCanvasData = (graphData: GraphData): Data => ({
+    nodes: graphData.nodes.map(({ id, category, color, visible, expand, isPath, isPathSelected, data }) => ({
         id,
         labels: [category],
         color,
+        borderColor: (isPath || isPathSelected) ? PATH_COLOR : undefined,
         visible,
+        expand,
         data: { ...data, isPath, isPathSelected }
     })),
-    links: graphData.links.filter(l => l.visible).map(({ id, label, color, visible, source, target, isPath, isPathSelected, data }) => ({
+    links: graphData.links.map(({ id, label, color, visible, source, target, isPath, isPathSelected, data }) => ({
         id,
         relationship: label,
-        color: isPath ? PATH_COLOR : color,
+        color: (isPath || isPathSelected) ? PATH_COLOR : color,
         visible,
         source,
         target,
@@ -49,6 +54,7 @@ const convertToCanvasData = (graphData: GraphData): Data => ({
 
 export default function ForceGraph({
     id,
+    graphId,
     data,
     canvasRef,
     onNodeClick,
@@ -59,14 +65,15 @@ export default function ForceGraph({
     onLinkHover,
     onLinkRightClick,
     isLinkSelected,
+    isNodeDimmed,
+    isLinkDimmed,
+    dimmed,
+    linkLineDash,
     onBackgroundClick,
     onBackgroundRightClick,
     onZoom,
     onEngineStop,
-    nodeCanvasObject,
-    nodePointerAreaPaint,
-    linkLineDash,
-    cooldownTicks,
+    onNodeDragEnd,
     backgroundColor = "#FFFFFF",
     foregroundColor = "#000000"
 }: Props) {
@@ -82,10 +89,10 @@ export default function ForceGraph({
     useEffect(() => {
         const canvas = canvasRef.current
 
-        if (!canvas) return
+        if (!canvas || !canvasLoaded) return
 
         (window as any)[id === "desktop" ? "graphDesktop" : "graphMobile"] = () => canvas.getGraphData();
-    }, [canvasRef, id])
+    }, [canvasRef, id, canvasLoaded])
 
     // Update canvas colors
     useEffect(() => {
@@ -93,13 +100,6 @@ export default function ForceGraph({
         canvasRef.current.setBackgroundColor(backgroundColor)
         canvasRef.current.setForegroundColor(foregroundColor)
     }, [canvasRef, backgroundColor, foregroundColor, canvasLoaded])
-
-    // Update cooldown ticks
-    useEffect(() => {
-        if (!canvasRef.current || !canvasLoaded) return
-
-        canvasRef.current.setCooldownTicks(cooldownTicks === -1 ? undefined : cooldownTicks)
-    }, [canvasRef, cooldownTicks, canvasLoaded])
 
     // Map node click handler
     const handleNodeClick = useCallback((node: GraphNode, event: MouseEvent) => {
@@ -113,9 +113,9 @@ export default function ForceGraph({
             onNodeHover(null)
             return
         }
-        
+
         const originalNode = data.nodes.find(n => n.id === node.id)
-        
+
         if (originalNode) onNodeHover(originalNode)
     }, [onNodeHover, data.nodes])
 
@@ -137,9 +137,9 @@ export default function ForceGraph({
             onLinkHover(null)
             return
         }
-        
+
         const originalLink = data.links.find(l => l.id === link.id)
-        
+
         if (originalLink) onLinkHover(originalLink)
     }, [onLinkHover, data.links])
 
@@ -158,23 +158,25 @@ export default function ForceGraph({
     useEffect(() => {
         if (!canvasRef.current || !canvasLoaded) return
         canvasRef.current.setConfig({
-            autoStopOnSettle: false,
-            // nodes will display node.data.captionsKeys in the canvas
-            captionsKeys: ["name", "title"],
-            onNodeClick: handleNodeClick,
-            onNodeRightClick: handleNodeRightClick,
-            onNodeHover: handleNodeHover,
+            captionsKeys: [["name", true], ["title", true]],
             isNodeSelected: isNodeSelected,
-            onLinkClick: handleLinkClick,
-            onLinkRightClick: handleLinkRightClick,
-            onLinkHover: handleLinkHover,
             isLinkSelected: isLinkSelected,
-            onBackgroundClick,
-            onBackgroundRightClick,
-            onEngineStop: handleEngineStop,
-            node: { nodeCanvasObject, nodePointerAreaPaint },
+            isNodeDimmed: isNodeDimmed,
+            isLinkDimmed: isLinkDimmed,
             linkLineDash,
-            onZoom
+            eventHandlers: {
+                onNodeClick: handleNodeClick,
+                onNodeRightClick: handleNodeRightClick,
+                onNodeHover: handleNodeHover,
+                onLinkClick: handleLinkClick,
+                onLinkRightClick: handleLinkRightClick,
+                onLinkHover: handleLinkHover,
+                onBackgroundClick,
+                onBackgroundRightClick,
+                onEngineStop: handleEngineStop,
+                onNodeDragEnd,
+                onZoom
+            }
         })
     }, [
         handleNodeClick,
@@ -185,16 +187,26 @@ export default function ForceGraph({
         handleLinkHover,
         isNodeSelected,
         isLinkSelected,
+        isNodeDimmed,
+        isLinkDimmed,
         onBackgroundClick,
         onBackgroundRightClick,
         handleEngineStop,
-        nodeCanvasObject,
-        nodePointerAreaPaint,
+        onNodeDragEnd,
         linkLineDash,
         onZoom,
         canvasRef,
         canvasLoaded
     ])
+
+    // Sync dimmed state to canvas (like browser: separate effect, not via setConfig)
+    useEffect(() => {
+        if (!canvasRef.current || !canvasLoaded) return
+        canvasRef.current.setDimmed(dimmed)
+    }, [dimmed, canvasRef, canvasLoaded])
+
+    // Track the last graphId that triggered a full setData
+    const lastGraphIdRef = useRef<string | undefined>(undefined)
 
     // Update canvas data
     useEffect(() => {
@@ -202,10 +214,16 @@ export default function ForceGraph({
         if (!canvas || !canvasLoaded) return
 
         const canvasData = convertToCanvasData(data)
-        canvas.setData(canvasData)
-    }, [canvasRef, data, canvasLoaded])
 
-    return (
-        <falkordb-canvas ref={canvasRef} node-mode="replace" />
-    )
+        if (graphId !== lastGraphIdRef.current) {
+            // New graph identity: full replacement (resets positions, runs simulation)
+            lastGraphIdRef.current = graphId
+            canvas.setData(canvasData)
+        } else {
+            // Same graph: incremental update (preserves node positions)
+            canvas.setGraphData(canvasData)
+        }
+    }, [canvasRef, graphId, data, canvasLoaded])
+
+    return createElement("falkordb-canvas", { ref: canvasRef, "node-mode": "replace" })
 }

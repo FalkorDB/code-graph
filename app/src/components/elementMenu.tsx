@@ -9,19 +9,21 @@ import { GraphNode } from "@falkordb/canvas";
 
 interface Props {
     obj: Node | Link | undefined;
-    objects: Node[];
+    objects: (Node | Link)[];
     setPath: Dispatch<SetStateAction<Path | undefined>>;
     handleRemove: (ids: number[], type: "nodes" | "links") => void;
     position: Position | undefined;
     url: string;
     handleExpand: (nodes: Node[],  expand: boolean) => void;
-    parentRef: RefObject<HTMLDivElement>;
+    parentRef: RefObject<HTMLDivElement | null>;
 }
 
 
 export default function ElementMenu({ obj, objects, setPath, handleRemove, position, url, handleExpand, parentRef }: Props) {
     const [currentObj, setCurrentObj] = useState<Node | Link>();
     const [containerWidth, setContainerWidth] = useState(0);
+    const [containerHeight, setContainerHeight] = useState(0);
+    const nodeObjects = objects.filter((o): o is Node => "category" in o)
 
     useEffect(() => {
         setCurrentObj(undefined)
@@ -29,33 +31,62 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
 
     if (!obj || !position) return null
 
-    const objURL = "category" in obj && obj.category === "File"
-        ? `${url}/tree/master/${obj.data.path}/${obj.data.name}`
-        : `${url}/tree/master/${obj.data.path}#L${obj.data.src_start}-L${obj.data.src_end + 1}`
+    const nodeURL = "category" in obj
+        ? obj.category === "File"
+            ? `${url}/tree/master/${obj.data.path}/${obj.data.name}`
+            : `${url}/tree/master/${obj.data.path}#L${obj.data.src_start}-L${obj.data.src_end + 1}`
+        : undefined
+
+    const parentRect = parentRef?.current?.getBoundingClientRect()
+    const parentW = parentRef?.current?.clientWidth || 0
+    const parentH = parentRef?.current?.clientHeight || 0
+
+    const edgeMargin = 8  // fixed margin from container edges
+    const gap = 12        // fixed gap between node edge and menu — constant at every zoom level
+
+    const zoom = position.zoom ?? 1
+    const nodeRadius = 9 * zoom  // node visual radius in screen px (NODE_SIZE=9 world units)
+
+    // Convert viewport coordinates to parent-relative coordinates
+    const relX = position.x - (parentRect?.left || 0)
+    const relY = position.y - (parentRect?.top || 0)
+
+    // X axis: center on click, clamp to container edges
+    const rawLeft = relX - containerWidth / 2
+    const left = Math.max(edgeMargin, Math.min(rawLeft, parentW - containerWidth - edgeMargin))
+
+    // Y axis: always place below at (node_center + node_radius + fixed_gap).
+    // Clamp to canvas edges — no flipping. If the node is larger than the canvas
+    // the menu stays at the bottom edge, which may overlap the node.
+    const rawTop = relY + nodeRadius + gap
+    const top = Math.max(edgeMargin, Math.min(rawTop, parentH - containerHeight - edgeMargin))
 
     return (
         <>
             <div
                 ref={(ref) => {
                     if (!ref) return
-                    setContainerWidth(ref.clientWidth)
+                    const { clientWidth, clientHeight } = ref
+                    if (clientWidth !== containerWidth) {
+                        setContainerWidth(clientWidth)
+                    }
+                    if (clientHeight !== containerHeight) {
+                        setContainerHeight(clientHeight)
+                    }
                 }}
-                className="absolute z-10 bg-popover text-popover-foreground rounded-lg shadow-lg flex divide-x divide-border"
+                className="absolute z-[15] bg-popover text-popover-foreground rounded-lg shadow-lg flex divide-x divide-border"
                 id="elementMenu"
-                style={{
-                    left: Math.max(8, Math.min(position.x - containerWidth / 2, (parentRef?.current?.clientWidth || 0) - containerWidth - 8)),
-                    top: Math.max(8, Math.min(position.y - 153, (parentRef?.current?.clientHeight || 0) - containerWidth - 8)),
-                }}
+                style={{ left, top }}
             >
                 {
-                    objects.some(o => o.id === obj.id) && objects.length > 1 ?
+                    "category" in obj && nodeObjects.some(o => o.id === obj.id) && nodeObjects.length > 1 ?
                         <>
                             {
-                                objects.length === 2 &&
+                                nodeObjects.length === 2 &&
                                 <button
                                     className="p-2"
                                     title="Create a path"
-                                    onClick={() => setPath({ start: { id: Number(objects[0].id), name: objects[0].data.name }, end: { id: Number(objects[1].id), name: objects[1].data.name } })}
+                                    onClick={() => setPath({ start: { id: Number(nodeObjects[0].id), name: nodeObjects[0].data.name }, end: { id: Number(nodeObjects[1].id), name: nodeObjects[1].data.name } })}
                                 >
                                     <Waypoints />
                                 </button>
@@ -63,19 +94,19 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                             <button
                                 className="p-2"
                                 title="Remove"
-                                onClick={() => handleRemove(objects.map(o => o.id), "nodes")}
+                                onClick={() => handleRemove(nodeObjects.map(o => o.id), "nodes")}
                             >
                                 <EyeOff />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand(objects, true)}
+                                onClick={() => handleExpand(nodeObjects, true)}
                             >
                                 <Maximize2 />
                             </button>
                             <button
                                 className="p-2"
-                                onClick={() => handleExpand(objects, false)}
+                                onClick={() => handleExpand(nodeObjects, false)}
                             >
                                 <Minimize2 />
                             </button>
@@ -123,11 +154,11 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
                                 <>
                                     <a
                                         className="p-2"
-                                        href={objURL}
+                                        href={nodeURL}
                                         target="_blank"
                                         title="Go to repo"
                                         onClick={() => {
-                                            window.open(objURL, '_blank');
+                                            if (nodeURL) window.open(nodeURL, '_blank');
                                         }}
                                     >
                                         <Globe />
@@ -164,7 +195,7 @@ export default function ElementMenu({ obj, objects, setPath, handleRemove, posit
             <DataPanel
                 obj={currentObj}
                 setObj={setCurrentObj}
-                url={objURL}
+                url={nodeURL ?? url}
             />
         </>
     )

@@ -1,0 +1,126 @@
+import { test, expect } from "@playwright/test";
+import BrowserWrapper from "../infra/ui/browserWrapper";
+import CodeGraph from "../logic/POM/codeGraph";
+import urls from "../config/urls.json";
+import { GRAPHRAG_SDK } from "../config/constants";
+import { findNodeByName } from "../logic/utils";
+import { nodes } from "../config/testData";
+
+test.describe("Element Menu and Right-click Menu tests", () => {
+  let browser: BrowserWrapper;
+
+  test.beforeAll(async () => {
+    browser = new BrowserWrapper();
+  });
+
+  test.afterAll(async () => {
+    await browser.closeBrowser();
+  });
+
+  test("Verify element menu appears on right-click at canvas center", async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    // Focus a known node first so it is centered on the canvas — the layout
+    // is not deterministic, so a blind center click may hit empty background.
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
+    await codeGraph.rightClickAtCanvasCenter();
+    const isMenuVisible = await codeGraph.isElementMenuVisible();
+    expect(isMenuVisible).toBe(true);
+  });
+
+  test("Verify element menu has consistent positioning gap from node", async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    
+    // Get a node's position
+    const graphData = await codeGraph.getGraphNodes();
+    const targetNode = findNodeByName(graphData, nodes[0].nodeName);
+    expect(targetNode).toBeDefined();
+    
+    // Right-click on the node to trigger element menu
+    await codeGraph.rightClickAtNode(targetNode.screenX, targetNode.screenY);
+    
+    // Verify menu is visible
+    const isMenuVisible = await codeGraph.isElementMenuVisible();
+    expect(isMenuVisible).toBe(true);
+    
+    // Get menu position and verify it appears below the node (not overlapping)
+    const menuBox = await codeGraph.getElementMenuBoundingBox();
+    expect(menuBox).toBeDefined();
+    expect(menuBox.y).toBeGreaterThan(targetNode.screenY);
+  });
+
+  test("Verify element menu contains 'View Node' button", async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    // Focus a known node so the canvas-center right-click hits it reliably.
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
+    await codeGraph.rightClickAtCanvasCenter();
+    
+    const hasViewNodeBtn = await codeGraph.hasElementMenuButton("View Node");
+    expect(hasViewNodeBtn).toBe(true);
+  });
+
+  test("Verify element menu 'View Node' button opens node details panel", async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    
+    // Get a node and right-click on it
+    const graphData = await codeGraph.getGraphNodes();
+    const targetNode = findNodeByName(graphData, nodes[0].nodeName);
+    expect(targetNode).toBeDefined();
+    
+    await codeGraph.rightClickAtNode(targetNode.screenX, targetNode.screenY);
+    await codeGraph.clickOnViewNode();
+    
+    expect(await codeGraph.isNodeDetailsPanel()).toBe(true);
+  });
+
+  test("Verify element menu 'Remove' button removes node/link from canvas", async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+
+    // Remove a specific node to keep the assertion deterministic.
+    const initialGraphData = await codeGraph.getGraphNodes();
+    const targetNode = findNodeByName(initialGraphData, nodes[0].nodeName);
+    expect(targetNode).toBeDefined();
+
+    await codeGraph.rightClickAtNode(targetNode.screenX, targetNode.screenY);
+    await codeGraph.clickOnRemoveNodeViaElementMenu();
+
+    // Hidden nodes remain in graph data; verify visibility rather than length.
+    await codeGraph.waitForCanvasAnimationToEnd();
+    const updatedGraphData = await codeGraph.getGraphNodes();
+    const updatedTargetNode = findNodeByName(updatedGraphData, nodes[0].nodeName);
+    expect(updatedTargetNode).toBeDefined();
+    expect(updatedTargetNode.visible).toBe(false);
+  });
+
+  test("Verify element menu positioning respects canvas boundaries", async () => {
+    const codeGraph = await browser.createNewPage(CodeGraph, urls.baseUrl);
+    await browser.setPageToFullScreen();
+    await codeGraph.selectGraph(GRAPHRAG_SDK);
+    
+    // Focus a known node so the canvas-center right-click hits it reliably.
+    await codeGraph.fillSearchBar(nodes[0].nodeName);
+    await codeGraph.selectSearchBarOptionBtn("1");
+    await codeGraph.waitForCanvasAnimationToEnd();
+    // Right-click at canvas center
+    await codeGraph.rightClickAtCanvasCenter();
+    
+    // Get menu bounding box and canvas bounds
+    const menuBox = await codeGraph.getElementMenuBoundingBox();
+    const canvasBox = await codeGraph.getCanvasBoundingBox();
+    
+    // Verify menu stays within canvas bounds
+    expect(menuBox.x).toBeGreaterThanOrEqual(canvasBox.x);
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height);
+  });
+});
