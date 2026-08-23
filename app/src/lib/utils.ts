@@ -27,10 +27,15 @@ export function toRepoOption(entry: unknown): RepoOption {
     return { project: entry, branch: DEFAULT_BRANCH, graph: entry }
   }
   const repo = entry as Partial<RepoOption> | null | undefined
-  const graph = repo?.graph ?? repo?.project ?? ""
+  const branch = repo?.branch ?? DEFAULT_BRANCH
+  // A backend that reports a project/branch pair without the composed key
+  // still has to be queried by that key, otherwise the UI would show the
+  // branch but silently load the default one.
+  const graph = repo?.graph
+    ?? (repo?.project ? composeGraphName(repo.project, branch) : "")
   return {
     project: repo?.project ?? graph,
-    branch: repo?.branch ?? DEFAULT_BRANCH,
+    branch,
     graph,
   }
 }
@@ -41,6 +46,17 @@ export function repoLabel(repo: RepoOption): string {
 
 export function composeGraphName(project: string, branch?: string | null): string {
   return `code:${project}:${branch || DEFAULT_BRANCH}`
+}
+
+// Mirrors the backend's `urlparse(url).path.split('/')[-1]`, so the name the
+// UI derives for a freshly analyzed repo matches the one the API created.
+// Falls back to a plain split for inputs URL() cannot parse.
+export function projectNameFromURL(url: string): string {
+  try {
+    return new URL(url).pathname.split("/").pop() ?? ""
+  } catch {
+    return url.split("/").pop() ?? ""
+  }
 }
 
 export type PathNode = {

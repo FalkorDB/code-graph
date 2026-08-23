@@ -13,7 +13,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } 
 import Input from './components/Input';
 import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
-import { cn, composeGraphName, GraphRef, Message, Path, PathData, PathNode, RepoOption } from '@/lib/utils';
+import { cn, composeGraphName, GraphRef, Message, Path, PathData, PathNode, projectNameFromURL, RepoOption } from '@/lib/utils';
 import type { GraphNode } from '@falkordb/canvas';
 import { Toaster } from '@/components/ui/toaster';
 import GTM from './GTM';
@@ -139,7 +139,10 @@ export default function App() {
     }
 
     const json = await result.json()
-    const project = createURL.split('/').pop()!
+    // Mirror the backend's `urlparse(url).path.split('/')[-1]` so the composed
+    // graph name matches the one analyze_repo actually created — a raw split
+    // would keep any query string (".../repo?tab=readme" -> "repo?tab=readme").
+    const project = projectNameFromURL(createURL)
     const option: RepoOption = {
       project,
       branch: json.branch,

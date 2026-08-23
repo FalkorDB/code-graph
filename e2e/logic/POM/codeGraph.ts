@@ -374,18 +374,24 @@ export default class CodeGraph extends BasePage {
      * The answer streams in and the scroll is animated, so the container
      * keeps growing for an indeterminate time after the message is sent —
      * polling avoids depending on a fixed delay that is racy on slower CI
-     * machines.
+     * machines. Requires the content to have stopped growing as well, so an
+     * auto-scroll that reaches the bottom once and then stops following the
+     * streamed response still fails.
      */
-    async waitForAtBottom(timeout = 10000): Promise<boolean> {
+    async waitForAtBottom(timeout = 15000): Promise<boolean> {
         const pollingInterval = 250;
         const deadline = Date.now() + timeout;
+        let previousHeight = -1;
 
         do {
-            if (await this.isAtBottom()) return true;
+            const { scrollTop, scrollHeight, clientHeight } = await this.getScrollMetrics();
+            const atBottom = Math.abs(scrollTop + clientHeight - scrollHeight) <= 2;
+            if (atBottom && scrollHeight === previousHeight) return true;
+            previousHeight = scrollHeight;
             await this.page.waitForTimeout(pollingInterval);
         } while (Date.now() < deadline);
 
-        return this.isAtBottom();
+        return false;
     }
 
     async getpreviousQuestionLoadingImage(): Promise<boolean> {
