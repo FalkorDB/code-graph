@@ -55,8 +55,7 @@ test.describe("Chat tests", () => {
     const { scrollTop } = await chat.getScrollMetrics();
     expect(scrollTop).toBeLessThanOrEqual(1);
     await chat.sendMessage(Node_Question);
-    await delay(500); // delay for scroll
-    expect(await chat.isAtBottom()).toBe(true);
+    expect(await chat.waitForAtBottom()).toBe(true);
   });
 
   test(`Validate consistent UI responses for repeated questions in chat`, async () => {

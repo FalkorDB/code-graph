@@ -13,7 +13,7 @@ import Input from './Input';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Position } from "./graphView";
 import { prepareArg } from '../utils';
-import { GraphRef } from "@/lib/utils";
+import { GraphRef, RepoOption } from "@/lib/utils";
 import { dataToGraphData } from "@falkordb/canvas";
 import type { Node as CanvasNode, Link as CanvasLink, GraphData as CanvasData } from "@falkordb/canvas";
 import GraphView from "./graphView";
@@ -29,8 +29,8 @@ interface Props {
     setData: Dispatch<SetStateAction<GraphData>>,
     onFetchGraph: (graphName: string) => Promise<void>,
     onFetchNode: (nodeIds: number[]) => Promise<GraphData>,
-    options: string[]
-    setOptions: Dispatch<SetStateAction<string[]>>
+    options: RepoOption[]
+    setOptions: Dispatch<SetStateAction<RepoOption[]>>
     isShowPath: boolean
     setPath: Dispatch<SetStateAction<Path | undefined>>
     canvasRef: GraphRef
