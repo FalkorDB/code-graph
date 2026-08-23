@@ -363,7 +363,29 @@ export default class CodeGraph extends BasePage {
 
     async isAtBottom(): Promise<boolean> {
         const { scrollTop, scrollHeight, clientHeight } = await this.getScrollMetrics();
-        return Math.abs(scrollTop + clientHeight - scrollHeight) < 1;
+        // Fractional scroll metrics (device pixel ratio / zoom) mean the sum
+        // rarely lands on an exact integer, so allow a sub-pixel tolerance.
+        return Math.abs(scrollTop + clientHeight - scrollHeight) <= 2;
+    }
+
+    /**
+     * Waits for the chat's auto-scroll to settle at the bottom.
+     *
+     * The answer streams in and the scroll is animated, so the container
+     * keeps growing for an indeterminate time after the message is sent —
+     * polling avoids depending on a fixed delay that is racy on slower CI
+     * machines.
+     */
+    async waitForAtBottom(timeout = 10000): Promise<boolean> {
+        const pollingInterval = 250;
+        const deadline = Date.now() + timeout;
+
+        do {
+            if (await this.isAtBottom()) return true;
+            await this.page.waitForTimeout(pollingInterval);
+        } while (Date.now() < deadline);
+
+        return this.isAtBottom();
     }
 
     async getpreviousQuestionLoadingImage(): Promise<boolean> {
