@@ -13,7 +13,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } 
 import Input from './components/Input';
 import { Labels } from './components/labels';
 import { Toolbar } from './components/toolbar';
-import { cn, GraphRef, Message, Path, PathData, PathNode } from '@/lib/utils';
+import { cn, composeGraphName, GraphRef, Message, Path, PathData, PathNode, RepoOption } from '@/lib/utils';
 import type { GraphNode } from '@falkordb/canvas';
 import { Toaster } from '@/components/ui/toaster';
 import GTM from './GTM';
@@ -71,7 +71,7 @@ export default function App() {
   const [createURL, setCreateURL] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [tipOpen, setTipOpen] = useState(false)
-  const [options, setOptions] = useState<string[]>([]);
+  const [options, setOptions] = useState<RepoOption[]>([]);
   const [path, setPath] = useState<Path | undefined>();
   const [isSubmit, setIsSubmit] = useState<boolean>(false);
   const desktopChartRef = useRef<GraphRef["current"]>(null)
@@ -138,17 +138,23 @@ export default function App() {
       return
     }
 
-    const graphName = createURL.split('/').pop()!
+    const json = await result.json()
+    const project = createURL.split('/').pop()!
+    const option: RepoOption = {
+      project,
+      branch: json.branch,
+      graph: composeGraphName(project, json.branch),
+    }
 
-    setOptions(prev => [...prev, graphName])
-    setSelectedValue(graphName)
+    setOptions(prev => [...prev, option])
+    setSelectedValue(option.graph)
     setCreateURL("")
     setCreateOpen(false)
     setIsSubmit(false)
 
     toast({
       title: "Success",
-      description: `Project ${graphName} created successfully`,
+      description: `Project ${project} created successfully`,
     })
   }
 
