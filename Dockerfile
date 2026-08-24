@@ -39,10 +39,12 @@ WORKDIR /app
 # Install Python dependencies pinned to uv.lock so the image matches CI.
 # uv is pinned too: it produces the constraints file, so an unpinned
 # upgrade could change `uv export` semantics and break reproducibility.
+# It is removed in the same layer, since only the export step needs it.
 ARG UV_VERSION=0.12.5
 COPY pyproject.toml uv.lock ./
 RUN pip install --no-cache-dir --break-system-packages "uv==${UV_VERSION}" \
     && uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/constraints.txt \
+    && pip uninstall -y --break-system-packages uv \
     && pip install --no-cache-dir --break-system-packages -c /tmp/constraints.txt . \
     && rm /tmp/constraints.txt
 
