@@ -396,7 +396,7 @@ requires-dist = [
     { name = "falkordb-multilspy", specifier = ">=0.1.0,<1.0.0" },
     { name = "falkordblite", marker = "extra == 'light'", specifier = ">=0.10.0,<1.0.0" },
     { name = "fastapi", specifier = ">=0.115.0,<1.0.0" },
-    { name = "graphrag-sdk", specifier = ">=0.8.1,<1.2.0" },
+    { name = "graphrag-sdk", specifier = ">=0.8.1,<0.9.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.28.0,<1.0.0" },
     { name = "javatools", specifier = ">=1.6.0,<2.0.0" },
     { name = "mcp", specifier = ">=1.0.0,<2.0.0" },
