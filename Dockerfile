@@ -36,9 +36,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Install Python dependencies
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir --break-system-packages .
+# Install Python dependencies pinned to uv.lock so the image matches CI
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir --break-system-packages uv \
+    && uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/constraints.txt \
+    && pip install --no-cache-dir --break-system-packages -c /tmp/constraints.txt . \
+    && rm /tmp/constraints.txt
 
 # Verify Node.js tooling for building the frontend
 RUN node --version && npm --version
