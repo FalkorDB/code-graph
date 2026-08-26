@@ -520,13 +520,16 @@ class Graph():
         node    = res.result_set[0][0]
         file.id = node.id
 
-    def delete_files(self, files: list[Path]) -> tuple[str, dict, list[int]]:
+    def delete_files(self, files: list[Path]) -> None:
         """
         Deletes file(s) from the graph in addition to any other entity
         defined in the file
 
         a file is defined by its path, name and extension
         files = [{'path':_, 'name': _, 'ext': _}, ...]
+
+        Returns:
+            None
         """
 
         q = """UNWIND $files AS file
@@ -538,7 +541,6 @@ class Graph():
         params = {'files': [{'path': str(file_path), 'name': file_path.name, 'ext' : file_path.suffix} for file_path in files]}
         self._query(q, params)
 
-        return None
 
     def get_file(self, path: str, name: str, ext: str) -> Optional[Node]:
         """
