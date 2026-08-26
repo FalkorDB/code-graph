@@ -98,11 +98,12 @@ def main():
         getattr(graphrag_sdk, "__version__", "?"),
         sdk_path,
     )
-    Project(
+    sdk_project = Project(
         name="GraphRAG-SDK",
         path=sdk_path,
         url="https://github.com/FalkorDB/GraphRAG-SDK",
-    ).analyze_sources()
+    )
+    sdk_project.analyze_sources()
 
     for url in REPOS:
         logger.info("Seeding %s ...", url)
@@ -110,8 +111,12 @@ def main():
         proj.analyze_sources()
         logger.info("Done seeding %s", url)
 
-    ensure_calls_edges("GraphRAG-SDK")
-    ensure_search_term_variety("GraphRAG-SDK")
+    # Use the actual composed graph name (e.g. "code:GraphRAG-SDK:_default")
+    # that analyze_sources() wrote into -- not the bare project name, which
+    # would silently create/write a separate, unused graph.
+    graph_name = sdk_project.graph.name
+    ensure_calls_edges(graph_name)
+    ensure_search_term_variety(graph_name)
 
     logger.info("All test data seeded successfully.")
 
