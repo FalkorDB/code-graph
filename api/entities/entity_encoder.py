@@ -1,8 +1,9 @@
 from falkordb import Node, Edge, Path
 
 def encode_node(n: Node) -> dict:
-    n.labels.remove('Searchable')
-    return vars(n)
+    result = vars(n).copy()
+    result['labels'] = [l for l in n.labels if l != 'Searchable']
+    return result
 
 def encode_edge(e: Edge) -> dict:
     return vars(e)
