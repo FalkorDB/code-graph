@@ -379,6 +379,38 @@ A C analyzer exists in the source tree, but it is commented out and is not curre
 | POST | `/api/analyze_repo` | Clone and analyze a git repository |
 | POST | `/api/switch_commit` | Switch the indexed repository to a specific commit |
 
+### Usage examples
+
+Fetch graph entities:
+```bash
+curl -X GET "http://127.0.0.1:5000/api/graph_entities?repo=<REPO_NAME>" \
+  -H "Authorization: Bearer <YOUR_SECRET_TOKEN>"
+```
+
+Query your code graph using natural language:
+```bash
+curl -X POST http://127.0.0.1:5000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_SECRET_TOKEN>" \
+  -d '{"repo": "<REPO_NAME>", "msg": "<YOUR_QUESTION>"}'
+```
+
+List all commits:
+```bash
+curl -X POST http://127.0.0.1:5000/api/list_commits \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_SECRET_TOKEN>" \
+  -d '{"repo": "<REPO_NAME>"}'
+```
+
+Switch to a specific commit:
+```bash
+curl -X POST http://127.0.0.1:5000/api/switch_commit \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_SECRET_TOKEN>" \
+  -d '{"repo": "<REPO_NAME>", "commit": "<COMMIT_HASH>"}'
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
