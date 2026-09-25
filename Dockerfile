@@ -37,16 +37,16 @@ RUN apt-get update \
 WORKDIR /app
 
 # Install Python dependencies pinned to uv.lock so the image matches CI.
-# uv is pinned too: it produces the constraints file, so an unpinned
+# uv is pinned too: it produces the requirements file, so an unpinned
 # upgrade could change `uv export` semantics and break reproducibility.
 # It is removed in the same layer, since only the export step needs it.
 ARG UV_VERSION=0.12.5
 COPY pyproject.toml uv.lock ./
 RUN pip install --no-cache-dir --break-system-packages "uv==${UV_VERSION}" \
-    && uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/constraints.txt \
+    && uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt \
     && pip uninstall -y --break-system-packages uv \
-    && pip install --no-cache-dir --break-system-packages -c /tmp/constraints.txt . \
-    && rm /tmp/constraints.txt
+    && pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
 
 # Verify Node.js tooling for building the frontend
 RUN node --version && npm --version
@@ -65,6 +65,13 @@ RUN npm --prefix ./app run build
 
 # Copy backend code
 COPY ./api ./api
+
+# Install the project itself now that its sources (and the README the
+# metadata references) are present, so the `api` package, its template
+# package-data and the cgraph/cgraph-mcp entry points all land in
+# site-packages. Dependencies are already installed and pinned above.
+COPY README.md ./
+RUN pip install --no-cache-dir --break-system-packages --no-deps .
 
 # Copy and make start.sh executable
 COPY start.sh /start.sh
