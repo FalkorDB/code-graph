@@ -60,10 +60,10 @@ export default function Combobox({ options, setOptions, selectedValue, onSelecte
 
     return (
         <Select open={open} onOpenChange={setOpen} value={selectedValue} onValueChange={onSelectedValue}>
-            <SelectTrigger className="z-10 md:z-0 rounded-md border border-border focus:ring-1 focus:ring-primary">
+            <SelectTrigger className="z-10 -mx-2 w-[calc(100%+1rem)] rounded-md border border-border focus:ring-1 focus:ring-primary md:z-0 md:mx-0 md:w-full">
                 <SelectValue placeholder="Select a repo" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[calc(100vw-1rem)]">
                 {
                     options.length !== 0 &&
                     options.map((option) => (
