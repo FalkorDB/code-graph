@@ -431,7 +431,7 @@ export default function App() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" asChild>
-                          <a title="Discord" href="https://discord.gg/falkordb" target='_blank' rel="noopener noreferrer">
+                          <a title="Discord" href="https://discord.gg/6M4QwDXn2w" target='_blank' rel="noopener noreferrer">
                             <BoomBox className="h-5 w-5" />
                           </a>
                         </Button>
@@ -612,7 +612,7 @@ export default function App() {
                   </a>
                 </li>
                 <li>
-                  <a href="https://discord.gg/falkordb" target='_blank' rel="noopener noreferrer">
+                  <a href="https://discord.gg/6M4QwDXn2w" target='_blank' rel="noopener noreferrer">
                     <p>Discord</p>
                   </a>
                 </li>
