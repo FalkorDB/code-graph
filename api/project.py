@@ -1,4 +1,3 @@
-import os
 import shutil
 import logging
 import validators
@@ -127,17 +126,5 @@ class Project():
     def process_git_history(self, ignore: Optional[List[str]] = []) -> GitGraph:
         logging.info(f"processing {self.name} git commit history")
 
-        # Save original working directory for later restore
-        original_dir = Path.cwd()
-
-        # change working directory to local repository
-        logging.info(f"Switching current working directory to: {self.path}")
-        os.chdir(self.path)
-
         git_graph = build_commit_graph(self.path, self.analyzer, self.name, ignore, branch=self.branch)
-
-        # Restore original working directory
-        logging.info(f"Restoring current working directory to: {original_dir}")
-        os.chdir(original_dir)
-
         return git_graph

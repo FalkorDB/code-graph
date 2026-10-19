@@ -1,6 +1,10 @@
 import os
 import unittest
 import pygit2
+import pytest
+from pathlib import Path
+from unittest.mock import patch
+import api.project
 from api import (
     Project,
     switch_commit
@@ -9,6 +13,35 @@ from api import (
 repo      = None  # repository
 graph     = None  # code graph
 git_graph = None  # git graph
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_process_git_history_preserves_working_directory(tmp_path, monkeypatch, fails):
+    monkeypatch.chdir(tmp_path)
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    with patch("api.project.Graph"):
+        project = Project("repo", repo_path, None, branch="main")
+    project.analyzer = object()
+    observed_directories = []
+    result = object()
+
+    def build_history(path, analyzer, repo_name, ignore, branch):
+        observed_directories.append(Path.cwd())
+        if fails:
+            raise RuntimeError("history failed")
+        return result
+
+    monkeypatch.setattr(api.project, "build_commit_graph", build_history)
+    if fails:
+        with pytest.raises(RuntimeError, match="history failed"):
+            project.process_git_history()
+    else:
+        assert project.process_git_history() is result
+
+    assert Path.cwd() == tmp_path
+    assert observed_directories == [tmp_path]
+
 
 class Test_Git_History(unittest.TestCase):
     @classmethod
