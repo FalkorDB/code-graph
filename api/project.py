@@ -60,8 +60,6 @@ def _clone_source(url: str, name: str) -> Path:
     return path
 
 class Project():
-    """Manage a repository's source analysis and Git history graphs."""
-
     def __init__(self, name: str, path: Path, url: Optional[str], branch: Optional[str] = None):
         self.url    = url
         self.name   = name

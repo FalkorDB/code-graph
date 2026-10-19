@@ -46,10 +46,9 @@ def test_process_git_history_preserves_working_directory(tmp_path, monkeypatch, 
 
 
 class Test_Git_History(unittest.TestCase):
-    """Verify history graphs and checkout transitions using the Git fixture."""
-
     @classmethod
     def setUpClass(cls):
+        """Build code and history graphs from the shared Git repository fixture."""
         # This runs once before all tests in this class
 
         global repo
