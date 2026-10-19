@@ -17,6 +17,7 @@ git_graph = None  # git graph
 
 @pytest.mark.parametrize("fails", [False, True])
 def test_process_git_history_preserves_working_directory(tmp_path, monkeypatch, fails):
+    """Keep CWD unchanged during history processing and after success or failure."""
     monkeypatch.chdir(tmp_path)
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
@@ -27,6 +28,7 @@ def test_process_git_history_preserves_working_directory(tmp_path, monkeypatch, 
     result = object()
 
     def build_history(path, analyzer, repo_name, ignore, branch):
+        """Observe CWD at the builder boundary before returning or failing."""
         observed_directories.append(Path.cwd())
         if fails:
             raise RuntimeError("history failed")

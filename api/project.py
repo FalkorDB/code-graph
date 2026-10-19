@@ -124,6 +124,7 @@ class Project():
         return self.graph
 
     def process_git_history(self, ignore: Optional[List[str]] = []) -> GitGraph:
+        """Build history using repository paths, preserving the caller's CWD."""
         logging.info(f"processing {self.name} git commit history")
 
         git_graph = build_commit_graph(self.path, self.analyzer, self.name, ignore, branch=self.branch)
