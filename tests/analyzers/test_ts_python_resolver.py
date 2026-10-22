@@ -15,6 +15,7 @@ from api.analyzers.python.ts_resolver import (
     _node_to_dotted_parts,
     _path_to_module,
 )
+from api.entities.entity import Entity
 from api.entities.file import File
 
 
@@ -46,6 +47,19 @@ def _find_name_node(tree_root, text: str):
             return node
         stack.extend(node.children)
     raise AssertionError(f"identifier '{text}' not found")
+
+
+def _call_target(call_node):
+    """Mirror ``PythonAnalyzer._extract_call_target``.
+
+    Production passes the resolver the call's *method-name* identifier (the
+    ``attribute`` child) for ``recv.method()``, not the full dotted node. Tests
+    that exercise method-call resolution should feed the same shape.
+    """
+    func = call_node.child_by_field_name("function")
+    if func is not None and func.type == "attribute":
+        return func.child_by_field_name("attribute")
+    return func
 
 
 # ---------------------------------------------------------------------------
@@ -137,11 +151,12 @@ def test_resolver_local_module_function(tmp_path: Path):
     func_ident = helper_call.child_by_field_name("function")
     out = r.resolve(files, mod_path, tmp_path.resolve(), func_ident)
     assert len(out) == 1
-    file, def_node = out[0]
+    file, def_node, resolution = out[0]
     assert file.path == mod_path
     assert def_node.type == "function_definition"
     name = def_node.child_by_field_name("name").text.decode("utf-8")
     assert name == "helper"
+    assert resolution == "static_exact"
 
 
 def test_resolver_from_import_resolution(tmp_path: Path):
@@ -251,7 +266,7 @@ def test_resolver_many_defs_name_def_alignment(tmp_path: Path):
             files, app_path, tmp_path.resolve(), call.child_by_field_name("function")
         )
         assert len(out) == 1, f"fn_{i} did not resolve uniquely"
-        file, def_node = out[0]
+        file, def_node, _ = out[0]
         assert file.path == lib_path
         resolved_name = def_node.child_by_field_name("name").text.decode("utf-8")
         assert resolved_name == f"fn_{i}", (
@@ -447,3 +462,258 @@ def test_python_analyzer_default_still_uses_jedi():
         a = PythonAnalyzer()
         assert a._ts_resolver is None
         assert a.needs_lsp() is True
+
+
+# ---------------------------------------------------------------------------
+# Static method-call resolution: self/cls exact + guarded name fallback
+# ---------------------------------------------------------------------------
+
+
+def test_resolver_name_fallback_single_method(tmp_path: Path):
+    """``g._query()`` with a single project method ``_query`` emits a CALLS edge
+    tagged ``static_name`` even though ``g``'s type is unknown."""
+    files = _make_project(
+        tmp_path,
+        {
+            "graph.py": "class Graph:\n    def _query(self, q):\n        return q\n",
+            "structural.py": "def _build_corpus(g):\n    g._query('x')\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    sp = (tmp_path / "structural.py").resolve()
+    call = _find_call_node(files[sp].tree.root_node, "g._query(")
+    out = r.resolve(files, sp, tmp_path.resolve(), _call_target(call))
+    assert len(out) == 1
+    file, def_node, resolution = out[0]
+    assert file.path == (tmp_path / "graph.py").resolve()
+    assert def_node.child_by_field_name("name").text.decode("utf-8") == "_query"
+    assert resolution == "static_name"
+
+
+def test_resolver_self_method_exact_enclosing_class(tmp_path: Path):
+    """``self._query()`` resolves to the *enclosing* class's method (exact),
+    never to a same-named method on a different class."""
+    src = (
+        "class A:\n"
+        "    def _query(self, q):\n"
+        "        return q\n"
+        "    def run(self):\n"
+        "        self._query('x')\n\n"
+        "class B:\n"
+        "    def _query(self, q):\n"
+        "        return q * 2\n"
+    )
+    files = _make_project(tmp_path, {"mod.py": src})
+    r = TreeSitterPythonResolver(_PY)
+    mod = (tmp_path / "mod.py").resolve()
+    call = _find_call_node(files[mod].tree.root_node, "self._query(")
+    out = r.resolve(files, mod, tmp_path.resolve(), _call_target(call))
+    assert len(out) == 1
+    _, def_node, resolution = out[0]
+    assert resolution == "static_exact"
+    cls = def_node.parent
+    while cls is not None and cls.type != "class_definition":
+        cls = cls.parent
+    assert cls is not None
+    assert cls.child_by_field_name("name").text.decode("utf-8") == "A"
+
+
+def test_resolver_import_prefix_blocks_name_fallback(tmp_path: Path):
+    """``logging.getLogger()`` with ``logging`` imported must NOT bind to a
+    project method named ``getLogger`` -- the import-prefix guard rejects it."""
+    files = _make_project(
+        tmp_path,
+        {
+            "util.py": "class Log:\n    def getLogger(self):\n        return 1\n",
+            "app.py": "import logging\n\ndef f():\n    logging.getLogger()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    app = (tmp_path / "app.py").resolve()
+    call = _find_call_node(files[app].tree.root_node, "logging.getLogger(")
+    out = r.resolve(files, app, tmp_path.resolve(), _call_target(call))
+    assert out == []
+
+
+def test_resolver_external_module_method_no_edge(tmp_path: Path):
+    """``requests.get()`` (external import) must not bind to project ``get``
+    methods even when the candidate count is under threshold."""
+    files = _make_project(
+        tmp_path,
+        {
+            "models.py": "class Session:\n    def get(self):\n        return 1\n",
+            "app.py": "import requests\n\ndef f():\n    requests.get()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    app = (tmp_path / "app.py").resolve()
+    call = _find_call_node(files[app].tree.root_node, "requests.get(")
+    out = r.resolve(files, app, tmp_path.resolve(), _call_target(call))
+    assert out == []
+
+
+def test_resolver_name_fallback_threshold_skips(tmp_path: Path):
+    """More same-named method defs than the threshold => no edge (avoids the
+    common-method-name explosion)."""
+    lib = "".join(
+        f"class C{i}:\n    def get(self):\n        return {i}\n\n" for i in range(6)
+    )
+    files = _make_project(
+        tmp_path,
+        {"lib.py": lib, "app.py": "def f(g):\n    g.get()\n"},
+    )
+    r = TreeSitterPythonResolver(_PY)
+    app = (tmp_path / "app.py").resolve()
+    call = _find_call_node(files[app].tree.root_node, "g.get(")
+    out = r.resolve(files, app, tmp_path.resolve(), _call_target(call))
+    assert out == []
+
+
+def test_resolver_name_fallback_at_threshold_returns_all(tmp_path: Path):
+    """Exactly threshold-many candidates are all returned, tagged static_name
+    and deterministically ordered by (file_path, start_byte)."""
+    lib = "".join(
+        f"class C{i}:\n    def fetch(self):\n        return {i}\n\n" for i in range(5)
+    )
+    files = _make_project(
+        tmp_path,
+        {"lib.py": lib, "app.py": "def f(g):\n    g.fetch()\n"},
+    )
+    r = TreeSitterPythonResolver(_PY)
+    app = (tmp_path / "app.py").resolve()
+    call = _find_call_node(files[app].tree.root_node, "g.fetch(")
+    out = r.resolve(files, app, tmp_path.resolve(), _call_target(call))
+    assert len(out) == 5
+    assert all(resolution == "static_name" for _, _, resolution in out)
+    starts = [def_node.start_byte for _, def_node, _ in out]
+    assert starts == sorted(starts)
+
+
+def test_resolver_super_call_no_name_fallback(tmp_path: Path):
+    """``super().foo()`` must not trigger the global name fallback."""
+    files = _make_project(
+        tmp_path,
+        {
+            "base.py": "class Base:\n    def foo(self):\n        return 1\n",
+            "child.py": (
+                "class Child:\n"
+                "    def foo(self):\n"
+                "        super().foo()\n"
+            ),
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    child = (tmp_path / "child.py").resolve()
+    call = _find_call_node(files[child].tree.root_node, "super().foo(")
+    out = r.resolve(files, child, tmp_path.resolve(), _call_target(call))
+    assert out == []
+
+
+# ---------------------------------------------------------------------------
+# Entity resolution-precedence + normalization
+# ---------------------------------------------------------------------------
+
+
+def test_entity_resolution_precedence_static_exact_wins():
+    tree = _PARSER.parse(b"x = 1\n")
+    node = tree.root_node
+    caller = Entity(node)
+    callee = Entity(node)
+    caller.add_resolved_symbol("call", callee, "static_name")
+    caller.add_resolved_symbol("call", callee, "static_exact")
+    assert caller.resolved_symbols["call"][callee] == "static_exact"
+    # lsp (and a later static_name) must never downgrade static_exact.
+    caller.add_resolved_symbol("call", callee, "lsp")
+    caller.add_resolved_symbol("call", callee, "static_name")
+    assert caller.resolved_symbols["call"][callee] == "static_exact"
+
+
+def test_entity_resolved_symbol_normalizes_tuples_and_bare():
+    tree = _PARSER.parse(b"x = 1\n")
+    node = tree.root_node
+    e = Entity(node)
+    e.add_symbol("call", node)
+    callee_a = Entity(node)
+    callee_b = Entity(node)
+
+    def f(key, symbol):
+        # tuple (static resolver) + bare entity (legacy LSP/jedi)
+        return [(callee_a, "static_name"), callee_b]
+
+    e.resolved_symbol(f)
+    assert e.resolved_symbols["call"][callee_a] == "static_name"
+    assert e.resolved_symbols["call"][callee_b] == "lsp"
+
+
+def test_resolver_chained_receiver_no_name_fallback(tmp_path: Path):
+    """A chained receiver (``line.strip().split()``) has no head we can trust,
+    so the name fallback must not fire even with a project method ``split``."""
+    files = _make_project(
+        tmp_path,
+        {
+            "lib.py": "class Tok:\n    def split(self):\n        return 1\n",
+            "app.py": "def f(line):\n    line.strip().split()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    app = (tmp_path / "app.py").resolve()
+    call = _find_call_node(files[app].tree.root_node, "line.strip().split(")
+    out = r.resolve(files, app, tmp_path.resolve(), _call_target(call))
+    assert out == []
+
+
+def test_resolver_dotted_receiver_no_name_fallback(tmp_path: Path):
+    """A dotted receiver (``a.b.method()``) is rejected by the simple-identifier
+    guard -- only ``identifier.method()`` is eligible for the name fallback."""
+    files = _make_project(
+        tmp_path,
+        {
+            "lib.py": "class C:\n    def ping(self):\n        return 1\n",
+            "app.py": "def f(a):\n    a.b.ping()\n",
+        },
+    )
+    r = TreeSitterPythonResolver(_PY)
+    app = (tmp_path / "app.py").resolve()
+    call = _find_call_node(files[app].tree.root_node, "a.b.ping(")
+    out = r.resolve(files, app, tmp_path.resolve(), _call_target(call))
+    assert out == []
+
+
+def test_resolver_self_in_staticmethod_not_exact(tmp_path: Path):
+    """``self.method()`` inside a ``@staticmethod`` (no ``self`` parameter) must
+    not produce a high-confidence ``static_exact`` edge to the enclosing class."""
+    src = (
+        "class A:\n"
+        "    def _query(self, q):\n"
+        "        return q\n"
+        "    @staticmethod\n"
+        "    def f():\n"
+        "        self._query('x')\n"
+    )
+    files = _make_project(tmp_path, {"mod.py": src})
+    r = TreeSitterPythonResolver(_PY)
+    mod = (tmp_path / "mod.py").resolve()
+    call = _find_call_node(files[mod].tree.root_node, "self._query(")
+    out = r.resolve(files, mod, tmp_path.resolve(), _call_target(call))
+    # No static_exact binding; at most a low-confidence name-based guess.
+    assert all(resolution != "static_exact" for _, _, resolution in out)
+
+
+def test_resolver_self_in_nested_function_shadowing_not_exact(tmp_path: Path):
+    """A nested function that redefines the first parameter shadows the method's
+    ``self``; the enclosing-function first-parameter guard must reject it."""
+    src = (
+        "class A:\n"
+        "    def _query(self, q):\n"
+        "        return q\n"
+        "    def outer(self):\n"
+        "        def inner(other):\n"
+        "            self._query('x')\n"
+        "        return inner\n"
+    )
+    files = _make_project(tmp_path, {"mod.py": src})
+    r = TreeSitterPythonResolver(_PY)
+    mod = (tmp_path / "mod.py").resolve()
+    call = _find_call_node(files[mod].tree.root_node, "self._query(")
+    out = r.resolve(files, mod, tmp_path.resolve(), _call_target(call))
+    assert all(resolution != "static_exact" for _, _, resolution in out)

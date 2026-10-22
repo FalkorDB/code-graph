@@ -301,7 +301,11 @@ class SourceAnalyzer():
                 file = self.files[file_path]
                 for _, entity in file.entities.items():
                     for key, resolved_set in entity.resolved_symbols.items():
-                        for resolved in resolved_set:
+                        # Deterministic order so edge writes are stable across
+                        # worker counts (Phase B promises bit-identical output).
+                        for resolved, resolution in sorted(
+                            resolved_set.items(), key=lambda kv: kv[0].id
+                        ):
                             if key == "base_class":
                                 graph.connect_entities("EXTENDS", entity.id, resolved.id)
                             elif key == "implement_interface":
@@ -309,7 +313,10 @@ class SourceAnalyzer():
                             elif key == "extend_interface":
                                 graph.connect_entities("EXTENDS", entity.id, resolved.id)
                             elif key == "call":
-                                graph.connect_entities("CALLS", entity.id, resolved.id)
+                                graph.connect_entities(
+                                    "CALLS", entity.id, resolved.id,
+                                    {"resolution": resolution},
+                                )
                             elif key == "return_type":
                                 graph.connect_entities("RETURNS", entity.id, resolved.id)
                             elif key == "parameters":

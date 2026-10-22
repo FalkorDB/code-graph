@@ -50,8 +50,13 @@ class TreeSitterAnalyzer(AbstractAnalyzer):
         path: Path,
         key: str,
         symbol: Node,
-    ) -> list[Entity]:
-        """Dispatch a captured symbol to type or callable resolution."""
+    ) -> list:
+        """Dispatch a captured symbol to type or callable resolution.
+
+        Returns bare ``Entity`` objects for type resolution and
+        ``(Entity, resolution)`` tuples for callable resolution; callers
+        normalize both shapes (see ``Entity.resolved_symbol``).
+        """
         if key in self.type_resolution_keys:
             return self.resolve_type(files, lsp, file_path, path, symbol)
         if key in self.method_resolution_keys:
@@ -79,7 +84,10 @@ class TreeSitterAnalyzer(AbstractAnalyzer):
         target = self._extract_type_target(node)
         if target is None:
             return res
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, target):
+        # ``resolve`` may yield 2-tuples (LSP/jedi) or 3-tuples (static
+        # resolver, carrying a resolution kind). Type edges ignore the
+        # resolution kind, so unpack tolerantly.
+        for file, resolved_node, *_ in self.resolve(files, lsp, file_path, path, target):
             type_dec = self.find_parent(resolved_node, self.type_definition_node_types)
             if type_dec in file.entities:
                 res.append(file.entities[type_dec])
@@ -92,16 +100,23 @@ class TreeSitterAnalyzer(AbstractAnalyzer):
         file_path: Path,
         path: Path,
         node: Node,
-    ) -> list[Entity]:
-        """Resolve a call reference to matching callable-definition entities."""
+    ) -> list[tuple[Entity, str]]:
+        """Resolve a call reference to matching callable-definition entities.
+
+        Returns ``(entity, resolution)`` pairs. ``resolution`` is the kind
+        reported by the resolver (``static_exact`` / ``static_name`` for the
+        static tree-sitter resolver) and defaults to ``"lsp"`` for resolvers
+        that yield bare ``(file, node)`` pairs.
+        """
         res = []
         target = self._extract_call_target(node)
         if target is None:
             return res
-        for file, resolved_node in self.resolve(files, lsp, file_path, path, target):
+        for file, resolved_node, *rest in self.resolve(files, lsp, file_path, path, target):
+            resolution = rest[0] if rest else "lsp"
             method_dec = self.find_parent(resolved_node, self.callable_definition_node_types)
             if method_dec and method_dec.type in self.callable_exclude_node_types:
                 continue
             if method_dec in file.entities:
-                res.append(file.entities[method_dec])
+                res.append((file.entities[method_dec], resolution))
         return res
