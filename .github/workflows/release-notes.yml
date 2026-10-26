@@ -1,0 +1,44 @@
+name: Polish release notes
+
+# Runs FalkorDB's shared release-notes workflow; its header explains what it
+# does and what it needs (the AZURE_OPENAI_API_KEY secret and the
+# AZURE_OPENAI_ENDPOINT variable, set on the organization).
+
+permissions:
+  contents: read
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to rewrite (e.g. v0.3.0), or the newest one of a range'
+        required: true
+        type: string
+      from_tag:
+        description: 'Oldest release tag of a range; leave empty to rewrite tag alone'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: 'Print the new notes without updating the release'
+        type: boolean
+        default: false
+
+jobs:
+  polish:
+    permissions:
+      contents: write
+      pull-requests: read
+      id-token: write
+    uses: FalkorDB/.github/.github/workflows/release-notes.yml@main
+    with:
+      product: FalkorDB CodeGraph
+      product-description: a knowledge graph visualization tool for codebases
+      tag: ${{ inputs.tag }}
+      from-tag: ${{ inputs.from_tag }}
+      dry-run: ${{ inputs.dry_run || false }}
+    secrets:
+      AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
