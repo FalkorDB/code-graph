@@ -626,8 +626,8 @@ export function Chat({ messages, setMessages, query, setQuery, selectedPath, set
     }
 
     return (
-        <div className="relative h-1 grow md:h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
-            <main data-name="main-chat" ref={containerRef} className="grow flex flex-col overflow-y-auto gap-6 px-4">
+        <div className="relative h-1 grow min-h-0 md:h-full flex flex-col justify-between px-6 pt-10 pb-4 gap-4">
+            <main data-name="main-chat" ref={containerRef} className="grow min-h-0 flex flex-col overflow-y-auto gap-6 px-4">
                 {
                     messages.length === 0 &&
                     <>
